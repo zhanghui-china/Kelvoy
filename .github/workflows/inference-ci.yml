@@ -1,0 +1,20 @@
+name: inference-ci
+
+on:
+  pull_request:
+    paths:
+      - "services/inference/**"
+      - ".github/workflows/inference-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/inference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run pytest tests/ -q

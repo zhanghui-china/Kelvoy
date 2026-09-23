@@ -1,16 +1,27 @@
-.PHONY: api web test bridge lint
+.PHONY: install web-api web-app worker inference cli test lint typecheck
 
-api:
-	uv run python -m kelvoy
+install:
+	bun install
+	cd services/inference && uv sync
 
-web:
-	cd web && npm run dev
+web-api:
+	bun run --cwd apps/web dev:api
+
+web-app:
+	bun run --cwd apps/web dev:web
+
+worker:
+	bun run --cwd apps/worker dev
+
+inference:
+	cd services/inference && uv run python -m inference
+
+typecheck:
+	bun run typecheck
 
 test:
-	uv run pytest tests/ -q
+	bun test
+	cd services/inference && uv run pytest
 
 lint:
-	uv run ruff check .
-
-bridge:
-	cd dgx-bridge && uv run python dgx_bridge_service.py
+	cd services/inference && uv run ruff check .

@@ -1,0 +1,15 @@
+{
+  "name": "kelvoy",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "typecheck": "bun run --filter '*' typecheck",
+    "build": "bun run --filter './apps/*' build",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "@types/bun": "^1.1.6"
+  }
+}

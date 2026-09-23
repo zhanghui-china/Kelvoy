@@ -1,1 +1,0 @@
-"""Kelvoy backend package."""

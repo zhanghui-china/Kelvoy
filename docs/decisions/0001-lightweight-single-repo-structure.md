@@ -1,7 +1,7 @@
 # 0001 · Repository structure: lightweight single repo, not a monorepo
 
 - **Date**: 2026-09-23
-- **Status**: Accepted
+- **Status**: Superseded by [0002](0002-monorepo-for-dgx-security-and-shared-engine.md)
 
 ## Context
 
