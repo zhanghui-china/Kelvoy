@@ -1,6 +1,6 @@
 # Kelvoy Architecture
 
-> 实现状态同步文档,不是设计文档——设计依据见 `docs/AI旅行Vlog生产工作台_PRD_v0.1.md` 第 9 节和 `docs/decisions/0002-...md`。目前所有模块都还是骨架占位,没有真实逻辑。
+> 实现状态同步文档,不是设计文档——设计依据见 `docs/AI旅行Vlog生产工作台_PRD_v0.2.md` 第 6/9 节和 `docs/decisions/0002-...md`。目前所有模块都还是骨架占位,没有真实逻辑。
 
 ## 目录
 

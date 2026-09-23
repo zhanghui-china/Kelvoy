@@ -1,17 +1,60 @@
 export type ShotSize = "wide" | "medium" | "close" | "detail" | "pov";
 export type ShotCamera = "static" | "pan" | "push" | "follow";
-export type ShotStatus = "draft" | "kf_ready" | "clip_ready" | "approved" | "rejected";
+export type SceneTime = "morning" | "noon" | "afternoon" | "evening" | "night";
+export type EpisodeMode = "per_shot" | "grid";
+
+// PRD v0.2 §6 期级状态机. Review states advance to the next generating state on user action.
+export type EpisodeStatus =
+  | "draft"
+  | "scripting"
+  | "script_review"
+  | "assets"
+  | "keyframing"
+  | "kf_review"
+  | "clipping"
+  | "clip_review"
+  | "composing"
+  | "done"
+  | "failed";
+
+// PRD v0.2 §6 镜级状态机. rejected = user asked for regeneration (see regen_stage), not deletion.
+export type ShotStatus =
+  | "draft"
+  | "generating_kf"
+  | "kf_ready"
+  | "kf_selected"
+  | "generating_clip"
+  | "clip_ready"
+  | "approved"
+  | "rejected"
+  | "failed";
+
+export type RegenStage = "keyframe" | "video";
+
+export type ProviderId = "local" | "kling" | "jimeng" | (string & {});
 
 export interface Scene {
   id: string;
   name: string;
-  time: string; // e.g. "morning" — free-form per PRD example
+  time: SceneTime;
   landmarks: string[]; // Landmark.id[]
 }
 
+// Reproducibility record per modality (PRD v0.2 §6, §8). attempts counts local retries + overflow.
+export interface ShotModelRecord {
+  provider: ProviderId;
+  model: string;
+  version: string;
+  seed: number;
+  prompt: string;
+  ref_hashes: string[];
+  attempts: number;
+  cost_usd: number;
+}
+
 export interface ShotModelRef {
-  image?: string;
-  video?: string;
+  image?: ShotModelRecord;
+  video?: ShotModelRecord;
 }
 
 export interface Shot {
@@ -23,13 +66,14 @@ export interface Shot {
   landmark: string | null; // Landmark.id
   kf_prompt: string;
   motion_prompt: string;
-  duration_s: number;
+  duration_s: number; // target; actual cut length is beat-aligned within 0.8–2.0 s (FR-07)
   candidates: string[];
   kf_selected: string | null;
   clip: string | null;
   trim_start_s: number | null;
   status: ShotStatus;
-  cost_usd: number;
+  regen_stage: RegenStage | null;
+  bad_shot_reported: boolean;
   model: ShotModelRef;
 }
 
@@ -57,20 +101,31 @@ export interface EpisodeRender {
   res: string;
   fps: number;
   title: string;
+  intro: string | null; // defaults from template, overridable per episode
+  outro: string | null;
   ai_label: boolean;
 }
 
 export interface Episode {
   episode_id: string;
+  owner_id: string;
   persona_id: string;
+  persona_version: number;
   destination_id: string;
+  destination_version: number;
   series_id: string;
+  template_id: string;
+  status: EpisodeStatus;
+  mode: EpisodeMode;
+  created_at: string; // ISO 8601
+  estimated_credits: number;
   credits_used: number;
   share: EpisodeShare;
   brief: EpisodeBrief;
-  template: string;
+  grid_refs: string[]; // planning grids (per_shot mode); viewable, not a review gate
   scenes: Scene[];
   shots: Shot[];
+  removed_shots: Shot[]; // deleted at review 1; kept for history
   music: EpisodeMusic;
   render: EpisodeRender;
 }
