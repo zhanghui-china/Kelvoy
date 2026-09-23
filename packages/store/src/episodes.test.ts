@@ -3,6 +3,7 @@ import type { Episode } from "@kelvoy/engine";
 import { close, open } from "./db";
 import {
   getEpisode,
+  getEpisodeBySlug,
   insertEpisode,
   listEpisodes,
   patchEpisode,
@@ -211,5 +212,20 @@ describe("listEpisodes", () => {
 
   test("returns an empty array for an owner with no episodes", async () => {
     expect(await listEpisodes("u_nobody")).toEqual([]);
+  });
+});
+
+describe("getEpisodeBySlug", () => {
+  test("finds the episode whose share.slug matches", async () => {
+    const withSlug: Episode = { ...fixtureEpisode("e_shared"), share: { enabled: true, slug: "abc123" } };
+    await insertEpisode(withSlug);
+    await insertEpisode(fixtureEpisode("e_other"));
+
+    const result = await getEpisodeBySlug("abc123");
+    expect(result?.episode_id).toBe("e_shared");
+  });
+
+  test("returns null for an unknown slug", async () => {
+    expect(await getEpisodeBySlug("no-such-slug")).toBeNull();
   });
 });

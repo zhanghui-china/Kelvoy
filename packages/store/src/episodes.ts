@@ -59,6 +59,20 @@ export async function listEpisodes(ownerId: string): Promise<Episode[]> {
   return rows.map((row) => JSON.parse(row.doc) as Episode);
 }
 
+/**
+ * FR-12 share page lookup. `share.slug` lives inside `doc`, not a column —
+ * one extra `json_extract` per row beats adding a migration + a second
+ * write path just to keep a slug column in sync.
+ */
+export async function getEpisodeBySlug(slug: string): Promise<Episode | null> {
+  const row = getDb()
+    .query<{ doc: string }, [string]>(
+      "select doc from episodes where json_extract(doc, '$.share.slug') = ?",
+    )
+    .get(slug);
+  return row ? (JSON.parse(row.doc) as Episode) : null;
+}
+
 export async function patchEpisode(
   episodeId: string,
   clientRowVersion: number,
