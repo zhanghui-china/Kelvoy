@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import destinations from "./routes/destinations";
 import episodes from "./routes/episodes";
 import health from "./routes/health";
+import internal from "./routes/internal";
 import personas from "./routes/personas";
 import share from "./routes/share";
 
@@ -12,6 +13,7 @@ app.route("/api/personas", personas);
 app.route("/api/destinations", destinations);
 app.route("/api/episodes", episodes);
 app.route("/api/share", share);
+app.route("/internal", internal);
 
 // TODO: in production, serve the Vite build output (apps/web/dist) as
 // static files here alongside the /api/* routes — not decided yet how
