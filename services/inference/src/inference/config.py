@@ -16,4 +16,6 @@ class Settings(BaseSettings):
 
     projects_root: Path = Path("projects")
     host: str = "127.0.0.1"
-    port: int = 8000
+    # 8000 is taken by visionary-backend on the shared DGX (gx10-8e22) —
+    # see infra/dgx/README.md. Don't move this back to 8000.
+    port: int = 8100
