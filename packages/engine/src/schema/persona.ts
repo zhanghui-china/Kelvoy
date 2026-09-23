@@ -11,6 +11,6 @@ export interface Persona {
   desc: string;
   locked: string[]; // e.g. ["脸型", "发型", "体态"]
   default_outfit: string;
-  refs: string[]; // object-storage paths; user-uploaded, real photos allowed (PRD v0.2 §3)
+  refs: string[]; // local disk paths (ADR-0004); user-uploaded, real photos allowed (PRD v0.2 §3)
   style: PersonaStyle;
 }
