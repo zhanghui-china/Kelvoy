@@ -1,26 +1,63 @@
 #!/usr/bin/env bun
 /**
- * Internal CLI (PRD §2, M1): `run <stage> --episode <id>`. Stays internal
- * long-term, not customer-facing. Episode load/save from Postgres + object
- * storage (PRD §6) is not wired — TODO once infra exists.
+ * Internal CLI (PRD §2, M1). Stays internal long-term, not customer-facing.
+ *
+ *   kelvoy run <stage> --episode <episode_id>
+ *   kelvoy import-destination <path.json>
  */
 import type { StageName } from "@kelvoy/engine";
+import { closeDb } from "./db";
+import { importDestination } from "./import-destination";
 
-function parseArgs(argv: string[]) {
-  const [command, stage] = argv;
+function usage(): never {
+  console.error("usage:");
+  console.error("  kelvoy run <stage> --episode <episode_id>");
+  console.error("  kelvoy import-destination <path.json>");
+  process.exit(1);
+}
+
+async function runRun(argv: string[]): Promise<void> {
+  const [stage] = argv;
   const episodeIdx = argv.indexOf("--episode");
   const episodeId = episodeIdx >= 0 ? argv[episodeIdx + 1] : undefined;
-  return { command, stage: stage as StageName | undefined, episodeId };
+  if (!stage || !episodeId) usage();
+  console.error(`TODO: load episode ${episodeId}, run stage ${stage as StageName}`);
+  throw new Error("not implemented");
+}
+
+async function runImportDestination(argv: string[]): Promise<void> {
+  const [path] = argv;
+  if (!path) usage();
+  const raw = await Bun.file(path).json();
+  try {
+    const result = await importDestination(raw);
+    if (!result.ok) {
+      console.error(`导入失败：${path}`);
+      for (const err of result.errors ?? []) {
+        console.error(`  - ${err}`);
+      }
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`导入成功：${result.destination_id}`);
+  } finally {
+    // Validation-only failures never open a DB connection; closeDb() is a
+    // no-op then. Without this the process hangs — postgres.js keeps its
+    // socket open (see db.ts).
+    await closeDb();
+  }
 }
 
 async function main() {
-  const { command, stage, episodeId } = parseArgs(process.argv.slice(2));
-  if (command !== "run" || !stage || !episodeId) {
-    console.error("usage: kelvoy run <stage> --episode <episode_id>");
-    process.exit(1);
+  const [command, ...rest] = process.argv.slice(2);
+  switch (command) {
+    case "run":
+      return runRun(rest);
+    case "import-destination":
+      return runImportDestination(rest);
+    default:
+      usage();
   }
-  console.error(`TODO: load episode ${episodeId}, run stage ${stage}`);
-  throw new Error("not implemented");
 }
 
 main();

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kelvoy/engine": "workspace:*"
+    "@kelvoy/engine": "workspace:*",
+    "postgres": "^3.4.4"
   },
   "devDependencies": {
     "typescript": "^5.5.3"
