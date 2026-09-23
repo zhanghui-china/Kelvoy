@@ -2,6 +2,8 @@
 
 2026-09-23 · 基于 v0.1（2026-09-22）+ 28 条缺口问答合并而成。v0.1 保留不动，文末 §12 是逐条变更表。
 
+> **2026-09-23 补丁**：§6/§8/§9/§10 按 [ADR-0004](decisions/0004-local-sqlite-no-cloud-infra.md) 原地改过——MVP 不用云端基础设施（除了 LLM），数据存本地 SQLite（`packages/store`），产物存本地磁盘，任务队列是 SQLite 表不是 Redis，worker 和 web 之间没有 HTTP 内部 API。之前"云上 web + Postgres + Redis + 对象存储"的架构描述已替换，不再是当前设计。
+
 ## 1. 产品定义与目标
 
 一句话定义：一个对外销售的 AI 旅行 vlog 生产工具——用户定一个虚拟出镜角色，选一个旅游目的地（景区级：一个景区一期），在三个节点做选择（脚本、关键帧、片段），得到一期 24–30 镜、约 30 秒、9:16 的目的地 vlog；同一角色走遍不同目的地，形成一个旅行账号的内容。
@@ -84,7 +86,7 @@ flowchart LR
 
 | 模式 | 做法 | 来源 | 取舍 |
 | --- | --- | --- | --- |
-| 逐镜生成（默认） | 先出横版 10 格网格做策划稿、锁一致性，再逐镜生成竖版关键帧。网格策划稿落对象存储、`Episode.grid_refs` 引用，审片台可查看，**不设审核点** | 参考片一（名古屋） | 质量高、可控，图片调用量 ×2 |
+| 逐镜生成（默认） | 先出横版 10 格网格做策划稿、锁一致性，再逐镜生成竖版关键帧。网格策划稿落本地磁盘、`Episode.grid_refs` 引用，审片台可查看，**不设审核点** | 参考片一（名古屋） | 质量高、可控，图片调用量 ×2 |
 | 网格直出（草稿） | 直接出竖版 10 格网格，裁切每格当关键帧，裁切后必经放大 | 参考片二（濑户内，28 镜与网格一一对应） | 省一步、更便宜，分辨率受限 |
 
 **每个审核点的动作**
@@ -113,14 +115,14 @@ flowchart LR
 | FR-11 | 账号 | 用户名密码注册登录（微信 / 手机号 P1）、角色列表、期列表、积分余额与消耗明细、积分包购买 | 积分不足在提交前拦截 |
 | FR-12 | 交付 | mp4 下载、分享链接（可关闭）、分镜表 PDF；成片与分享链接不随 90 天清理失效 | 分享页不含账号信息，可嵌入 |
 | FR-13 | 系列与批量 | 一次提交 N 个目的地，用同一角色批量出 N 期；系列内自动沿用模板（LUT、标题样式、片头片尾）；批量进队列排队，同一用户同时最多 2 期在跑；每期仍逐个过三个审核点 | 10 期批量提交后无需逐期配置 |
-| FR-14 | 目的地库 | 颗粒度为景区（一个景区一条记录，`city` 只作归组）；每条一个符号包：地标清单（每个地标 3–10 张实景参考图 + 最佳机位 / 时段 + 必须保真的特征）、动线、季节、地方饮食、交通、住宿；`type` 为六值枚举；官方维护，M1 用 CLI `import-destination <json>` 录入，参考图手动传对象存储；首批五个景区见 §3 | 每个地标 ≥ 3 张实景参考图；一个新目的地入库 ≤ 1 个工作日 |
+| FR-14 | 目的地库 | 颗粒度为景区（一个景区一条记录，`city` 只作归组）；每条一个符号包：地标清单（每个地标 3–10 张实景参考图 + 最佳机位 / 时段 + 必须保真的特征）、动线、季节、地方饮食、交通、住宿；`type` 为六值枚举；官方维护，M1 用 CLI `import-destination <json>` 录入，参考图手动放本地 `projects/` 目录；首批五个景区见 §3 | 每个地标 ≥ 3 张实景参考图；一个新目的地入库 ≤ 1 个工作日 |
 | FR-15 | 模板市场（P1） | 官方模板免费，用户模板可发布；目的地库开放用户提交，审核后入库 | MVP 不做 |
 
 参考片印证：两条片的镜头语法完全同构（走近→拉门/进门→落座→器具→食物特写→吃或喝→抬头笑；渡轮→骑车→符号→食→宿→星空→睡），只换了地点符号和角色，FR-10 的模板就是把这个骨架显式化。
 
 ## 6. 数据模型
 
-四个持久对象：角色（账号级）、目的地（共享资产，官方维护）、模板（官方 / 私有）、期（一次生产）。都是 Postgres 一条记录（期 JSON 存 jsonb，**Postgres 是唯一真源**）+ 对象存储一个目录，字段可扩但不可删；期里的 `shots[]` 是流水线的工作面。队列任务是瞬态对象，只带引用不带正文。TS 类型在 `packages/engine/src/schema/`，与本节一一对应。
+四个持久对象：角色（账号级）、目的地（共享资产，官方维护）、模板（官方 / 私有）、期（一次生产）。都是本地 SQLite 一条记录（期 JSON 存一列，**SQLite 是唯一真源**，见 ADR-0004）+ 本地磁盘一个目录，字段可扩但不可删；期里的 `shots[]` 是流水线的工作面。队列任务是瞬态对象，只带引用不带正文，存在同一个 SQLite 库的一张表里。TS 类型在 `packages/engine/src/schema/`，与本节一一对应；持久化实现在 `packages/store/`。
 
 **枚举**
 
@@ -231,7 +233,7 @@ flowchart LR
               "intro": "intro/default.mp4", "outro": null, "ai_label": true }
 }
 
-// 队列任务（Redis，瞬态；worker 凭 episode_id 经内部 API 取期 JSON）
+// 队列任务（SQLite tasks 表，瞬态；worker 凭 episode_id 调 packages/store 取期 JSON）
 { "task_id": "tk_...", "episode_id": "e_20260922_0001", "stage": "keyframe", "shot_no": 7, "attempt": 1 }
 ```
 
@@ -265,59 +267,56 @@ flowchart LR
 
 - **成本 / 毛利**：COGS = Spark GPU 时间（折旧 + 电费 + 运维）+ 国内 API 调用费。单期 GPU 时间目标待 M0 定；国内 API 费用上限 ¥20 / 期，口径为整期所有环节都走 API。积分按固定汇率：1 积分 = X GPU 分钟等价，X 由 M0 实测 COGS 按"定价 ≥ 5 × COGS"倒推；溢出 API 费用按同汇率折算计入，不对用户加价。用户超额重生成扣积分，坏镜报告每镜免费重生成一次。
 - **时长与并发**：单期口径：提交后 ≤ 30 分钟拿到关键帧候选，全片 ≤ 2 小时；单用户同时在跑 ≤ 2 期，超出的排队（批量 10 期 = 排队跑）；单次模型调用超时 5 分钟进入重试。
-- **可重跑 / 幂等**：每镜产物独立落对象存储；重跑跳过已 approved 的镜；复现键见 §6；成片可复现。
+- **可重跑 / 幂等**：每镜产物独立落本地磁盘（`projects/<episode_id>/...`）；重跑跳过已 approved 的镜；复现键见 §6；成片可复现。
 - **版本与清理**：角色、目的地带版本号，期记录生成时快照，后续修改不影响老期；用户素材默认 90 天后清理**中间产物**（候选图、网格、未选片段），成片、分镜表、分享链接保留；付费用户可延长。
 - **合规**：成片带可见 AI 标识 + 文件元数据（模型自带的 SynthID / C2PA 保留不剥离）；AI 标识 MVP 形式：右下角半透明文字"AI 生成 · 虚构角色 · 真实目的地"+ 元数据字段，按《人工智能生成合成内容标识办法》（2025 年 9 月起施行）加显式与隐式标识；不生成他人商标；音乐只用授权曲；网站上线前完成 ICP 备案；模型自部署 → 我们自己是模型服务提供者，算法备案 / 大模型备案大概率落在自己头上，M2 前请专业人士核。**角色参考图允许真人照片**这一决定会加重肖像权与备案侧的审查，合规评估要按 v0.2 口径重做——这是上线前置条件。
 - **内容安全**：MVP 只做 prompt 层关键词拦截（v0.1 的"产物过审、人脸检测"降级）；云厂商内容安全 API（文本 + 图片）在 M3 上线前接入；违规账号封停。
 - **质量红线**：人物 / 服装漂移、手部崩坏、可读幻觉文字、真实地标失真、违反物理的动作——命中任一条该镜标记重生成，不允许进入成片。MVP 靠人工审核点执行，自动检测器不在 MVP 范围。
 - **安全 / 数据**：多租户隔离用行级 `owner_id` 过滤；模型与 API 密钥只在 worker；分享页不暴露账号信息。
-- **运维**：日志落文件 + 云厂商基础监控告警；Postgres 每日快照；对象存储靠云厂商多副本，不另做备份。
+- **运维**：日志落文件；SQLite 文件定期打包备份（本地，脚本待补）；本地磁盘不做异地冗余，MVP 阶段可接受，上线前重新评估（ADR-0004）。
 
 ## 9. 技术架构与目录结构
 
-MVP 是"云上 web + 队列 + 本地 DGX Spark worker 池 + 对象存储"：web、API、数据库放国内云（备案域名），2 台 Spark 在本地作为 GPU worker，只向外连队列拉任务、经内部 API 读写期状态、向对象存储推产物，不开任何入站端口。Bun/TS 写 web 与编排，模型推理是常驻的 Python 服务，worker 通过 HTTP 调本机推理服务。
+**MVP 不用云端基础设施，除了 LLM 调用**（ADR-0004，取代本节此前"云上 web + 队列 + 对象存储"的方案）：web、worker、推理服务暂时都跑在同一台机器上（DGX 或自己的服务器），数据是本地 SQLite（`packages/store` 统一管），产物文件是本地磁盘目录，任务队列是 SQLite 里的一张表，不是 Redis。web 和 worker 之间没有 HTTP 内部 API，都直接调 `packages/store` 的函数——这层函数保持 `async`，是刻意留出的边界：以后如果要把生图 / 生视频 / ffmpeg 拆到不同 DGX 上，只需要把 `packages/store` 的实现换成网络调用，上层代码不用动。Bun/TS 写 web 与编排，模型推理是常驻的 Python 服务，worker 通过 HTTP 调本机推理服务（这条 HTTP 是本机内网调用，不是"内部 API"那种跨机器协议）。
 
 ```mermaid
 flowchart LR
-  U[浏览器<br/>表单 / 审片台 / 分享页] --> W[Web + API<br/>Bun / Hono · 国内云]
-  W --> DB[(Postgres · 唯一真源<br/>用户 / 角色 / 目的地 / 模板 / 期 jsonb)]
-  W --> Q[(队列<br/>Redis · 国内云)]
-  Q -. 出站拉取 .-> K1[GPU worker<br/>DGX Spark #1]
-  Q -. 出站拉取 .-> K2[GPU worker<br/>DGX Spark #2]
-  K1 -. 出站 · 内部 API<br/>读期 / 回写状态 .-> W
-  K2 -. 出站 · 内部 API .-> W
-  K1 --> M[本机推理服务<br/>vLLM · 图像 · 视频]
-  K2 --> M
-  K1 --> A[国内 API 溢出<br/>可灵 / 即梦]
-  K1 --> S[(对象存储<br/>OSS / MinIO)]
-  K2 --> S
-  S -. 签名 URL .-> U
+  U[浏览器<br/>表单 / 审片台 / 分享页] --> W[apps/web<br/>Bun / Hono]
+  W --> ST[(packages/store<br/>本地 SQLite：episodes / destinations / tasks)]
+  K[apps/worker<br/>消费循环] --> ST
+  K --> M[本机推理服务<br/>services/inference]
+  M --> LLM[云端 LLM API<br/>唯一用到云的地方]
+  K --> A[国内 API 溢出<br/>可灵 / 即梦]
+  K --> D[(本地磁盘<br/>projects/&lt;episode_id&gt;/...)]
+  D -. 本地路径 .-> U
 ```
 
-**真源与回写协议**
+**真源与写回**
 
-- 期 JSON 存 Postgres jsonb，是唯一真源；对象存储只放二进制产物，路径相对期目录（`episodes/<episode_id>/kf/07_a.png`），角色与目的地的参考图各在自己的目录。
-- 队列任务只带 `{episode_id, stage, shot_no?, attempt}`（§6）。worker 拉到任务后出站调 web 的内部 API：`GET /internal/episodes/:id` 取期 JSON，`PATCH /internal/episodes/:id/shots/:no` 回写单镜（带乐观锁版本号），`PATCH /internal/episodes/:id` 回写期级状态。内部 API 用 worker 专属 token 鉴权，不对公网开放路由前缀。
-- 审片台只改期 JSON 里的 `kf_selected / trim_start_s / status / regen_stage / bad_shot_reported`，改完写一条任务进队列；进度靠浏览器 2–5 秒轮询 web，web 读 Postgres。
-- 一台 Spark 宕机容量减半但不停服；队列超阈值自动溢出到国内 API；ffmpeg 合成也在 worker 上跑。
+- 期 JSON 存本地 SQLite（`episodes.doc`），是唯一真源；产物文件（关键帧、片段、成片）落本地磁盘 `projects/<episode_id>/kf/07_a.png` 这种路径，角色与目的地的参考图各在自己的目录。
+- 队列任务只带 `{episode_id, stage, shot_no?, attempt}`（§6），存在 SQLite 的 `tasks` 表里。worker 出队后直接调 `packages/store` 的 `getEpisode`/`replaceEpisode`（带乐观锁 `row_version`）读写期数据，不经过 HTTP。
+- 审片台只改期 JSON 里的 `kf_selected / trim_start_s / status / regen_stage / bad_shot_reported`，改完写一条任务进队列；进度靠浏览器 2–5 秒轮询 `apps/web`，`apps/web` 读同一个 SQLite。
+- 单机部署意味着当前没有"一台机器宕机不停服"这种冗余——MVP 阶段接受，上线前重新评估；队列超阈值自动溢出到国内 API；ffmpeg 合成也在 worker 上跑。
 
-**目录结构**（已落地，见仓库根目录与 `docs/decisions/0002`）
+**目录结构**（已落地，见仓库根目录、`docs/decisions/0002`、`docs/decisions/0004`）
 
 ```
 Kelvoy/
-  apps/web/              # Hono API（src/server，含 /internal/* 供 worker 回写）+ React/Vite 前端（src/frontend）
-  apps/worker/           # GPU worker（跑在 Spark）：拉队列、调本机推理服务、调内部 API 回写、落对象存储、跑 ffmpeg
+  apps/web/              # Hono API（src/server）+ React/Vite 前端（src/frontend），调 packages/store，没有 /internal/*
+  apps/worker/           # 消费循环：轮询 packages/store 的 tasks 表、调本机推理服务、落本地磁盘、写回、跑 ffmpeg
   services/inference/    # Python 常驻推理服务：llm · image · video · upscale
-  packages/engine/       # 流水线核心（worker / CLI 共用）：stages/ providers/ schema/ templates/
+  packages/engine/       # 流水线核心（worker / CLI 共用）：stages/ providers/ schema/ state/ rules/，不碰 IO
+  packages/store/        # 唯一拥有 SQLite 的地方：episodes / destinations / tasks，apps/web 和 apps/worker 都调它
   packages/cli/          # 内部工具：run <stage> --episode <id>；import-destination <json>
-  infra/                 # 云：Postgres、Redis、OSS、备案域名；本地：Spark 容器编排、模型权重管理
+  infra/                 # 本地：Spark/DGX 编排笔记，不需要容器编排（没有 Postgres/Redis/对象存储要起）
 ```
 
 **模块边界**
 
-- `engine` 不做任何 IO 假设：输入期 JSON 与文件句柄，输出更新后的 JSON 与产物路径；worker 和 CLI 都只是调用方。
+- `engine` 不做任何 IO 假设：输入期 JSON 与文件句柄，输出更新后的 JSON 与产物路径；`store`、worker 和 CLI 都只是调用方。
+- `store` 是唯一拥有 SQLite 连接的地方：不实现业务规则，状态转移合法性调 `engine` 的判断函数，自己只管读写和乐观锁。
 - `providers/*` 只做一件事：把统一接口翻译成本机推理服务或各家 API，记录 provider / 模型 / 版本 / seed / 费用；换模型不改上层。
-- `services/inference` 常驻加载权重；Spark 上三类模型怎么分配 M0 实测后定。
+- `services/inference` 常驻加载权重；本机上三类模型怎么分配 M0 实测后定。
 - `compose` 是唯一调用 ffmpeg 的地方，在 worker 上跑：切片、卡拍对齐、拼接、片头片尾、LUT、字幕、标识、封装。
 - 分享页静态化（成片 + 分镜表），不依赖登录态，不随 90 天清理失效。
 
@@ -328,7 +327,7 @@ Kelvoy/
 | 里程碑 | 交付 | 验收 | 工作量 |
 | --- | --- | --- | --- |
 | M0 需求与方法验证 | 照参考片的方法，用同一个角色手工做无锡 3 期（南长街夜游 / 拈花湾 / 灵山大佛），验证跨期一致性和真实地标还原度；实拍三地参考图建第一份目的地包（景区级三条）；访谈 10 个目标用户，记录付费意愿与价格锚点；**在 Spark 上**用大佛、迎客松、清名桥做基准，评测 2 个开源图像 + 2 个开源视频模型 + 1 个国内 API，记录每镜 GPU 分钟数与哪些模型根本跑不动；用 3 期全量做一致性评审集，内部逐镜打分 | ≥ 3 人愿意预付；一页选型结论（漂移率、地标还原度、每镜 GPU 分钟、失败率、开源 vs API 并排、Spark 可行性）；积分汇率 X 与估价常量初值 | 1 周 |
-| M1 引擎 + CLI | 六阶段流水线、两套状态机、providers（Spark 自部署 + 国内 API 溢出 + 重试链路）、推理服务化与队列、内部 API 回写协议、schema、ffmpeg 合成（卡拍、片头片尾）、费用记录与积分换算、`import-destination` 录入五个景区，全部命令行 | 第二条片人工操作 ≤ 30 分钟；任一镜可单独重跑；任一期可重新合成 | 1–2 周 |
+| M1 引擎 + CLI | 六阶段流水线、两套状态机、providers（Spark 自部署 + 国内 API 溢出 + 重试链路）、推理服务化、本地 SQLite 存储与任务队列（`packages/store`，ADR-0004）、schema、ffmpeg 合成（卡拍、片头片尾）、费用记录与积分换算、`import-destination` 录入五个景区，全部命令行 | 第二条片人工操作 ≤ 30 分钟；任一镜可单独重跑；任一期可重新合成 | 1–2 周 |
 | M2 Web MVP | 用户名密码登录、积分与估价拦截、建角色、brief 表单（含模式）、审片台（三个审核点 + 网格查看 + 拖拽选点 + 待审队列）、轮询进度、重新合成、导出、分享链接、3 个内置模板（大型景区 / 古镇水乡 / 名山登顶） | 10 个种子用户不经指导完整跑通一条 | 2–3 周 |
 | M3 付费上线 | 微信 / 支付宝支付、定价页、落地页（同一角色 3 期 + 公开分享链接）、ICP 与模型备案、云厂商内容审核 API 接入、用户协议（含真人参考图责任条款）；冷启动：无锡景区与文旅账号上门 + 小红书 / 抖音旅行创作者社群 | 8 周内 10 个付费用户 | 1–2 周 + 持续运营 |
 | M4 模板市场与团队（P1） | 用户模板发布、代运营多客户管理、API、微信登录、系统生成角色参考图、自有店铺核验 | 视 M3 数据决定 | 待定 |
