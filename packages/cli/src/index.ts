@@ -6,7 +6,6 @@
  *   kelvoy import-destination <path.json>
  */
 import type { StageName } from "@kelvoy/engine";
-import { closeDb } from "./db";
 import { importDestination } from "./import-destination";
 
 function usage(): never {
@@ -29,23 +28,16 @@ async function runImportDestination(argv: string[]): Promise<void> {
   const [path] = argv;
   if (!path) usage();
   const raw = await Bun.file(path).json();
-  try {
-    const result = await importDestination(raw);
-    if (!result.ok) {
-      console.error(`导入失败：${path}`);
-      for (const err of result.errors ?? []) {
-        console.error(`  - ${err}`);
-      }
-      process.exitCode = 1;
-      return;
+  const result = await importDestination(raw);
+  if (!result.ok) {
+    console.error(`导入失败：${path}`);
+    for (const err of result.errors ?? []) {
+      console.error(`  - ${err}`);
     }
-    console.log(`导入成功：${result.destination_id}`);
-  } finally {
-    // Validation-only failures never open a DB connection; closeDb() is a
-    // no-op then. Without this the process hangs — postgres.js keeps its
-    // socket open (see db.ts).
-    await closeDb();
+    process.exitCode = 1;
+    return;
   }
+  console.log(`导入成功：${result.destination_id}`);
 }
 
 async function main() {

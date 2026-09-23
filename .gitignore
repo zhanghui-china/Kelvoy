@@ -15,6 +15,10 @@ services/inference/.ruff_cache/
 
 # Runtime data
 projects/
+data/
+*.db
+*.db-wal
+*.db-shm
 .env
 .env.local
 config.json

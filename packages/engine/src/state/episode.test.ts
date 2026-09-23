@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Episode, EpisodeStatus, Shot } from "../schema";
-import { type GeneratingEpisodeStatus, MIN_SHOTS, removeShot, transitionEpisode } from "./episode";
+import {
+  type GeneratingEpisodeStatus,
+  MIN_SHOTS,
+  isLegalEpisodeStatusChange,
+  removeShot,
+  transitionEpisode,
+} from "./episode";
 
 function makeShot(no: number): Shot {
   return {
@@ -154,5 +160,31 @@ describe("removeShot", () => {
   test("throws when the shot doesn't exist", () => {
     const episode = makeEpisode(MIN_SHOTS + 1);
     expect(() => removeShot(episode, 999)).toThrow();
+  });
+});
+
+describe("isLegalEpisodeStatusChange", () => {
+  test("accepts an advance", () => {
+    expect(isLegalEpisodeStatusChange("draft", "scripting")).toBe(true);
+  });
+
+  test("accepts a fail from a generating state", () => {
+    expect(isLegalEpisodeStatusChange("scripting", "failed")).toBe(true);
+  });
+
+  test("accepts a retry from failed into a generating state", () => {
+    expect(isLegalEpisodeStatusChange("failed", "keyframing")).toBe(true);
+  });
+
+  test("accepts recompose from done", () => {
+    expect(isLegalEpisodeStatusChange("done", "composing")).toBe(true);
+  });
+
+  test("rejects skipping straight from draft to done", () => {
+    expect(isLegalEpisodeStatusChange("draft", "done")).toBe(false);
+  });
+
+  test("rejects recompose from a non-done state", () => {
+    expect(isLegalEpisodeStatusChange("composing", "composing")).toBe(false);
   });
 });

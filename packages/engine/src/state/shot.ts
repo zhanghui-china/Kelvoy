@@ -67,3 +67,31 @@ export function transitionShot(current: ShotStatus, event: ShotEvent): ShotStatu
     }
   }
 }
+
+const RETRY_TARGETS: GeneratingShotStatus[] = ["generating_kf", "generating_clip"];
+
+/**
+ * Internal-API write-back (docs/contracts/internal-api.md) carries a target
+ * `status` value, not an event. Same rationale as
+ * state/episode.ts's isLegalEpisodeStatusChange.
+ */
+export function isLegalShotStatusChange(from: ShotStatus, to: ShotStatus): boolean {
+  const events: ShotEvent[] = [
+    { type: "start_keyframe" },
+    { type: "keyframe_ready" },
+    { type: "select_keyframe" },
+    { type: "start_clip" },
+    { type: "clip_ready" },
+    { type: "approve" },
+    { type: "request_regen" },
+    { type: "fail" },
+    ...RETRY_TARGETS.map((into): ShotEvent => ({ type: "retry", into })),
+  ];
+  return events.some((event) => {
+    try {
+      return transitionShot(from, event) === to;
+    } catch {
+      return false;
+    }
+  });
+}

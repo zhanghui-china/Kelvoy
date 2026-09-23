@@ -60,6 +60,37 @@ export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): 
   }
 }
 
+const RETRY_TARGETS: GeneratingEpisodeStatus[] = [
+  "scripting",
+  "assets",
+  "keyframing",
+  "clipping",
+  "composing",
+];
+
+/**
+ * Internal-API write-back (docs/contracts/internal-api.md) carries a target
+ * `status` value, not an event — the caller doesn't know this module's event
+ * vocabulary. This checks whether *any* legal event would produce `to` from
+ * `from`, so a PATCH handler can validate an arbitrary status write without
+ * re-deriving the event itself.
+ */
+export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatus): boolean {
+  const events: EpisodeEvent[] = [
+    { type: "advance" },
+    { type: "fail" },
+    { type: "recompose" },
+    ...RETRY_TARGETS.map((into): EpisodeEvent => ({ type: "retry", into })),
+  ];
+  return events.some((event) => {
+    try {
+      return transitionEpisode(from, event) === to;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** Review 1 (FR-02): the floor below which a script may not be cut. */
 export const MIN_SHOTS = 24;
 

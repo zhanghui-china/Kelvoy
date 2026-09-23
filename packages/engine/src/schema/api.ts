@@ -2,8 +2,9 @@ import type { Episode, Shot } from "./episode";
 import type { StageName } from "../stages";
 
 /**
- * Queue task (PRD v0.2 §6). Transient — carries only a reference, never the
- * episode body. Redis is the transport; this is the payload shape.
+ * Task queue payload (PRD v0.2 §6, ADR-0004). Transient — carries only a
+ * reference, never the episode body. Transport is a `tasks` table in the
+ * same local SQLite database (packages/store), not Redis.
  */
 export interface Task {
   task_id: string;
@@ -14,26 +15,23 @@ export interface Task {
 }
 
 /**
- * Internal API (PRD v0.2 §9): apps/worker is the only caller, reached
- * outbound-only from DGX. apps/web owns Postgres; worker never connects to
- * it directly. All three endpoints live under apps/web's /internal/* prefix,
- * gated by a worker-only token (see docs/contracts/internal-api.md).
+ * Generic "patch envelope" shapes for episode/shot writes (ADR-0004).
+ * Originally an HTTP request body (worker -> apps/web's /internal/*); that
+ * HTTP layer is gone now that web/worker share a machine and both call
+ * packages/store directly, but the same envelope shape (row_version +
+ * patch) is still the right argument shape for packages/store's
+ * patchEpisode/patchShot — and for apps/web's own public /api/episodes
+ * routes later, which still take untrusted JSON from the browser and need
+ * something to validate against (see schema/validate.ts).
  *
- * Optimistic locking: every read returns row_version (the Postgres row's
- * version counter, distinct from persona_version/destination_version which
- * are domain snapshots). Every write must submit the row_version it read;
- * a mismatch is rejected with VersionConflict so two workers racing on the
- * same episode can't silently clobber each other.
+ * row_version is the optimistic-lock counter packages/store maintains per
+ * row — distinct from persona_version/destination_version, which are
+ * domain snapshots baked into the episode doc itself.
  */
 
-export interface GetEpisodeResponse {
-  episode: Episode;
-  row_version: number;
-}
-
-// Fields a worker is allowed to patch on a single shot. Anything else
+// Fields allowed to be patched on a single shot. Anything else
 // (schema-defining fields like `scene`/`camera`/`beat`) is script-stage
-// output, not worker write-back.
+// output, not write-back.
 export type ShotPatch = Partial<
   Pick<
     Shot,
@@ -53,13 +51,9 @@ export interface PatchShotRequest {
   patch: ShotPatch;
 }
 
-export interface PatchShotResponse {
-  row_version: number;
-}
-
-// Fields a worker is allowed to patch on the episode itself (status
-// transitions and render-stage outputs). Brief/scenes/shots are not
-// touched here — shots go through PatchShotRequest.
+// Fields allowed to be patched on the episode itself (status transitions
+// and render-stage outputs). Brief/scenes/shots are not touched here —
+// shots go through PatchShotRequest.
 export type EpisodePatch = Partial<
   Pick<Episode, "status" | "credits_used" | "grid_refs" | "render" | "music">
 >;
@@ -67,13 +61,4 @@ export type EpisodePatch = Partial<
 export interface PatchEpisodeRequest {
   row_version: number;
   patch: EpisodePatch;
-}
-
-export interface PatchEpisodeResponse {
-  row_version: number;
-}
-
-export interface VersionConflict {
-  error: "version_conflict";
-  current_row_version: number;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ShotStatus } from "../schema";
-import { transitionShot } from "./shot";
+import { isLegalShotStatusChange, transitionShot } from "./shot";
 
 describe("transitionShot: legal transitions", () => {
   test("draft --start_keyframe--> generating_kf", () => {
@@ -88,5 +88,27 @@ describe("transitionShot: illegal transitions", () => {
 
   test("draft --retry--> throws (only rejected/failed can retry)", () => {
     expect(() => transitionShot("draft", { type: "retry", into: "generating_kf" })).toThrow();
+  });
+});
+
+describe("isLegalShotStatusChange", () => {
+  test("accepts draft -> generating_kf", () => {
+    expect(isLegalShotStatusChange("draft", "generating_kf")).toBe(true);
+  });
+
+  test("accepts approved -> rejected (坏镜 report after approval)", () => {
+    expect(isLegalShotStatusChange("approved", "rejected")).toBe(true);
+  });
+
+  test("accepts rejected -> generating_clip (retry)", () => {
+    expect(isLegalShotStatusChange("rejected", "generating_clip")).toBe(true);
+  });
+
+  test("rejects skipping straight from draft to approved", () => {
+    expect(isLegalShotStatusChange("draft", "approved")).toBe(false);
+  });
+
+  test("rejects request_regen from draft", () => {
+    expect(isLegalShotStatusChange("draft", "rejected")).toBe(false);
   });
 });

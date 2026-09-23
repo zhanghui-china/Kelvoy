@@ -1,17 +1,17 @@
 {
-  "name": "@kelvoy/cli",
+  "name": "@kelvoy/store",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "bin": {
-    "kelvoy": "./src/index.ts"
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kelvoy/engine": "workspace:*",
-    "@kelvoy/store": "workspace:*"
+    "@kelvoy/engine": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.3"

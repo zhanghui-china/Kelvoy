@@ -1,7 +1,7 @@
 /**
- * GPU worker entrypoint (PRD §9). Runs on DGX: pulls the queue (outbound
- * only, no inbound port), calls the local inference service, pushes
- * artifacts to object storage, writes status back.
+ * GPU worker entrypoint (ADR-0004). Polls the local task queue
+ * (@kelvoy/store, no Redis), calls the local inference service, writes
+ * artifacts to local disk, writes status back via @kelvoy/store.
  */
 import { consumeLoop } from "./queue/consumer";
 

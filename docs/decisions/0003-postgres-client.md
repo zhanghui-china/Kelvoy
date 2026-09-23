@@ -1,7 +1,7 @@
 # 0003 · Postgres 客户端：postgres.js，不用 ORM
 
 - **Date**: 2026-09-23
-- **Status**: Accepted
+- **Status**: Superseded by [0004](0004-local-sqlite-no-cloud-infra.md)——MVP 不用 Postgres 了，选型本身没错，是前提变了
 
 ## Context
 
