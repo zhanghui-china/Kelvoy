@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import auth from "./routes/auth";
 import destinations from "./routes/destinations";
 import episodes from "./routes/episodes";
 import health from "./routes/health";
@@ -8,6 +9,7 @@ import share from "./routes/share";
 const app = new Hono();
 
 app.route("/api/health", health);
+app.route("/api/auth", auth);
 app.route("/api/personas", personas);
 app.route("/api/destinations", destinations);
 app.route("/api/episodes", episodes);

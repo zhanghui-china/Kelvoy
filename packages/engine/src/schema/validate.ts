@@ -1,4 +1,4 @@
-import type { PatchEpisodeRequest, PatchShotRequest } from "./api";
+import type { LoginRequest, PatchEpisodeRequest, PatchShotRequest, RegisterRequest } from "./api";
 import type { DestinationType } from "./destination";
 import type {
   Episode,
@@ -398,6 +398,36 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: input as unknown as PatchShotRequest };
+}
+
+/** Validates a RegisterRequest (apps/web's POST /api/auth/register). */
+export function validateRegisterRequest(input: unknown): ValidationResult<RegisterRequest> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const r = input as Partial<RegisterRequest>;
+
+  if (!isNonEmptyString(r.username)) errors.push("username: 缺失或为空");
+  if (!isNonEmptyString(r.password)) errors.push("password: 缺失或为空");
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: r as RegisterRequest };
+}
+
+/** Validates a LoginRequest (apps/web's POST /api/auth/login). */
+export function validateLoginRequest(input: unknown): ValidationResult<LoginRequest> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const r = input as Partial<LoginRequest>;
+
+  if (!isNonEmptyString(r.username)) errors.push("username: 缺失或为空");
+  if (!isNonEmptyString(r.password)) errors.push("password: 缺失或为空");
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: r as LoginRequest };
 }
 
 function validatePersonaStyle(input: unknown, errors: string[]): void {

@@ -22,5 +22,3 @@ data/
 .env
 .env.local
 config.json
-users.json
-sessions.json

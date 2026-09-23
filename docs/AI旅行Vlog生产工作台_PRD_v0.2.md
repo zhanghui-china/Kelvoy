@@ -122,7 +122,9 @@ flowchart LR
 
 ## 6. 数据模型
 
-四个持久对象：角色（账号级）、目的地（共享资产，官方维护）、模板（官方 / 私有）、期（一次生产）。都是本地 SQLite 一条记录（期 JSON 存一列，**SQLite 是唯一真源**，见 ADR-0004）+ 本地磁盘一个目录，字段可扩但不可删；期里的 `shots[]` 是流水线的工作面。队列任务是瞬态对象，只带引用不带正文，存在同一个 SQLite 库的一张表里。TS 类型在 `packages/engine/src/schema/`，与本节一一对应；持久化实现在 `packages/store/`。
+五个持久对象：账号（User）、角色（账号级）、目的地（共享资产，官方维护）、模板（官方 / 私有）、期（一次生产）。都是本地 SQLite 一条记录（期 JSON 存一列，**SQLite 是唯一真源**，见 ADR-0004）+ 本地磁盘一个目录，字段可扩但不可删；期里的 `shots[]` 是流水线的工作面。队列任务和登录 session 是瞬态对象，只带引用不带正文，各存在同一个 SQLite 库的一张表里（`tasks`、`sessions`）。TS 类型在 `packages/engine/src/schema/`，与本节一一对应；持久化实现在 `packages/store/`。
+
+账号（User）目前只有登录必需的字段——积分余额与消耗明细（FR-11）待 M0-6 定完积分汇率之后再加，现在加只是空占位，不如不加。
 
 **枚举**
 
@@ -141,6 +143,14 @@ flowchart LR
 `draft → generating_kf → kf_ready → kf_selected → generating_clip → clip_ready → approved`；任一生成态可进 `failed`；用户在审核 2 / 3 标记重生成 → `rejected` 并记 `regen_stage`（`keyframe` / `video`），worker 拾取后回到对应生成态。删镜是审核 1 的显式操作，从 `shots[]` 移除并记入 `removed_shots[]`，不是状态。重跑跳过 `approved`。
 
 ```json
+// 账号
+{
+  "user_id": "u_123",
+  "username": "dannei",
+  "password_hash": "$argon2id$...",
+  "created_at": "2026-09-23T10:00:00+08:00"
+}
+
 // 角色（账号级资产）
 {
   "persona_id": "c_001",
@@ -235,6 +245,9 @@ flowchart LR
 
 // 队列任务（SQLite tasks 表，瞬态；worker 凭 episode_id 调 packages/store 取期 JSON）
 { "task_id": "tk_...", "episode_id": "e_20260922_0001", "stage": "keyframe", "shot_no": 7, "attempt": 1 }
+
+// 登录 session（SQLite sessions 表，瞬态；httpOnly cookie 存 session_id）
+{ "session_id": "sess_...", "user_id": "u_123", "expires_at": "2026-09-30T10:00:00+08:00" }
 ```
 
 `shot.model.*.provider` ∈ `local` / `kling` / `jimeng` / …；`attempts` 含本地重试与溢出总次数；复现键 = (episode_id, shot_no, stage, provider, model, version, seed, prompt 哈希, ref_hashes)。

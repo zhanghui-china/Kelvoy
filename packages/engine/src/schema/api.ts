@@ -62,3 +62,14 @@ export interface PatchEpisodeRequest {
   row_version: number;
   patch: EpisodePatch;
 }
+
+// FR-11 账号: apps/web 的 /api/auth/* 请求体.
+export interface RegisterRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}

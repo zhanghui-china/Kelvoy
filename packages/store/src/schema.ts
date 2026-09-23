@@ -32,6 +32,19 @@ create table if not exists templates (
   updated_at text not null default (datetime('now'))
 );
 
+create table if not exists users (
+  user_id text primary key,
+  username text not null unique,
+  password_hash text not null,
+  created_at text not null default (datetime('now'))
+);
+
+create table if not exists sessions (
+  session_id text primary key,
+  user_id text not null,
+  expires_at text not null
+);
+
 create table if not exists tasks (
   task_id text primary key,
   episode_id text not null,
