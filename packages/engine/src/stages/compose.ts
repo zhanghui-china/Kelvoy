@@ -7,6 +7,6 @@ import type { Episode } from "../schema";
  * providers.compose / ComposeProvider), and runs on apps/worker. Not
  * implemented at skeleton stage.
  */
-export async function runCompose(_episode: Episode): Promise<Episode> {
+export async function runCompose(_episode: Episode, _shotNo?: number): Promise<Episode> {
   throw new Error("not implemented");
 }

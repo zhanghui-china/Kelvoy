@@ -6,6 +6,6 @@ import type { Episode } from "../schema";
  * shots must reference destination.landmarks entries, never invent one.
  * Calls providers.script (ScriptProvider). Not implemented at skeleton stage.
  */
-export async function runScript(_episode: Episode): Promise<Episode> {
+export async function runScript(_episode: Episode, _shotNo?: number): Promise<Episode> {
   throw new Error("not implemented");
 }

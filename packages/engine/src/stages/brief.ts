@@ -5,6 +5,6 @@ import type { Episode } from "../schema";
  * destination library) + season/time/tone/banned-list. Missing fields get
  * defaults, annotated on the project. Not implemented at skeleton stage.
  */
-export async function runBrief(_episode: Episode): Promise<Episode> {
+export async function runBrief(_episode: Episode, _shotNo?: number): Promise<Episode> {
   throw new Error("not implemented");
 }

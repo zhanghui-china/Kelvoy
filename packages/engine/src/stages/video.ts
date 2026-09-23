@@ -5,6 +5,6 @@ import type { Episode } from "../schema";
  * prompt = action beat + camera motion. Calls providers.video (VideoProvider).
  * Not implemented at skeleton stage.
  */
-export async function runVideo(_episode: Episode): Promise<Episode> {
+export async function runVideo(_episode: Episode, _shotNo?: number): Promise<Episode> {
   throw new Error("not implemented");
 }

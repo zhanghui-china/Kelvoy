@@ -5,6 +5,6 @@ import type { Episode } from "../schema";
  * reference-image set and the destination's landmark symbol pack for the
  * shots that need them. Not implemented at skeleton stage.
  */
-export async function runAssets(_episode: Episode): Promise<Episode> {
+export async function runAssets(_episode: Episode, _shotNo?: number): Promise<Episode> {
   throw new Error("not implemented");
 }

@@ -14,7 +14,7 @@ import {
   upsertTemplate,
 } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { Destination, Episode, Persona, Template } from "@kelvoy/engine";
+import type { Destination, Episode, Persona, Shot, ShotSize, Template } from "@kelvoy/engine";
 import { Hono } from "hono";
 import episodes, { resolveArtifactPath } from "./episodes";
 
@@ -42,6 +42,43 @@ function fixture(id: string, ownerId: string): Episode {
     music: { file: "", bpm: 0, license: "" },
     render: { res: "1080x1920", fps: 30, title: "", intro: null, outro: null, ai_label: true },
   };
+}
+
+function shotFixture(no: number, overrides: Partial<Shot> = {}): Shot {
+  return {
+    no,
+    scene: "sc1",
+    size: "wide",
+    beat: "走过石板路",
+    camera: "static",
+    landmark: null,
+    kf_prompt: "",
+    motion_prompt: "",
+    duration_s: 2,
+    candidates: [],
+    kf_selected: null,
+    clip: null,
+    trim_start_s: null,
+    status: "draft",
+    regen_stage: null,
+    bad_shot_reported: false,
+    model: {},
+    ...overrides,
+  };
+}
+
+const SHOT_SIZES: ShotSize[] = ["wide", "medium", "close"];
+
+// FR-02 结构规则 (MIN_SHOTS=24, MAX_SAME_SIZE_RUN=2, MIN_LANDMARK_SHOTS=5)
+// compliant fixture — cycling sizes avoids same-size runs, first
+// `landmarkCount` shots reference destinationFixture()'s one landmark ("l1").
+function compliantShots(count: number, landmarkCount = 5): Shot[] {
+  return Array.from({ length: count }, (_, i) =>
+    shotFixture(i + 1, {
+      size: SHOT_SIZES[i % SHOT_SIZES.length],
+      landmark: i < landmarkCount ? "l1" : null,
+    }),
+  );
 }
 
 function personaFixture(id: string, ownerId: string): Persona {
@@ -315,6 +352,352 @@ test("POST 400s on a missing required field", async () => {
     method: "POST",
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ destination_id: "d_1", template_id: "t_1" }),
+  });
+  expect(res.status).toBe(400);
+});
+
+// ---- M2-6: 审片台写路由 ----
+
+test("PATCH /:id applies a field patch and bumps row_version", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertEpisode(fixture("e_1", ownerId));
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, patch: { credits_used: 3 } }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, row_version: 2 });
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const body = (await got.json()) as { episode: Episode };
+  expect(body.episode.credits_used).toBe(3);
+});
+
+test("PATCH /:id 409s on a stale row_version", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertEpisode(fixture("e_1", ownerId));
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 999, patch: { credits_used: 3 } }),
+  });
+  expect(res.status).toBe(409);
+});
+
+test("PATCH /:id 400s on an illegal status transition", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertEpisode(fixture("e_1", ownerId)); // status: draft
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, patch: { status: "done" } }), // draft -> done: no such edge
+  });
+  expect(res.status).toBe(400);
+});
+
+test("PATCH /:id 404s on someone else's episode", async () => {
+  const { cookie } = await login("dannei");
+  await insertEpisode(fixture("e_1", "u_someone_else"));
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, patch: { credits_used: 3 } }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("PATCH /:id/shots/:no applies a shot patch and bumps the episode's row_version", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.shots = [shotFixture(1)];
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/1", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, patch: { candidates: ["kf/01_a.png"] } }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const body = (await got.json()) as { episode: Episode };
+  expect(body.episode.shots[0]?.candidates).toEqual(["kf/01_a.png"]);
+});
+
+test("PATCH /:id/shots/:no 404s on a shot number that doesn't exist", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.shots = [shotFixture(1)];
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/99", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, patch: { candidates: ["x.png"] } }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("POST /:id/continue advances script_review -> assets and enqueues one whole-episode task", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "script_review";
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/continue", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const body = (await got.json()) as { episode: Episode };
+  expect(body.episode.status).toBe("assets");
+
+  const task = await dequeueTask();
+  expect(task?.stage).toBe("assets");
+  expect(task?.shot_no).toBeUndefined();
+});
+
+test("POST /:id/continue advances kf_review -> clipping and enqueues one video task per kf_selected shot", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "kf_review";
+  episode.shots = [
+    shotFixture(1, { status: "kf_selected" }),
+    shotFixture(2, { status: "kf_selected" }),
+    shotFixture(3, { status: "kf_ready" }), // not yet selected — must not get a task
+  ];
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/continue", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  expect(((await got.json()) as { episode: Episode }).episode.status).toBe("clipping");
+
+  const shotNos = new Set<number | undefined>();
+  for (let i = 0; i < 2; i++) {
+    const task = await dequeueTask();
+    expect(task?.stage).toBe("video");
+    shotNos.add(task?.shot_no);
+  }
+  expect(shotNos).toEqual(new Set([1, 2]));
+  expect(await dequeueTask()).toBeNull(); // shot 3 (kf_ready) got no task
+});
+
+test("POST /:id/continue 400s outside a review gate", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertEpisode(fixture("e_1", ownerId)); // status: draft, not a review gate
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/continue", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("POST /:id/shots/:no/regen rejects the shot, infers regen_stage from status, and enqueues", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.shots = [shotFixture(1, { status: "kf_ready" })];
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/1/regen", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const shot = ((await got.json()) as { episode: Episode }).episode.shots[0];
+  expect(shot?.status).toBe("rejected");
+  expect(shot?.regen_stage).toBe("keyframe"); // kf_ready -> still picking a keyframe
+
+  const task = await dequeueTask();
+  expect(task?.stage).toBe("keyframe");
+  expect(task?.shot_no).toBe(1);
+});
+
+test("POST /:id/shots/:no/regen honors an explicit regen_stage override", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.shots = [shotFixture(1, { status: "approved" })];
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/1/regen", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, regen_stage: "keyframe" }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const shot = ((await got.json()) as { episode: Episode }).episode.shots[0];
+  expect(shot?.regen_stage).toBe("keyframe");
+});
+
+test("POST /:id/shots/:no/regen 400s from a status that isn't a regen source", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.shots = [shotFixture(1, { status: "draft" })]; // draft can't go straight to rejected
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/1/regen", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("POST /:id/shots/:no/report-bad marks bad_shot_reported, rejects, and enqueues a free regen", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.shots = [shotFixture(1, { status: "approved" })];
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/1/report-bad", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const shot = ((await got.json()) as { episode: Episode }).episode.shots[0];
+  expect(shot?.bad_shot_reported).toBe(true);
+  expect(shot?.status).toBe("rejected");
+  expect(shot?.regen_stage).toBe("video"); // approved -> clip already made, redo the clip
+
+  const task = await dequeueTask();
+  expect(task?.stage).toBe("video");
+  expect(task?.shot_no).toBe(1);
+});
+
+test("POST /:id/shots/:no/remove deletes the shot and re-validates FR-02 on what's left", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await upsertDestination(destinationFixture("d_1"));
+  const episode = fixture("e_1", ownerId);
+  episode.destination_id = "d_1";
+  episode.shots = compliantShots(25, 6); // extra shot + extra landmark headroom
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/25/remove", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const body = (await got.json()) as { episode: Episode };
+  expect(body.episode.shots).toHaveLength(24);
+  expect(body.episode.shots.some((s) => s.no === 25)).toBe(false);
+  expect(body.episode.removed_shots.map((s) => s.no)).toEqual([25]);
+});
+
+test("POST /:id/shots/:no/remove 400s when it would drop below the MIN_SHOTS floor", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await upsertDestination(destinationFixture("d_1"));
+  const episode = fixture("e_1", ownerId);
+  episode.destination_id = "d_1";
+  episode.shots = compliantShots(24, 6); // exactly at the floor
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/shots/24/remove", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(400);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  expect(((await got.json()) as { episode: Episode }).episode.shots).toHaveLength(24); // untouched
+});
+
+test("POST /:id/shots/:no/remove 400s when the remainder fails FR-02 (landmark coverage)", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await upsertDestination(destinationFixture("d_1"));
+  const episode = fixture("e_1", ownerId);
+  episode.destination_id = "d_1";
+  episode.shots = compliantShots(25, 5); // exactly at the MIN_LANDMARK_SHOTS floor
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  // shot 1 is one of the 5 landmark shots — removing it drops coverage to 4
+  const res = await app.request("/api/episodes/e_1/shots/1/remove", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(400);
+  const errBody = (await res.json()) as { error: string };
+  expect(errBody.error).toBe("script_rule_violation");
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  expect(((await got.json()) as { episode: Episode }).episode.shots).toHaveLength(25); // untouched
+});
+
+test("POST /:id/recompose moves done -> composing and enqueues a compose task", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "done";
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/recompose", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(200);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  expect(((await got.json()) as { episode: Episode }).episode.status).toBe("composing");
+
+  const task = await dequeueTask();
+  expect(task?.stage).toBe("compose");
+});
+
+test("POST /:id/recompose 400s from any status other than done", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "clip_review"; // also a legal advance -> composing, but not via this endpoint
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/recompose", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
   });
   expect(res.status).toBe(400);
 });

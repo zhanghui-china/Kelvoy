@@ -36,7 +36,7 @@ export async function handleTask(task: Task): Promise<void> {
   }
 
   try {
-    const updated = await runStage(task.stage, result.episode);
+    const updated = await runStage(task.stage, result.episode, task.shot_no);
     const written = await replaceEpisode(task.episode_id, result.row_version, updated);
     if (!written.ok) {
       // Lost a write race or the transition became illegal between our

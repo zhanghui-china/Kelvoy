@@ -6,6 +6,6 @@ import type { Episode } from "../schema";
  * no "imagined landmarks" allowed. Supports per-shot and grid modes.
  * Calls providers.keyframe (KeyframeProvider). Not implemented at skeleton stage.
  */
-export async function runKeyframe(_episode: Episode): Promise<Episode> {
+export async function runKeyframe(_episode: Episode, _shotNo?: number): Promise<Episode> {
   throw new Error("not implemented");
 }
