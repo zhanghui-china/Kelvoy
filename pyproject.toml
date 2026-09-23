@@ -1,0 +1,29 @@
+[project]
+name = "kelvoy"
+version = "0.1.0"
+description = "Kelvoy backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2.7",
+    "pydantic-settings",
+    "httpx",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kelvoy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
