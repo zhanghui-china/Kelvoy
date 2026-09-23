@@ -1,4 +1,7 @@
-import { close, createSession, createUser, insertPersona, open } from "@kelvoy/store";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { close, createSession, createUser, getPersona, insertPersona, open } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Persona } from "@kelvoy/engine";
 import { Hono } from "hono";
@@ -18,6 +21,16 @@ function fixture(id: string, ownerId: string): Persona {
   };
 }
 
+function createRequestBody() {
+  return {
+    name: "小岛",
+    desc: "30 岁男性，短发",
+    locked: ["脸型", "发型", "体态"],
+    default_outfit: "浅灰亚麻衬衫",
+    style: { lut: "lut/warm_film.cube", title_style: "serif-center" },
+  };
+}
+
 function buildApp() {
   const app = new Hono();
   app.route("/api/personas", personas);
@@ -31,12 +44,22 @@ async function login(username: string): Promise<{ cookie: string; ownerId: strin
   return { cookie: `kelvoy_session=${session.session_id}`, ownerId: created.user.user_id };
 }
 
-beforeEach(() => {
+function pngFile(name: string): File {
+  return new File([new Uint8Array([1, 2, 3])], name, { type: "image/png" });
+}
+
+let tmpRoot: string;
+
+beforeEach(async () => {
   open(":memory:");
+  tmpRoot = await mkdtemp(join(tmpdir(), "kelvoy-personas-api-"));
+  process.env.KELVOY_PROJECTS_ROOT = join(tmpRoot, "projects");
 });
 
-afterEach(() => {
+afterEach(async () => {
   close();
+  delete process.env.KELVOY_PROJECTS_ROOT;
+  await rm(tmpRoot, { recursive: true, force: true });
 });
 
 test("requires login", async () => {
@@ -55,4 +78,145 @@ test("only returns the logged-in user's own personas", async () => {
   expect(res.status).toBe(200);
   const body = (await res.json()) as { ok: boolean; personas: Persona[] };
   expect(body.personas.map((p) => p.persona_id)).toEqual(["c_mine"]);
+});
+
+test("creates a persona with zero reference images", async () => {
+  const { cookie } = await login("dannei");
+  const app = buildApp();
+  const res = await app.request("/api/personas", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify(createRequestBody()),
+  });
+  expect(res.status).toBe(201);
+  const body = (await res.json()) as { ok: boolean; persona: Persona };
+  expect(body.persona.refs).toEqual([]);
+  expect(body.persona.version).toBe(1);
+});
+
+test("rejects a malformed create request", async () => {
+  const { cookie } = await login("dannei");
+  const app = buildApp();
+  const res = await app.request("/api/personas", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ name: "小岛" }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("patch bumps version and rejects touching refs", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertPersona(fixture("c_mine", ownerId));
+  const app = buildApp();
+
+  const patchRes = await app.request("/api/personas/c_mine", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ desc: "换了个发型" }),
+  });
+  expect(patchRes.status).toBe(200);
+  const patched = (await patchRes.json()) as { ok: boolean; persona: Persona };
+  expect(patched.persona.version).toBe(2);
+  expect(patched.persona.desc).toBe("换了个发型");
+
+  const refsRes = await app.request("/api/personas/c_mine", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ refs: ["x.png"] }),
+  });
+  expect(refsRes.status).toBe(400);
+});
+
+test("patching someone else's persona 404s", async () => {
+  const { cookie } = await login("dannei");
+  await insertPersona(fixture("c_theirs", "u_someone_else"));
+  const app = buildApp();
+
+  const res = await app.request("/api/personas/c_theirs", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ desc: "试图改别人的角色" }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("uploading refs below the minimum is rejected", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
+  const app = buildApp();
+
+  const form = new FormData();
+  form.append("files", pngFile("a.png"));
+  form.append("files", pngFile("b.png"));
+  const res = await app.request("/api/personas/c_mine/refs", {
+    method: "POST",
+    headers: { cookie },
+    body: form,
+  });
+  expect(res.status).toBe(400);
+  const body = (await res.json()) as { ok: boolean; error: string };
+  expect(body.error).toBe("invalid_ref_count");
+});
+
+test("uploading refs above the maximum is rejected and nothing is written", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
+  const app = buildApp();
+
+  const form = new FormData();
+  for (let i = 0; i < 8; i++) form.append("files", pngFile(`${i}.png`));
+  const res = await app.request("/api/personas/c_mine/refs", {
+    method: "POST",
+    headers: { cookie },
+    body: form,
+  });
+  expect(res.status).toBe(400);
+
+  const persona = await getPersona("c_mine");
+  expect(persona?.refs).toEqual([]);
+});
+
+test("uploading 3-7 refs saves the files and appends to Persona.refs", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
+  const app = buildApp();
+
+  const form = new FormData();
+  form.append("files", pngFile("front.png"));
+  form.append("files", pngFile("side.png"));
+  form.append("files", pngFile("full.png"));
+  const res = await app.request("/api/personas/c_mine/refs", {
+    method: "POST",
+    headers: { cookie },
+    body: form,
+  });
+  expect(res.status).toBe(201);
+  const body = (await res.json()) as { ok: boolean; persona: Persona };
+  expect(body.persona.refs.length).toBe(3);
+  expect(body.persona.version).toBe(2);
+
+  for (const rel of body.persona.refs) {
+    const file = Bun.file(join(process.env.KELVOY_PROJECTS_ROOT!, rel));
+    expect(await file.exists()).toBe(true);
+  }
+});
+
+test("rejects non-image files", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
+  const app = buildApp();
+
+  const form = new FormData();
+  form.append("files", pngFile("front.png"));
+  form.append("files", pngFile("side.png"));
+  form.append("files", new File([new Uint8Array([1])], "evil.exe", { type: "application/x-msdownload" }));
+  const res = await app.request("/api/personas/c_mine/refs", {
+    method: "POST",
+    headers: { cookie },
+    body: form,
+  });
+  expect(res.status).toBe(400);
+  const body = (await res.json()) as { ok: boolean; error: string };
+  expect(body.error).toBe("invalid_file_type");
 });

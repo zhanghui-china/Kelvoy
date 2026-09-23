@@ -1,4 +1,11 @@
-import type { LoginRequest, PatchEpisodeRequest, PatchShotRequest, RegisterRequest } from "./api";
+import type {
+  CreatePersonaRequest,
+  LoginRequest,
+  PatchEpisodeRequest,
+  PatchShotRequest,
+  PersonaPatch,
+  RegisterRequest,
+} from "./api";
 import type { DestinationType } from "./destination";
 import type {
   Episode,
@@ -465,6 +472,57 @@ export function validatePersona(input: unknown): ValidationResult<Persona> {
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: p as Persona };
+}
+
+/**
+ * Validates apps/web's POST /api/personas request body. Deliberately
+ * excludes refs — a persona can be created with zero reference images and
+ * filled in afterwards via POST /api/personas/:id/refs, which is where the
+ * FR-03 3–7 张 count is actually enforced (see M2-4 commit for why: forcing
+ * the count at creation would make the two-step "create, then upload"
+ * flow impossible).
+ */
+export function validateCreatePersonaRequest(input: unknown): ValidationResult<CreatePersonaRequest> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const r = input as Partial<CreatePersonaRequest>;
+
+  if (!isNonEmptyString(r.name)) errors.push("name: 缺失或为空");
+  if (!isNonEmptyString(r.desc)) errors.push("desc: 缺失或为空");
+  if (!isStringArray(r.locked)) errors.push("locked: 必须是字符串数组");
+  if (!isNonEmptyString(r.default_outfit)) errors.push("default_outfit: 缺失或为空");
+  if (r.style !== undefined) validatePersonaStyle(r.style, errors);
+  else errors.push("style: 缺失");
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: r as CreatePersonaRequest };
+}
+
+/**
+ * Validates apps/web's PATCH /api/personas/:id request body. refs isn't
+ * patchable here on purpose — only through POST /api/personas/:id/refs, so
+ * the 3–7 张 count check lives in exactly one place.
+ */
+export function validatePersonaPatchRequest(input: unknown): ValidationResult<PersonaPatch> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const p = input as PersonaPatch & { refs?: unknown };
+
+  if ("name" in p && !isNonEmptyString(p.name)) errors.push("name: 必须是非空字符串");
+  if ("desc" in p && typeof p.desc !== "string") errors.push("desc: 必须是字符串");
+  if ("locked" in p && !isStringArray(p.locked)) errors.push("locked: 必须是字符串数组");
+  if ("default_outfit" in p && !isNonEmptyString(p.default_outfit)) {
+    errors.push("default_outfit: 必须是非空字符串");
+  }
+  if ("style" in p) validatePersonaStyle(p.style, errors);
+  if ("refs" in p) errors.push("refs: 不支持通过 PATCH 修改，走 POST /api/personas/:id/refs");
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: p as PersonaPatch };
 }
 
 /** Validates a whole template document (used by `import-template`). */

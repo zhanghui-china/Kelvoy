@@ -1,4 +1,5 @@
 import type { Episode, Shot } from "./episode";
+import type { Persona, PersonaStyle } from "./persona";
 import type { StageName } from "../stages";
 
 /**
@@ -73,3 +74,19 @@ export interface LoginRequest {
   username: string;
   password: string;
 }
+
+// FR-03 角色: apps/web 的 POST /api/personas 请求体. 不含 persona_id/
+// owner_id/version(服务端生成/管理)、refs(走单独的 POST /:id/refs 上传接口,
+// 3–7 张的校验只在那一条路径上做,PATCH/创建都不碰 refs)。
+export interface CreatePersonaRequest {
+  name: string;
+  desc: string;
+  locked: string[];
+  default_outfit: string;
+  style: PersonaStyle;
+}
+
+// PATCH /api/personas/:id 请求体. Persona.version 不是乐观锁(不像
+// Episode.row_version),updatePersona 自己管 bump,所以这里没有 row_version
+// 信封,直接就是要改的字段。
+export type PersonaPatch = Partial<Pick<Persona, "name" | "desc" | "locked" | "default_outfit" | "style">>;
