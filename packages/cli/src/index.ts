@@ -5,10 +5,12 @@
  *   kelvoy run <stage> --episode <episode_id>
  *   kelvoy import-destination <path.json>
  *   kelvoy import-episode <path.json>
+ *   kelvoy import-template <path.json>
  */
 import type { StageName } from "@kelvoy/engine";
 import { importDestination } from "./import-destination";
 import { importEpisode } from "./import-episode";
+import { importTemplate } from "./import-template";
 import { runEpisodeStage } from "./run-stage";
 
 function usage(): never {
@@ -16,6 +18,7 @@ function usage(): never {
   console.error("  kelvoy run <stage> --episode <episode_id>");
   console.error("  kelvoy import-destination <path.json>");
   console.error("  kelvoy import-episode <path.json>");
+  console.error("  kelvoy import-template <path.json>");
   process.exit(1);
 }
 
@@ -66,6 +69,22 @@ async function runImportEpisode(argv: string[]): Promise<void> {
   console.log(`导入成功：${result.episode_id}`);
 }
 
+async function runImportTemplate(argv: string[]): Promise<void> {
+  const [path] = argv;
+  if (!path) usage();
+  const raw = await Bun.file(path).json();
+  const result = await importTemplate(raw);
+  if (!result.ok) {
+    console.error(`导入失败：${path}`);
+    for (const err of result.errors ?? []) {
+      console.error(`  - ${err}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`导入成功：${result.template_id}`);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   switch (command) {
@@ -75,6 +94,8 @@ async function main() {
       return runImportDestination(rest);
     case "import-episode":
       return runImportEpisode(rest);
+    case "import-template":
+      return runImportTemplate(rest);
     default:
       usage();
   }

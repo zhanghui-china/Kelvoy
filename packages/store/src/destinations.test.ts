@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Destination } from "@kelvoy/engine";
 import { close, open } from "./db";
-import { getDestination, upsertDestination } from "./destinations";
+import { getDestination, listDestinations, upsertDestination } from "./destinations";
 
 function fixture(id: string, name: string): Destination {
   return {
@@ -46,4 +46,16 @@ test("upserting the same id again overwrites in place", async () => {
   const result = await getDestination("d_2");
   expect(result?.name).toBe("新名字");
   expect(result?.version).toBe(2);
+});
+
+test("listDestinations returns everything (shared official data, no owner filter)", async () => {
+  await upsertDestination(fixture("d_1", "灵山大佛"));
+  await upsertDestination(fixture("d_2", "拈花湾"));
+
+  const result = await listDestinations();
+  expect(result.map((d) => d.destination_id).sort()).toEqual(["d_1", "d_2"]);
+});
+
+test("listDestinations returns an empty array when none exist", async () => {
+  expect(await listDestinations()).toEqual([]);
 });

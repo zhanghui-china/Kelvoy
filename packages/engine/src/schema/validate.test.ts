@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { Episode, Shot } from "./episode";
+import type { Persona } from "./persona";
+import type { Template } from "./template";
 import {
   validateEpisode,
   validatePatchEpisodeRequest,
   validatePatchShotRequest,
+  validatePersona,
   validateShot,
+  validateTemplate,
 } from "./validate";
 
 function validShot(no = 1): Shot {
@@ -176,5 +180,78 @@ describe("validatePatchShotRequest", () => {
   test("rejects a non-object patch", () => {
     const result = validatePatchShotRequest({ row_version: 1, patch: "nope" });
     expect(result.valid).toBe(false);
+  });
+});
+
+function validPersona(): Persona {
+  return {
+    persona_id: "c_001",
+    owner_id: "u_123",
+    version: 1,
+    name: "小岛",
+    desc: "30 岁男性，短发，中等身材，温和表情",
+    locked: ["脸型", "发型", "体态"],
+    default_outfit: "浅灰亚麻衬衫，卡其长裤",
+    refs: ["persona/c_001/front.png", "persona/c_001/side.png", "persona/c_001/full.png"],
+    style: { lut: "lut/warm_film.cube", title_style: "serif-center" },
+  };
+}
+
+describe("validatePersona", () => {
+  test("accepts a well-formed persona", () => {
+    expect(validatePersona(validPersona()).valid).toBe(true);
+  });
+
+  test("rejects fewer than 3 reference images", () => {
+    const p = { ...validPersona(), refs: ["a.png", "b.png"] };
+    const result = validatePersona(p);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.errors.some((e) => e.startsWith("refs:"))).toBe(true);
+  });
+
+  test("rejects more than 7 reference images", () => {
+    const p = { ...validPersona(), refs: Array(8).fill("a.png") };
+    expect(validatePersona(p).valid).toBe(false);
+  });
+
+  test("rejects a missing style object", () => {
+    const p = { ...validPersona(), style: undefined };
+    expect(validatePersona(p).valid).toBe(false);
+  });
+});
+
+function validTemplate(): Template {
+  return {
+    template_id: "t_scenic_area_day",
+    owner_id: null,
+    name: "大型景区 · 一日",
+    skeleton: "scenic_area",
+    lut: "lut/warm_film.cube",
+    intro: "intro/default.mp4",
+    outro: null,
+    title_style: "serif-center",
+  };
+}
+
+describe("validateTemplate", () => {
+  test("accepts a well-formed official template (owner_id null)", () => {
+    expect(validateTemplate(validTemplate()).valid).toBe(true);
+  });
+
+  test("accepts a well-formed private template (owner_id set)", () => {
+    const t = { ...validTemplate(), owner_id: "u_123" };
+    expect(validateTemplate(t).valid).toBe(true);
+  });
+
+  test("rejects an invalid skeleton enum value", () => {
+    const t = { ...validTemplate(), skeleton: "beach" };
+    const result = validateTemplate(t);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.errors.some((e) => e.startsWith("skeleton:"))).toBe(true);
+  });
+
+  test("rejects a missing lut", () => {
+    const t = { ...validTemplate(), lut: "" };
+    expect(validateTemplate(t).valid).toBe(false);
   });
 });

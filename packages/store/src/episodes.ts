@@ -50,6 +50,15 @@ export async function getEpisode(episodeId: string): Promise<GetEpisodeResult> {
   return { ok: true, episode: JSON.parse(row.doc) as Episode, row_version: row.row_version };
 }
 
+export async function listEpisodes(ownerId: string): Promise<Episode[]> {
+  const rows = getDb()
+    .query<{ doc: string }, [string]>(
+      "select doc from episodes where owner_id = ? order by episode_id",
+    )
+    .all(ownerId);
+  return rows.map((row) => JSON.parse(row.doc) as Episode);
+}
+
 export async function patchEpisode(
   episodeId: string,
   clientRowVersion: number,

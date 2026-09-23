@@ -25,3 +25,11 @@ bun run packages/cli/src/index.ts import-episode <path.json>
 ```
 
 手写的期 JSON 校验(`@kelvoy/engine` 的 `validateEpisode`)后写库,同款失败即报错不写库的规矩。`episode_id` 重复会报清晰错误,不会崩。
+
+## import-template
+
+```bash
+bun run packages/cli/src/index.ts import-template <path.json>
+```
+
+模板校验(`@kelvoy/engine` 的 `validateTemplate`)后写库,同款失败即报错不写库的规矩。`owner_id: null` 是官方模板,写非空字符串是用户私有模板。存在则覆盖(upsert,不像 destination/episode 那样报重复)。

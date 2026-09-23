@@ -17,7 +17,7 @@
 | `apps/worker` | 轮询 `@kelvoy/store` 的任务队列、调 `services/inference`、存产物到本地磁盘、跑 compose | 业务规则（那是 engine 的）、直接拼 SQL（走 `@kelvoy/store`） |
 | `services/inference` | 常驻 Python 推理：`/llm` `/image` `/video` `/upscale` | 流水线逻辑、音乐、ffmpeg |
 | `packages/engine` | 六阶段 `stages/`、`providers/` 接口与实现、`schema/`、`state/`、`rules/` | 任何 IO：不读写 DB / 文件 / 队列，只吃 JSON 吐 JSON |
-| `packages/store` | 唯一拥有 SQLite 连接的地方：`episodes`/`destinations`/`tasks` 三张表的读写，乐观锁 | 业务规则（校验/状态转移合法性调用 engine，不自己重写一遍） |
+| `packages/store` | 唯一拥有 SQLite 连接的地方：`episodes`/`destinations`/`personas`/`templates`/`tasks` 五张表的读写，乐观锁 | 业务规则（校验/状态转移合法性调用 engine，不自己重写一遍） |
 | `packages/cli` | `run <stage> --episode <id>`、`import-destination <json>` | 面向用户的功能 |
 | `infra` | DGX 编排笔记（`dgx/README.md`） | 密钥、容器编排配置（ADR-0004 后不需要了） |
 | `docs` | PRD、ADR、架构状态、手册 | 代码 |

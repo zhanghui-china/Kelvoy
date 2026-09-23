@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Episode } from "@kelvoy/engine";
 import { close, open } from "./db";
-import { getEpisode, insertEpisode, patchEpisode, patchShot, replaceEpisode } from "./episodes";
+import {
+  getEpisode,
+  insertEpisode,
+  listEpisodes,
+  patchEpisode,
+  patchShot,
+  replaceEpisode,
+} from "./episodes";
 
-function fixtureEpisode(id: string): Episode {
+function fixtureEpisode(id: string, ownerId = "u_test"): Episode {
   return {
     episode_id: id,
-    owner_id: "u_test",
+    owner_id: ownerId,
     persona_id: "c_test",
     persona_version: 1,
     destination_id: "d_test",
@@ -189,5 +196,20 @@ describe("replaceEpisode", () => {
     await insertEpisode(fixtureEpisode("e_10"));
     const result = await replaceEpisode("e_10", 999, fixtureEpisode("e_10"));
     expect(result).toEqual({ ok: false, error: "version_conflict", current_row_version: 1 });
+  });
+});
+
+describe("listEpisodes", () => {
+  test("only returns the given owner's episodes", async () => {
+    await insertEpisode(fixtureEpisode("e_a", "u_1"));
+    await insertEpisode(fixtureEpisode("e_b", "u_1"));
+    await insertEpisode(fixtureEpisode("e_c", "u_2"));
+
+    const mine = await listEpisodes("u_1");
+    expect(mine.map((e) => e.episode_id).sort()).toEqual(["e_a", "e_b"]);
+  });
+
+  test("returns an empty array for an owner with no episodes", async () => {
+    expect(await listEpisodes("u_nobody")).toEqual([]);
   });
 });

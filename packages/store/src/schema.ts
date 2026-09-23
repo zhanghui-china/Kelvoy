@@ -17,6 +17,21 @@ create table if not exists destinations (
   updated_at text not null default (datetime('now'))
 );
 
+create table if not exists personas (
+  persona_id text primary key,
+  owner_id text not null,
+  version integer not null default 1,
+  doc text not null,
+  updated_at text not null default (datetime('now'))
+);
+
+create table if not exists templates (
+  template_id text primary key,
+  owner_id text,
+  doc text not null,
+  updated_at text not null default (datetime('now'))
+);
+
 create table if not exists tasks (
   task_id text primary key,
   episode_id text not null,

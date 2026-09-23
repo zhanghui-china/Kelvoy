@@ -1,4 +1,5 @@
 import type { PatchEpisodeRequest, PatchShotRequest } from "./api";
+import type { DestinationType } from "./destination";
 import type {
   Episode,
   EpisodeBrief,
@@ -15,13 +16,15 @@ import type {
   ShotSize,
   ShotStatus,
 } from "./episode";
+import type { Persona, PersonaStyle } from "./persona";
+import type { Template } from "./template";
 
 /**
  * Runtime type guards for the request boundary — used by apps/web's
- * /internal/* handlers (whole Episode/Shot on import, patches on write-back)
- * and by packages/cli's `import-episode`. Same collect-every-error style as
- * packages/cli/src/validate-destination.ts: report the whole list, never
- * fail fast, never mutate the input.
+ * `/api/*` routes and packages/cli's `import-episode`/`import-template`
+ * (whole documents on import, patches on write-back via packages/store).
+ * Same collect-every-error style as packages/cli/src/validate-destination.ts:
+ * report the whole list, never fail fast, never mutate the input.
  */
 export type ValidationResult<T> = { valid: true; value: T } | { valid: false; errors: string[] };
 
@@ -53,6 +56,18 @@ const SHOT_STATUSES: ShotStatus[] = [
   "failed",
 ];
 const REGEN_STAGES: RegenStage[] = ["keyframe", "video"];
+// Also duplicated in packages/cli/src/validate-destination.ts — that one
+// validates the full Destination pack (M0 recon-and-import path), this one
+// only needs the enum for Template.skeleton. Not worth a shared package for
+// six string literals; keep both in sync by hand if the enum ever changes.
+const DESTINATION_TYPES: DestinationType[] = [
+  "mountain_summit",
+  "city_night",
+  "theme_town",
+  "scenic_area",
+  "water_town",
+  "island",
+];
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
@@ -383,4 +398,68 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: input as unknown as PatchShotRequest };
+}
+
+function validatePersonaStyle(input: unknown, errors: string[]): void {
+  if (!isPlainObject(input)) {
+    errors.push("style: 不是对象");
+    return;
+  }
+  const s = input as Partial<PersonaStyle>;
+  if (!isNonEmptyString(s.lut)) errors.push("style.lut: 缺失或为空");
+  if (!isNonEmptyString(s.title_style)) errors.push("style.title_style: 缺失或为空");
+}
+
+/** Validates a whole persona document (used by future import/create paths). */
+export function validatePersona(input: unknown): ValidationResult<Persona> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const p = input as Partial<Persona>;
+
+  if (!isNonEmptyString(p.persona_id)) errors.push("persona_id: 缺失或为空");
+  if (!isNonEmptyString(p.owner_id)) errors.push("owner_id: 缺失或为空");
+  if (!isFiniteNumber(p.version) || !Number.isInteger(p.version) || p.version < 1) {
+    errors.push("version: 必须是 ≥1 的整数");
+  }
+  if (!isNonEmptyString(p.name)) errors.push("name: 缺失或为空");
+  if (typeof p.desc !== "string") errors.push("desc: 必须是字符串");
+  if (!isStringArray(p.locked)) errors.push("locked: 必须是字符串数组");
+  if (!isNonEmptyString(p.default_outfit)) errors.push("default_outfit: 缺失或为空");
+  if (!isStringArray(p.refs) || p.refs.length < 3 || p.refs.length > 7) {
+    errors.push("refs: 必须是 3–7 张参考图路径的数组（FR-03）");
+  }
+  if (p.style !== undefined) validatePersonaStyle(p.style, errors);
+  else errors.push("style: 缺失");
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: p as Persona };
+}
+
+/** Validates a whole template document (used by `import-template`). */
+export function validateTemplate(input: unknown): ValidationResult<Template> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const t = input as Partial<Template>;
+
+  if (!isNonEmptyString(t.template_id)) errors.push("template_id: 缺失或为空");
+  if (t.owner_id !== null && !isNonEmptyString(t.owner_id)) {
+    errors.push("owner_id: 必须是字符串或 null（null = 官方模板）");
+  }
+  if (!isNonEmptyString(t.name)) errors.push("name: 缺失或为空");
+  if (!t.skeleton || !DESTINATION_TYPES.includes(t.skeleton as DestinationType)) {
+    errors.push(
+      `skeleton: 必须是 ${DESTINATION_TYPES.join(" / ")} 之一，实际是 ${JSON.stringify(t.skeleton)}`,
+    );
+  }
+  if (!isNonEmptyString(t.lut)) errors.push("lut: 缺失或为空");
+  if (t.intro !== null && !isNonEmptyString(t.intro)) errors.push("intro: 必须是字符串或 null");
+  if (t.outro !== null && !isNonEmptyString(t.outro)) errors.push("outro: 必须是字符串或 null");
+  if (!isNonEmptyString(t.title_style)) errors.push("title_style: 缺失或为空");
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: t as Template };
 }

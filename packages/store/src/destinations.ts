@@ -30,3 +30,10 @@ export async function getDestination(destinationId: string): Promise<Destination
     .get(destinationId);
   return row ? (JSON.parse(row.doc) as Destination) : null;
 }
+
+export async function listDestinations(): Promise<Destination[]> {
+  const rows = getDb()
+    .query<DestinationRow, []>("select doc from destinations order by destination_id")
+    .all();
+  return rows.map((row) => JSON.parse(row.doc) as Destination);
+}
