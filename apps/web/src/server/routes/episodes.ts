@@ -1,15 +1,92 @@
 import { join, resolve, sep } from "node:path";
-import { getEpisode, listEpisodes } from "@kelvoy/store";
+import type { Episode } from "@kelvoy/engine";
+import { validateCreateEpisodeRequest } from "@kelvoy/engine";
+import {
+  enqueueTask,
+  getDestination,
+  getEpisode,
+  getPersona,
+  getTemplate,
+  insertEpisode,
+  listEpisodes,
+} from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 
-// FR-01/FR-05/FR-08: 期列表/详情/产物文件. 审片台的写路由在 M2-6 (#22)。
+// FR-01/FR-05/FR-08: 建期/期列表/详情/产物文件. 审片台的写路由在 M2-6 (#22)。
 const episodes = new Hono();
 
 episodes.use("*", requireOwner);
 
 episodes.get("/", async (c) => {
   return c.json({ ok: true, episodes: await listEpisodes(c.get("ownerId")) });
+});
+
+episodes.post("/", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const result = validateCreateEpisodeRequest(body);
+  if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
+  const req = result.value;
+
+  const [persona, destination, template] = await Promise.all([
+    getPersona(req.persona_id),
+    getDestination(req.destination_id),
+    getTemplate(req.template_id),
+  ]);
+  if (!persona || persona.owner_id !== c.get("ownerId")) {
+    return c.json({ ok: false, error: "persona_not_found" }, 404);
+  }
+  if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
+  if (!template) return c.json({ ok: false, error: "template_not_found" }, 404);
+
+  // FR-01"缺字段给默认值"：mode 的默认值(per_shot)是 PRD §6 原文写明的；
+  // series_id/season/tone/banned 没有 PRD 原文默认值可抄，这里按合理取舍
+  // 补：series_id 缺省时 1 目的地 = 1 系列(PRD 没有定义"系列"怎么分组多个
+  // 目的地，等以后真需要跨目的地系列时再改)；season 缺省取目的地的
+  // season_best 第一项，没有就空字符串；tone/banned 缺省给空。
+  const episode: Episode = {
+    episode_id: `e_${crypto.randomUUID()}`,
+    owner_id: c.get("ownerId"),
+    persona_id: persona.persona_id,
+    persona_version: persona.version,
+    destination_id: destination.destination_id,
+    destination_version: destination.version,
+    series_id: req.series_id ?? destination.destination_id,
+    template_id: template.template_id,
+    status: "draft",
+    mode: req.mode ?? "per_shot",
+    created_at: new Date().toISOString(),
+    estimated_credits: 0, // FR-09 估价公式卡 M0-6，estimateCredits() 占位未接入，见 credits.ts
+    credits_used: 0,
+    share: { enabled: false, slug: "" },
+    brief: {
+      season: req.season ?? destination.season_best[0] ?? "",
+      aspect: "9:16",
+      duration_s: 30,
+      tone: req.tone ?? "",
+      outfit_override: null,
+      banned: req.banned ?? [],
+    },
+    grid_refs: [],
+    scenes: [],
+    shots: [],
+    removed_shots: [],
+    // Template 没有音乐字段(配乐按 tone 自动选是 assets 阶段的业务逻辑，
+    // 不是建期这一步该做的事)，这里只给空占位，由后续阶段真正填入。
+    music: { file: "", bpm: 0, license: "" },
+    render: {
+      res: "1080x1920",
+      fps: 30,
+      title: `${destination.city} · ${destination.name}`,
+      intro: template.intro,
+      outro: template.outro,
+      ai_label: true,
+    },
+  };
+
+  await insertEpisode(episode);
+  await enqueueTask({ episode_id: episode.episode_id, stage: "brief" });
+  return c.json({ ok: true, episode }, 201);
 });
 
 episodes.get("/:id", async (c) => {

@@ -1,4 +1,4 @@
-import type { Episode, Shot } from "./episode";
+import type { Episode, EpisodeMode, Shot } from "./episode";
 import type { Persona, PersonaStyle } from "./persona";
 import type { StageName } from "../stages";
 
@@ -90,3 +90,21 @@ export interface CreatePersonaRequest {
 // Episode.row_version),updatePersona 自己管 bump,所以这里没有 row_version
 // 信封,直接就是要改的字段。
 export type PersonaPatch = Partial<Pick<Persona, "name" | "desc" | "locked" | "default_outfit" | "style">>;
+
+// FR-01 建期: apps/web 的 POST /api/episodes 请求体. series_id/season/
+// tone/banned/mode 都可省略——省略时由路由按 FR-01"缺字段给默认值"的验收
+// 要求补上(mode 默认 per_shot 是 PRD 原文写明的默认值,其余是本 issue 自定
+// 的合理默认,见 M2-5 commit)。persona_version/destination_version/
+// render/music/estimated_credits 等派生字段不在请求体里——那些是服务端在
+// 提交那一刻从 persona/destination/template 当前状态算出来的快照,不是
+// 客户端能直接指定的。
+export interface CreateEpisodeRequest {
+  persona_id: string;
+  destination_id: string;
+  template_id: string;
+  series_id?: string;
+  season?: string;
+  tone?: string;
+  banned?: string[];
+  mode?: EpisodeMode;
+}

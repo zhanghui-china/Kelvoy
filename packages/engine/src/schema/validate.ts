@@ -1,4 +1,5 @@
 import type {
+  CreateEpisodeRequest,
   CreatePersonaRequest,
   LoginRequest,
   PatchEpisodeRequest,
@@ -10,6 +11,7 @@ import type { DestinationType } from "./destination";
 import type {
   Episode,
   EpisodeBrief,
+  EpisodeMode,
   EpisodeMusic,
   EpisodeRender,
   EpisodeShare,
@@ -63,6 +65,7 @@ const SHOT_STATUSES: ShotStatus[] = [
   "failed",
 ];
 const REGEN_STAGES: RegenStage[] = ["keyframe", "video"];
+const EPISODE_MODES: EpisodeMode[] = ["per_shot", "grid"];
 // Also duplicated in packages/cli/src/validate-destination.ts — that one
 // validates the full Destination pack (M0 recon-and-import path), this one
 // only needs the enum for Template.skeleton. Not worth a shared package for
@@ -550,4 +553,33 @@ export function validateTemplate(input: unknown): ValidationResult<Template> {
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: t as Template };
+}
+
+/**
+ * Validates apps/web's POST /api/episodes request body (M2-5). Only the
+ * three foreign keys are required — season/tone/banned/mode/series_id are
+ * all optional here, the route fills defaults for whichever are missing
+ * (FR-01"缺字段给默认值"), so validation only rejects fields that are
+ * *present but the wrong shape*, never a merely-absent optional field.
+ */
+export function validateCreateEpisodeRequest(input: unknown): ValidationResult<CreateEpisodeRequest> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const r = input as Partial<CreateEpisodeRequest>;
+
+  if (!isNonEmptyString(r.persona_id)) errors.push("persona_id: 缺失或为空");
+  if (!isNonEmptyString(r.destination_id)) errors.push("destination_id: 缺失或为空");
+  if (!isNonEmptyString(r.template_id)) errors.push("template_id: 缺失或为空");
+  if ("series_id" in r && !isNonEmptyString(r.series_id)) errors.push("series_id: 必须是非空字符串");
+  if ("season" in r && !isNonEmptyString(r.season)) errors.push("season: 必须是非空字符串");
+  if ("tone" in r && !isNonEmptyString(r.tone)) errors.push("tone: 必须是非空字符串");
+  if ("banned" in r && !isStringArray(r.banned)) errors.push("banned: 必须是字符串数组");
+  if ("mode" in r && !EPISODE_MODES.includes(r.mode as EpisodeMode)) {
+    errors.push(`mode: 必须是 ${EPISODE_MODES.join(" / ")} 之一`);
+  }
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: r as CreateEpisodeRequest };
 }
