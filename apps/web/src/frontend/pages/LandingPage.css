@@ -1,0 +1,290 @@
+/* 官网单页 + 锚点导航（#45 M2-17）。独立文件而不是加进 index.css——那边
+   M2-12 刚定稿、五个并行 issue 都在改，这次布局跟旧 .k-landing-nav 等
+   class 差异太大，换一套 .k-lp- 前缀避免撞名。复用 index.css 已有的跨页
+   工具类：.k-eyebrow / .k-card / .k-card-title / .k-pill(-accent) / .k-btn(-primary)
+   / .k-mono / .k-empty / .k-error，颜色变量全部走 :root 里已有的 token，
+   这里不重定义任何一个。 */
+
+.k-lp-page {
+  --k-lp-nav-h: 64px;
+}
+
+/* 导航：sticky 而不是 fixed——page 顶部没有其它元素，sticky 效果等价于
+   固定，还省了给 hero 手动加 padding-top 抵消脱离文档流的高度。 */
+.k-lp-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--k-lp-nav-h);
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0 1.5rem;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.k-lp-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+/* 中间锚点列表横向滚动——手机宽度（~400px）不折叠成汉堡菜单，直接滚，
+   满足验收项"手机宽度导航折叠或横向滚动，不溢出"。 */
+.k-lp-nav-links {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 1.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.k-lp-nav-links::-webkit-scrollbar {
+  display: none;
+}
+
+.k-lp-nav-links a {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.k-lp-nav-links a:hover {
+  color: var(--color-accent);
+}
+
+.k-lp-nav-cta {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 1.1rem;
+}
+
+/* 每个 section 的滚动定位都要扣掉导航高度，不然平滑滚动后标题被导航挡住。 */
+#top,
+.k-lp-section {
+  scroll-margin-top: calc(var(--k-lp-nav-h) + 12px);
+}
+
+.k-lp-hero {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  text-align: center;
+  align-items: center;
+}
+
+.k-lp-hero h1 {
+  font-size: 2.5rem;
+  line-height: 1.25;
+}
+
+.k-lp-hero p {
+  font-size: 1.02rem;
+  line-height: 1.85;
+  color: var(--color-ink-soft);
+  margin: 0;
+}
+
+.k-lp-hero-cta {
+  margin-top: 0.5rem;
+}
+
+.k-lp-section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 3.5rem 1.5rem 0 1.5rem;
+}
+
+.k-lp-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.k-lp-section-head h2 {
+  font-size: 1.7rem;
+}
+
+.k-lp-how-substep-head {
+  margin-top: 2.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.k-lp-how-substep-head h3 {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.k-lp-section-lead {
+  max-width: 760px;
+  font-size: 1rem;
+  line-height: 1.85;
+  color: var(--color-ink-soft);
+  margin: 0 0 2rem 0;
+}
+
+/* #solutions 三张 P0 用户卡 */
+.k-lp-user-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.k-lp-user-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.k-lp-user-row p {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.9rem;
+  color: var(--color-ink-soft);
+  line-height: 1.6;
+}
+
+/* #features 三张护城河卡 */
+.k-lp-pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  border-top: 1px solid var(--color-ink);
+  padding-top: 1.5rem;
+}
+
+.k-lp-pillar p {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  line-height: 1.7;
+}
+
+/* #how 六阶段流程条：横向滚动，手机上不挤压卡片 */
+.k-lp-flow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.k-lp-flow-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.k-lp-flow-arrow {
+  color: var(--color-muted);
+}
+
+.k-lp-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.25rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.5rem;
+}
+
+.k-lp-step-no {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--color-accent);
+}
+
+.k-lp-step p {
+  margin: 0.4rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+/* #destinations 真实数据卡 */
+.k-lp-dest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.k-lp-dest-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.k-lp-dest-stats {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+}
+
+/* #faq */
+.k-lp-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 760px;
+}
+
+.k-lp-faq-item p {
+  margin: 0.4rem 0 0 0;
+  font-size: 0.92rem;
+  color: var(--color-ink-soft);
+  line-height: 1.75;
+}
+
+.k-lp-footer {
+  max-width: 1080px;
+  margin: 3.5rem auto 0 auto;
+  padding: 1.75rem 1.5rem 2.5rem 1.5rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.k-lp-footer-login {
+  margin-left: auto;
+}
+
+@media (max-width: 720px) {
+  .k-lp-user-grid,
+  .k-lp-pillar-grid {
+    grid-template-columns: 1fr;
+  }
+  .k-lp-steps-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .k-lp-hero h1 {
+    font-size: 2rem;
+  }
+  .k-lp-nav {
+    gap: 1rem;
+    padding: 0 1rem;
+  }
+  .k-lp-footer-login {
+    margin-left: 0;
+  }
+}
