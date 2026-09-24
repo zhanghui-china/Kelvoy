@@ -1,6 +1,7 @@
-import type { Episode, ShotModelRecord } from "@kelvoy/engine";
+import type { Episode } from "@kelvoy/engine";
 import { episodeFileUrl, recompose, setEpisodeShare, shareUrl } from "../api/client";
 import { MutationError } from "./ShotHeader";
+import { tally } from "./tally";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
 /**
@@ -11,40 +12,6 @@ import type { EpisodeMutation } from "./useEpisodeMutation";
  */
 function finalKey(episodeId: string): string {
   return `final/${episodeId}.mp4`;
-}
-
-interface ProviderTally {
-  provider: string;
-  model: string;
-  shots: number;
-  attempts: number;
-  costUsd: number;
-}
-
-// 成本报告按 provider+model 汇总每镜的 model.image / model.video 记录
-// （§6 的可复现记录里就有 attempts 和 cost_usd，不用另存一份账）。
-function tally(episode: Episode): ProviderTally[] {
-  const rows = new Map<string, ProviderTally>();
-  const records: ShotModelRecord[] = [];
-  for (const shot of episode.shots) {
-    if (shot.model.image) records.push(shot.model.image);
-    if (shot.model.video) records.push(shot.model.video);
-  }
-  for (const record of records) {
-    const key = `${record.provider}/${record.model}`;
-    const row = rows.get(key) ?? {
-      provider: record.provider,
-      model: record.model,
-      shots: 0,
-      attempts: 0,
-      costUsd: 0,
-    };
-    row.shots += 1;
-    row.attempts += record.attempts;
-    row.costUsd += record.cost_usd;
-    rows.set(key, row);
-  }
-  return [...rows.values()];
 }
 
 export default function DoneView({
@@ -117,7 +84,8 @@ export default function DoneView({
       <div className="k-card">
         <div className="k-card-title">成本报告</div>
         <div className="k-card-meta">
-          预估 {episode.estimated_credits} GPU 分钟 · 实际用掉 {episode.credits_used} GPU 分钟
+          预估 <span className="k-mono">{episode.estimated_credits}</span> GPU 分钟 · 实际用掉{" "}
+          <span className="k-mono">{episode.credits_used}</span> GPU 分钟
         </div>
         {rows.length === 0 ? (
           <p className="k-empty">还没有模型调用记录。</p>
@@ -138,14 +106,14 @@ export default function DoneView({
                   <tr key={`${row.provider}/${row.model}`}>
                     <td>{row.provider}</td>
                     <td>{row.model}</td>
-                    <td>{row.shots}</td>
-                    <td>{row.attempts}</td>
-                    <td>{row.costUsd.toFixed(4)}</td>
+                    <td className="k-mono">{row.shots}</td>
+                    <td className="k-mono">{row.attempts}</td>
+                    <td className="k-mono">{row.costUsd.toFixed(4)}</td>
                   </tr>
                 ))}
                 <tr>
                   <td colSpan={4}>合计</td>
-                  <td>{totalCost.toFixed(4)}</td>
+                  <td className="k-mono">{totalCost.toFixed(4)}</td>
                 </tr>
               </tbody>
             </table>

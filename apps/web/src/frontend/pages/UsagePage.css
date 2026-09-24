@@ -1,0 +1,30 @@
+/* 用量页（M2-16, #44）。跟 NewEpisodePage.css 同样的理由拆成独立文件：
+   index.css 已经超过 CLAUDE.md 的 500 行上限（历史债务，见 #40 的汇报），
+   这里只复用它和 review.css 定义的变量/工具类，不再往那两个文件里加。 */
+
+.k-usage-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.k-usage-total-value {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.k-usage-table-row {
+  cursor: pointer;
+}
+
+.k-usage-table-row:hover {
+  background: var(--color-bg);
+}
+
+@media (max-width: 780px) {
+  .k-usage-totals {
+    grid-template-columns: 1fr;
+  }
+}
