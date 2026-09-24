@@ -1,5 +1,5 @@
 import { type StageName, runStage, transitionEpisode } from "@kelvoy/engine";
-import { getEpisode, patchEpisode, replaceEpisode } from "@kelvoy/store";
+import { getDestination, getEpisode, patchEpisode, replaceEpisode } from "@kelvoy/store";
 
 export type RunStageResult = { ok: true; row_version: number } | { ok: false; error: string };
 
@@ -31,7 +31,11 @@ export async function runEpisodeStage(episodeId: string, stage: StageName): Prom
   }
 
   try {
-    const updated = await runStage(stage, result.episode);
+    // Engine stages don't touch @kelvoy/store (CLAUDE.md directory table) —
+    // "script" needs the destination record, so it's fetched here and
+    // threaded through as context. Other stages ignore it for now.
+    const destination = await getDestination(result.episode.destination_id);
+    const updated = await runStage(stage, result.episode, undefined, destination ? { destination } : undefined);
     const written = await replaceEpisode(episodeId, result.row_version, updated);
     if (!written.ok) {
       return { ok: false, error: `写回失败：${written.error}` };

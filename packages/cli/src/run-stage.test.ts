@@ -62,9 +62,11 @@ test("refuses to run a stage when the episode can't advance (terminal state)", a
 
 test("stage failure from a non-generating status (draft) reports the error without crashing", async () => {
   await insertEpisode(fixtureEpisode("e_draft", "draft"));
-  const result = await runEpisodeStage("e_draft", "brief");
+  // "assets" is still a not-implemented stub (unlike "brief", real since
+  // M1-10) — convenient stand-in for "a stage that currently fails".
+  const result = await runEpisodeStage("e_draft", "assets");
   expect(result.ok).toBe(false);
-  expect(!result.ok && result.error).toContain("阶段 brief 失败");
+  expect(!result.ok && result.error).toContain("阶段 assets 失败");
 
   // "failed" isn't reachable from "draft" (not a generating state) — the
   // best-effort patch silently no-ops, status stays "draft".

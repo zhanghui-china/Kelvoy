@@ -55,10 +55,12 @@ test("handleTask fails permanently when the episode doesn't exist", async () => 
 
 test("handleTask requeues on stage failure while under the local retry budget", async () => {
   await insertEpisode(fixtureEpisode("e_1"));
-  const task = await enqueueTask({ episode_id: "e_1", stage: "brief" });
+  // "assets" is still a not-implemented stub (unlike "brief", real since
+  // M1-10) — convenient stand-in for "a stage that currently fails".
+  const task = await enqueueTask({ episode_id: "e_1", stage: "assets" });
   await dequeueTask(); // attempt 1, now "processing"
 
-  await handleTask(task); // runStage("brief", ...) throws (not implemented yet)
+  await handleTask(task); // runStage("assets", ...) throws (not implemented yet)
 
   const retried = await dequeueTask();
   expect(retried?.task_id).toBe(task.task_id);
@@ -67,7 +69,7 @@ test("handleTask requeues on stage failure while under the local retry budget", 
 
 test("handleTask stops requeuing once MAX_LOCAL_ATTEMPTS is exhausted", async () => {
   await insertEpisode(fixtureEpisode("e_2"));
-  const task = await enqueueTask({ episode_id: "e_2", stage: "brief" });
+  const task = await enqueueTask({ episode_id: "e_2", stage: "assets" });
 
   // First attempt: fails, requeues (attempt 1 -> 2).
   await dequeueTask();

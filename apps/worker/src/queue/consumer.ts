@@ -1,5 +1,5 @@
 import { type Task, runStage } from "@kelvoy/engine";
-import { completeTask, dequeueTask, failTask, getEpisode, replaceEpisode } from "@kelvoy/store";
+import { completeTask, dequeueTask, failTask, getDestination, getEpisode, replaceEpisode } from "@kelvoy/store";
 
 /**
  * Task queue consumer (ADR-0004): polls the local `tasks` table (no Redis,
@@ -36,7 +36,15 @@ export async function handleTask(task: Task): Promise<void> {
   }
 
   try {
-    const updated = await runStage(task.stage, result.episode, task.shot_no);
+    // Engine stages don't touch @kelvoy/store — "script" needs the
+    // destination record, fetched here and threaded through as context.
+    const destination = await getDestination(result.episode.destination_id);
+    const updated = await runStage(
+      task.stage,
+      result.episode,
+      task.shot_no,
+      destination ? { destination } : undefined,
+    );
     const written = await replaceEpisode(task.episode_id, result.row_version, updated);
     if (!written.ok) {
       // Lost a write race or the transition became illegal between our

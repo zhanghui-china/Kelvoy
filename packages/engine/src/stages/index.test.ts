@@ -3,7 +3,12 @@ import { runStage } from "./index";
 import type { Episode } from "../schema";
 
 test("runStage dispatches to the named stage and rejects as not implemented", async () => {
-  await expect(runStage("brief", {} as Episode)).rejects.toThrow("not implemented");
+  await expect(runStage("assets", {} as Episode)).rejects.toThrow("not implemented");
+});
+
+test("runStage dispatches to brief (implemented, M1-10) and advances draft -> scripting", async () => {
+  const updated = await runStage("brief", { status: "draft" } as Episode);
+  expect(updated.status).toBe("scripting");
 });
 
 // Per-shot stages (keyframe/video) need shot_no threaded through from the

@@ -1,7 +1,10 @@
-import type { Destination, Episode, EpisodeBrief, Persona, Shot } from "../schema";
+import type { Destination, Episode, EpisodeBrief, Persona, Scene, Shot } from "../schema";
 
 export interface ScriptProvider {
-  generateShots(input: { brief: EpisodeBrief; destination: Destination }): Promise<Shot[]>;
+  generateShots(input: {
+    brief: EpisodeBrief;
+    destination: Destination;
+  }): Promise<{ shots: Shot[]; scenes: Scene[] }>;
 }
 
 export interface IdentityProvider {
