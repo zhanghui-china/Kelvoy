@@ -1,5 +1,13 @@
-import { type Task, runStage } from "@kelvoy/engine";
-import { completeTask, dequeueTask, failTask, getDestination, getEpisode, replaceEpisode } from "@kelvoy/store";
+import { type EpisodeStatus, type StageName, type Task, runStage } from "@kelvoy/engine";
+import {
+  completeTask,
+  dequeueTask,
+  enqueueTask,
+  failTask,
+  getDestination,
+  getEpisode,
+  replaceEpisode,
+} from "@kelvoy/store";
 
 /**
  * Task queue consumer (ADR-0004): polls the local `tasks` table (no Redis,
@@ -14,6 +22,16 @@ const POLL_INTERVAL_MS = 1000;
 // This loop only tracks whether to requeue; overflow policy lives in
 // packages/engine/src/providers/overflow.ts.
 const MAX_LOCAL_ATTEMPTS = 2;
+
+// M1-15 (#39): the only stage pair in the six-stage pipeline with no human
+// review gate between them (PRD §4 flowchart: A[brief] --> B[script] direct)
+// — every other hand-off is driven by a person via apps/web's
+// REVIEW_GATE_ADVANCE (episodes.ts POST /:id/continue). Keyed by the status
+// a completed stage just landed the episode in, not by stage name, to
+// mirror that table's shape.
+const AUTO_ADVANCE: Partial<Record<EpisodeStatus, StageName>> = {
+  scripting: "script",
+};
 
 export async function consumeLoop(signal?: AbortSignal): Promise<void> {
   while (!signal?.aborted) {
@@ -54,6 +72,11 @@ export async function handleTask(task: Task): Promise<void> {
       return;
     }
     await completeTask(task.task_id);
+
+    const nextStage = AUTO_ADVANCE[updated.status];
+    if (nextStage) {
+      await enqueueTask({ episode_id: task.episode_id, stage: nextStage });
+    }
   } catch {
     await failTask(task.task_id, { requeue: task.attempt < MAX_LOCAL_ATTEMPTS });
   }

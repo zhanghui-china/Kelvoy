@@ -53,6 +53,17 @@ test("handleTask fails permanently when the episode doesn't exist", async () => 
   expect(await dequeueTask()).toBeNull();
 });
 
+test("handleTask auto-enqueues script once brief lands the episode in scripting (#39)", async () => {
+  await insertEpisode(fixtureEpisode("e_brief"));
+  const task = await enqueueTask({ episode_id: "e_brief", stage: "brief" });
+  await dequeueTask();
+  await handleTask(task);
+
+  const next = await dequeueTask();
+  expect(next?.episode_id).toBe("e_brief");
+  expect(next?.stage).toBe("script");
+});
+
 test("handleTask requeues on stage failure while under the local retry budget", async () => {
   await insertEpisode(fixtureEpisode("e_1"));
   // "assets" is still a not-implemented stub (unlike "brief", real since
