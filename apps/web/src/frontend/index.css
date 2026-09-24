@@ -556,6 +556,95 @@ a:hover {
   }
 }
 
+/* 首页（EpisodesPage）*/
+
+.k-home-top-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 1rem;
+}
+
+.k-home-resume,
+.k-home-new,
+.k-home-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.k-home-resume {
+  text-decoration: none;
+  color: inherit;
+  position: relative;
+}
+
+.k-home-resume-btn {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+  height: 36px;
+  padding: 0 1rem;
+}
+
+.k-home-new {
+  text-decoration: none;
+  color: inherit;
+  border-style: dashed;
+  justify-content: center;
+}
+
+.k-home-new-plus {
+  font-size: 1.6rem;
+  color: var(--color-muted);
+  line-height: 1;
+}
+
+.k-home-stats-row {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.k-home-stat-value {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.k-series-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.k-series-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.k-series-row:first-child {
+  border-top: none;
+}
+
+.k-series-action {
+  font-size: 0.85rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 780px) {
+  .k-home-top-row {
+    grid-template-columns: 1fr;
+  }
+  .k-series-row {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+}
+
 /* 角色工作室（PersonasPage）*/
 
 .k-persona-grid {
