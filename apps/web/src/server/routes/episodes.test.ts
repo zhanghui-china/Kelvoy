@@ -330,6 +330,36 @@ test("GET /estimate returns a cost estimate for a given mode without touching th
   );
 });
 
+test("GET /estimate takes the candidate count from the query (M2-15 出片默认值)", async () => {
+  const { cookie } = await login("dannei");
+  const app = buildApp();
+
+  const res = await app.request("/api/episodes/estimate?mode=per_shot&candidates=3", {
+    headers: { cookie },
+  });
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { estimate: unknown };
+  expect(body.estimate).toEqual(estimateCost({ mode: "per_shot", candidates: 3 }));
+
+  // 不传 candidates 时行为不变：仍然是 credits.ts 的 DEFAULT_CANDIDATES。
+  const noCandidates = await app.request("/api/episodes/estimate?mode=per_shot", {
+    headers: { cookie },
+  });
+  expect((await noCandidates.json()).estimate).toEqual(estimateCost({ mode: "per_shot" }));
+});
+
+test("GET /estimate rejects a candidate count outside 1–3", async () => {
+  const { cookie } = await login("dannei");
+  const app = buildApp();
+
+  for (const value of ["0", "4", "2.5", "abc"]) {
+    const res = await app.request(`/api/episodes/estimate?mode=per_shot&candidates=${value}`, {
+      headers: { cookie },
+    });
+    expect(res.status).toBe(400);
+  }
+});
+
 test("GET /estimate rejects a missing or invalid mode", async () => {
   const { cookie } = await login("dannei");
   const app = buildApp();

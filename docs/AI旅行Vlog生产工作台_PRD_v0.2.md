@@ -133,7 +133,7 @@ flowchart LR
 
 五个持久对象：账号（User）、角色（账号级）、目的地（共享资产，官方维护）、模板（官方 / 私有）、期（一次生产）。都是本地 SQLite 一条记录（期 JSON 存一列，**SQLite 是唯一真源**，见 ADR-0004）+ 本地磁盘一个目录，字段可扩但不可删；期里的 `shots[]` 是流水线的工作面。队列任务和登录 session 是瞬态对象，只带引用不带正文，各存在同一个 SQLite 库的一张表里（`tasks`、`sessions`）。TS 类型在 `packages/engine/src/schema/`，与本节一一对应；持久化实现在 `packages/store/`。
 
-账号（User）目前只有登录必需的字段——积分余额与消耗明细（FR-11）现在加只是空占位，不如不加，要不要加见附录 A。期上的 `estimated_credits` / `credits_used` 两个字段保留不动：填的是成本估算与实际消耗的等价值（口径见 FR-09），不涉及扣费。
+账号（User）只有登录必需的字段 + 一列 `settings`（出片默认值：默认语气 / 默认每镜候选数 / 默认关键帧模式，设置页写入、新建一期页读来预填，见 §16、M2-15；三项都可缺省，缺省时回落到代码里的默认常量，所以没设置过的账号行为跟加这一列之前一样）——积分余额与消耗明细（FR-11）现在加只是空占位，不如不加，要不要加见附录 A。期上的 `estimated_credits` / `credits_used` 两个字段保留不动：填的是成本估算与实际消耗的等价值（口径见 FR-09），不涉及扣费。
 
 **枚举**
 
@@ -157,7 +157,8 @@ flowchart LR
   "user_id": "u_123",
   "username": "dannei",
   "password_hash": "$argon2id$...",
-  "created_at": "2026-09-23T10:00:00+08:00"
+  "created_at": "2026-09-23T10:00:00+08:00",
+  "settings": { "default_tone": "松弛", "default_candidates": 2, "default_mode": "per_shot" }
 }
 
 // 角色（账号级资产）

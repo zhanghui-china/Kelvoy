@@ -36,7 +36,8 @@ create table if not exists users (
   user_id text primary key,
   username text not null unique,
   password_hash text not null,
-  created_at text not null default (datetime('now'))
+  created_at text not null default (datetime('now')),
+  settings text not null default '{}'
 );
 
 create table if not exists sessions (
@@ -56,3 +57,17 @@ create table if not exists tasks (
   updated_at text not null default (datetime('now'))
 );
 `;
+
+/**
+ * 已有库的补列（M2-15 给 users 加了 settings）。SQLite 没有
+ * "add column if not exists"，而上面的 `create table if not exists` 对已经
+ * 建好的 data/kelvoy.db 不起作用——新列只能靠这里补。按列名判断，重复运行
+ * 无副作用（每次 open() 都会跑一遍）。
+ */
+export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
+  {
+    table: "users",
+    column: "settings",
+    ddl: "alter table users add column settings text not null default '{}'",
+  },
+];

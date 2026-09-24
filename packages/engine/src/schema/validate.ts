@@ -1,4 +1,5 @@
 import type {
+  ChangePasswordRequest,
   CreateEpisodeRequest,
   CreatePersonaRequest,
   CreateTemplateRequest,
@@ -27,6 +28,11 @@ import type {
 } from "./episode";
 import type { Persona, PersonaStyle } from "./persona";
 import type { Template } from "./template";
+import {
+  SETTINGS_CANDIDATES_MAX,
+  SETTINGS_CANDIDATES_MIN,
+  type UserSettings,
+} from "./user";
 
 /**
  * Runtime type guards for the request boundary — used by apps/web's
@@ -617,4 +623,58 @@ export function validateCreateEpisodeRequest(input: unknown): ValidationResult<C
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: r as CreateEpisodeRequest };
+}
+
+/**
+ * Validates apps/web's POST /api/me/password request body (M2-15). 新密码
+ * 的强度要求跟 `packages/cli create-user` 保持一致——那条命令只要求非空，
+ * 这里不自己多发明一条长度下限，否则同一个账号体系会有两套口径。
+ */
+export function validateChangePasswordRequest(input: unknown): ValidationResult<ChangePasswordRequest> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const r = input as Partial<ChangePasswordRequest>;
+
+  if (!isNonEmptyString(r.current_password)) errors.push("current_password: 缺失或为空");
+  if (!isNonEmptyString(r.new_password)) errors.push("new_password: 缺失或为空");
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: r as ChangePasswordRequest };
+}
+
+/**
+ * Validates apps/web's PATCH /api/me/settings request body (M2-15). 是个
+ * patch：只校验出现了的字段，没出现的字段保持原值（合并在
+ * packages/store 的 updateUserSettings 里做）。default_tone 允许空字符串
+ * ——那是"清空默认语气"的表达方式，不是缺失。
+ */
+export function validateUserSettingsPatch(input: unknown): ValidationResult<UserSettings> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const s = input as UserSettings;
+
+  if ("default_tone" in s && typeof s.default_tone !== "string") {
+    errors.push("default_tone: 必须是字符串");
+  }
+  if (
+    "default_candidates" in s &&
+    (!isFiniteNumber(s.default_candidates) ||
+      !Number.isInteger(s.default_candidates) ||
+      s.default_candidates < SETTINGS_CANDIDATES_MIN ||
+      s.default_candidates > SETTINGS_CANDIDATES_MAX)
+  ) {
+    errors.push(
+      `default_candidates: 必须是 ${SETTINGS_CANDIDATES_MIN}–${SETTINGS_CANDIDATES_MAX} 的整数`,
+    );
+  }
+  if ("default_mode" in s && !isOneOf(s.default_mode, EPISODE_MODES)) {
+    errors.push(`default_mode: 必须是 ${EPISODE_MODES.join(" / ")} 之一`);
+  }
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: s };
 }

@@ -1,0 +1,48 @@
+/* 设置页（M2-15, #43）。独立文件的理由同 NewEpisodePage.css——index.css
+   已经超过 CLAUDE.md 的 500 行上限，这里只补这一页独有的 k-settings- 前缀
+   类，配色和 .k-card/.k-field/.k-btn/.k-error 都直接复用它定义的那套。 */
+
+.k-settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 560px;
+}
+
+.k-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.k-settings-fieldset {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.k-settings-fieldset legend {
+  font-family: var(--font-display);
+  font-weight: 700;
+  padding: 0 0.3rem;
+}
+
+.k-settings-radio {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.k-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}

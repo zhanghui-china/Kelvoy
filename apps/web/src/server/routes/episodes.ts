@@ -3,6 +3,8 @@ import type { Episode, Template } from "@kelvoy/engine";
 import {
   checkContent,
   estimateCost,
+  SETTINGS_CANDIDATES_MAX,
+  SETTINGS_CANDIDATES_MIN,
   validateCreateEpisodeRequest,
   validatePatchEpisodeRequest,
 } from "@kelvoy/engine";
@@ -120,7 +122,23 @@ episodes.get("/estimate", (c) => {
   if (mode !== "per_shot" && mode !== "grid") {
     return c.json({ ok: false, error: "invalid_mode" }, 400);
   }
-  return c.json({ ok: true, estimate: estimateCost({ mode }) });
+
+  // M2-15：候选数由表单传上来（来自账号的出片默认值，用户可当场改），
+  // 不传就沿用 credits.ts 的 DEFAULT_CANDIDATES。范围跟设置页同一套常量。
+  const rawCandidates = c.req.query("candidates");
+  let candidates: number | undefined;
+  if (rawCandidates !== undefined) {
+    candidates = Number(rawCandidates);
+    if (
+      !Number.isInteger(candidates) ||
+      candidates < SETTINGS_CANDIDATES_MIN ||
+      candidates > SETTINGS_CANDIDATES_MAX
+    ) {
+      return c.json({ ok: false, error: "invalid_candidates" }, 400);
+    }
+  }
+
+  return c.json({ ok: true, estimate: estimateCost({ mode, candidates }) });
 });
 
 episodes.get("/:id", async (c) => {

@@ -3,6 +3,7 @@ import type { Episode, Shot } from "./episode";
 import type { Persona } from "./persona";
 import type { Template } from "./template";
 import {
+  validateChangePasswordRequest,
   validateCreateEpisodeRequest,
   validateCreateTemplateRequest,
   validateEpisode,
@@ -11,6 +12,7 @@ import {
   validatePersona,
   validateShot,
   validateTemplate,
+  validateUserSettingsPatch,
 } from "./validate";
 
 function validShot(no = 1): Shot {
@@ -346,5 +348,51 @@ describe("validateCreateEpisodeRequest", () => {
   test("rejects an invalid mode enum value", () => {
     const body = { ...validCreateEpisodeRequest(), mode: "square" };
     expect(validateCreateEpisodeRequest(body).valid).toBe(false);
+  });
+});
+
+describe("validateChangePasswordRequest", () => {
+  test("accepts both passwords", () => {
+    const result = validateChangePasswordRequest({
+      current_password: "hunter2",
+      new_password: "hunter3",
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  test("rejects a missing or empty field", () => {
+    expect(validateChangePasswordRequest({ new_password: "hunter3" }).valid).toBe(false);
+    expect(
+      validateChangePasswordRequest({ current_password: "hunter2", new_password: "  " }).valid,
+    ).toBe(false);
+  });
+});
+
+describe("validateUserSettingsPatch", () => {
+  test("accepts an empty patch and a full one", () => {
+    expect(validateUserSettingsPatch({}).valid).toBe(true);
+    expect(
+      validateUserSettingsPatch({
+        default_tone: "松弛",
+        default_candidates: 3,
+        default_mode: "grid",
+      }).valid,
+    ).toBe(true);
+  });
+
+  test("accepts an empty default_tone — that's how the page clears it", () => {
+    expect(validateUserSettingsPatch({ default_tone: "" }).valid).toBe(true);
+  });
+
+  test("rejects a candidate count outside 1–3 or non-integer", () => {
+    expect(validateUserSettingsPatch({ default_candidates: 0 }).valid).toBe(false);
+    expect(validateUserSettingsPatch({ default_candidates: 4 }).valid).toBe(false);
+    expect(validateUserSettingsPatch({ default_candidates: 2.5 }).valid).toBe(false);
+  });
+
+  test("rejects an unknown mode", () => {
+    const result = validateUserSettingsPatch({ default_mode: "square" });
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.errors.some((e) => e.startsWith("default_mode:"))).toBe(true);
   });
 });

@@ -1,9 +1,16 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import type { ContentViolation, EpisodeMode } from "@kelvoy/engine";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  type ContentViolation,
+  DEFAULT_CANDIDATES,
+  type EpisodeMode,
+  SETTINGS_CANDIDATES_MAX,
+  SETTINGS_CANDIDATES_MIN,
+} from "@kelvoy/engine";
 import {
   createEpisode,
   getEstimate,
+  getMySettings,
   isContentViolation,
   listDestinations,
   listPersonas,
@@ -15,6 +22,13 @@ import "./NewEpisodePage.css";
 
 // FR-01 语气快捷 chip，点一下直接填入(替换，不追加)。
 const TONE_CHIPS = ["松弛", "治愈", "活力", "文艺"];
+
+// M2-15 设置页开放的候选数范围（1–3），跟后端 /api/episodes/estimate 校验
+// 用的是同一对常量。
+const CANDIDATE_OPTIONS = Array.from(
+  { length: SETTINGS_CANDIDATES_MAX - SETTINGS_CANDIDATES_MIN + 1 },
+  (_, i) => SETTINGS_CANDIDATES_MIN + i,
+);
 
 // FR-01/§6 默认禁止项：示例词"可读文字"+ 硬规则"真人"，用户可删可加。
 const DEFAULT_BANNED = ["可读文字", "真人"];
@@ -29,6 +43,14 @@ function splitBannedInput(raw: string): string[] {
 
 export default function NewEpisodePage() {
   const navigate = useNavigate();
+  // 首页"灵感目的地"卡片点进来时带 ?destination=<id>（#42）。
+  const [searchParams] = useSearchParams();
+  const destinationParam = searchParams.get("destination");
+
+  // M2-15：账号级出片默认值（语气/候选数/关键帧模式）。没设置过的账号回
+  // 空对象，下面的预填就什么都不做，表单保持 M2-15 之前的初值。
+  const settingsRes = useApiResource(getMySettings, []);
+  const settings = settingsRes.data?.settings ?? null;
 
   const personasRes = useApiResource(listPersonas, []);
   const destinationsRes = useApiResource(listDestinations, []);
@@ -48,19 +70,33 @@ export default function NewEpisodePage() {
   const [bannedInput, setBannedInput] = useState("");
   const [outfitOverride, setOutfitOverride] = useState("");
   const [mode, setMode] = useState<EpisodeMode>("per_shot");
+  const [candidates, setCandidates] = useState<number>(DEFAULT_CANDIDATES);
 
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<string[] | null>(null);
   const [violations, setViolations] = useState<ContentViolation[] | null>(null);
+
+  // 出片默认值到位后预填一次。settings 的引用只在这次请求结束时变，所以
+  // 不会覆盖用户之后的手动修改（同下面那几个"各选一次默认项"的 effect）。
+  useEffect(() => {
+    if (!settings) return;
+    if (settings.default_tone !== undefined) setTone(settings.default_tone);
+    if (settings.default_mode !== undefined) setMode(settings.default_mode);
+    if (settings.default_candidates !== undefined) setCandidates(settings.default_candidates);
+  }, [settings]);
 
   // 数据到位后各选一次默认项，不覆盖用户之后的手动改选。
   useEffect(() => {
     if (personas.length > 0 && personaId === "") setPersonaId(personas[0].persona_id);
   }, [personas, personaId]);
 
+  // 目的地的默认项优先用 ?destination=<id> 预选；id 不在库里（或者库变了）
+  // 就回落到第一个，不报错——这个入口只是省一次下拉选择。
   useEffect(() => {
-    if (destinations.length > 0 && destinationId === "") setDestinationId(destinations[0].destination_id);
-  }, [destinations, destinationId]);
+    if (destinations.length === 0 || destinationId !== "") return;
+    const preselected = destinations.find((d) => d.destination_id === destinationParam);
+    setDestinationId(preselected?.destination_id ?? destinations[0].destination_id);
+  }, [destinations, destinationId, destinationParam]);
 
   const selectedPersona = personas.find((p) => p.persona_id === personaId) ?? null;
   const selectedDestination = destinations.find((d) => d.destination_id === destinationId) ?? null;
@@ -83,8 +119,13 @@ export default function NewEpisodePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDestination?.destination_id, seasonMode]);
 
-  // FR-01/FR-09：mode 一变就重新粗估，展示在提交按钮旁，只展示不拦截。
-  const { data: estimateData, loading: estimateLoading } = useApiResource(() => getEstimate(mode), [mode]);
+  // FR-01/FR-09：mode / 候选数一变就重新粗估，展示在提交按钮旁，只展示不
+  // 拦截。候选数目前只进估价，不随建期请求落库——Episode 里还没有这个字段
+  // （PRD §6），要让流水线真按 N 出候选是 M1 接真实图像模型时的事。
+  const { data: estimateData, loading: estimateLoading } = useApiResource(
+    () => getEstimate(mode, candidates),
+    [mode, candidates],
+  );
   const estimate = estimateData?.estimate ?? null;
 
   function addBannedTerms() {
@@ -132,8 +173,10 @@ export default function NewEpisodePage() {
     navigate(`/episodes/${result.episode.episode_id}`);
   }
 
-  const loading = personasRes.loading || destinationsRes.loading || templatesRes.loading;
-  const loadError = personasRes.error ?? destinationsRes.error ?? templatesRes.error;
+  const loading =
+    personasRes.loading || destinationsRes.loading || templatesRes.loading || settingsRes.loading;
+  const loadError =
+    personasRes.error ?? destinationsRes.error ?? templatesRes.error ?? settingsRes.error;
 
   if (loading) return <p className="k-empty">加载中…</p>;
   if (loadError) return <p className="k-error">加载失败：{loadError}</p>;
@@ -288,6 +331,17 @@ export default function NewEpisodePage() {
             ))}
           </div>
 
+          <label className="k-field">
+            每镜候选数
+            <select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>
+              {CANDIDATE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <fieldset className="k-field k-brief-mode">
             <legend>关键帧模式</legend>
             <label className="k-brief-radio">
@@ -337,9 +391,14 @@ export default function NewEpisodePage() {
 
         <div className="k-brief-submit-row">
           <div className="k-brief-estimate">
-            {estimateLoading || !estimate
-              ? "预估中…"
-              : `预估：约 ${Math.round(estimate.gpu_minutes)} GPU 分钟（M0 前占位估算）`}
+            {estimateLoading || !estimate ? (
+              "预估中…"
+            ) : (
+              <>
+                预估：约 <span className="k-mono">{Math.round(estimate.gpu_minutes)}</span> GPU
+                分钟（M0 前占位估算）
+              </>
+            )}
           </div>
           <button type="submit" className="k-btn k-btn-primary" disabled={submitting}>
             {submitting ? "创建中…" : "创建这一期"}

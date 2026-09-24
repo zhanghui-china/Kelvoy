@@ -124,3 +124,12 @@ export type CreateTemplateRequest = Pick<
   Template,
   "name" | "skeleton" | "lut" | "intro" | "outro" | "title_style"
 >;
+
+// FR-11 账号: apps/web 的 POST /api/me/password 请求体（M2-15 设置页）。
+// 改的永远是"当前登录的这个账号"——user_id 从 session 来，不在请求体里，
+// 跟 packages/cli 的 set-password（按用户名改、无身份校验的内部工具）不是
+// 同一条路径。
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
