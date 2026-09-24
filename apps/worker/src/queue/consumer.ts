@@ -1,4 +1,12 @@
-import { ContentBlockedError, type EpisodeStatus, type StageName, type Task, runStage } from "@kelvoy/engine";
+import {
+  ContentBlockedError,
+  type Episode,
+  type EpisodeStatus,
+  type StageContext,
+  type StageName,
+  type Task,
+  runStage,
+} from "@kelvoy/engine";
 import {
   completeTask,
   dequeueTask,
@@ -6,9 +14,11 @@ import {
   failTask,
   getDestination,
   getEpisode,
+  getPersona,
   patchEpisode,
   replaceEpisode,
 } from "@kelvoy/store";
+import { ffmpegComposeProvider } from "../compose/ffmpeg";
 
 /**
  * Task queue consumer (ADR-0004): polls the local `tasks` table (no Redis,
@@ -45,6 +55,26 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
   }
 }
 
+/**
+ * Everything a stage needs beyond the Episode itself. Engine stages never
+ * touch @kelvoy/store (CLAUDE.md directory table), so the reads happen here:
+ * "script" needs the destination, "compose" needs the persona (account-level
+ * LUT / title style) plus the ffmpeg backend — the one provider that must be
+ * injected rather than imported by engine, because ffmpeg only runs on the
+ * worker.
+ */
+export async function buildStageContext(stage: StageName, episode: Episode): Promise<StageContext> {
+  const [destination, persona] = await Promise.all([
+    getDestination(episode.destination_id),
+    getPersona(episode.persona_id),
+  ]);
+  const context: StageContext = {};
+  if (destination) context.destination = destination;
+  if (persona) context.persona = persona;
+  if (stage === "compose") context.compose = ffmpegComposeProvider;
+  return context;
+}
+
 export async function handleTask(task: Task): Promise<void> {
   const result = await getEpisode(task.episode_id);
   if (!result.ok) {
@@ -55,14 +85,11 @@ export async function handleTask(task: Task): Promise<void> {
   }
 
   try {
-    // Engine stages don't touch @kelvoy/store — "script" needs the
-    // destination record, fetched here and threaded through as context.
-    const destination = await getDestination(result.episode.destination_id);
     const updated = await runStage(
       task.stage,
       result.episode,
       task.shot_no,
-      destination ? { destination } : undefined,
+      await buildStageContext(task.stage, result.episode),
     );
     const written = await replaceEpisode(task.episode_id, result.row_version, updated);
     if (!written.ok) {

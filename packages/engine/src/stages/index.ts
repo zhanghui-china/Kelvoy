@@ -4,6 +4,7 @@ import { runBrief } from "./brief";
 import { runCompose } from "./compose";
 import { runKeyframe } from "./keyframe";
 import { runScript } from "./script";
+export { AI_LABEL_TEXT, buildComposePlan, finalOutputKey } from "./compose";
 export type { StageContext } from "./types";
 import type { StageContext } from "./types";
 import { runVideo } from "./video";

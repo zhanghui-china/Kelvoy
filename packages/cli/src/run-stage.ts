@@ -1,6 +1,17 @@
 import { type StageName, runStage, transitionEpisode } from "@kelvoy/engine";
 import { getDestination, getEpisode, patchEpisode, replaceEpisode } from "@kelvoy/store";
 
+/**
+ * 已知限制（M1-13, #28）：`run compose` 在 CLI 里跑不通，会拿到 engine 的
+ * "compose 阶段需要 ComposeProvider" 错误。ffmpeg 实现在 apps/worker
+ * （CLAUDE.md：compose 只在 worker 上跑），而 packages/cli 不能 import
+ * apps/*——那会让内部工具反向依赖一个应用。
+ *
+ * 现在合成只能通过 worker 的任务队列触发（apps/web 的
+ * POST /api/episodes/:id/recompose，或手工 enqueueTask）。以后要让 CLI 也能
+ * 直接跑，正解是把 provider 实现下沉成一个独立包（比如 @kelvoy/providers），
+ * worker 和 cli 都依赖它——等第二个调用方真出现时再做，现在不提前拆。
+ */
 export type RunStageResult = { ok: true; row_version: number } | { ok: false; error: string };
 
 function errorMessage(err: unknown): string {

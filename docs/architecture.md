@@ -39,10 +39,10 @@ flowchart LR
 | `packages/engine` schema(Persona/Destination/Episode) | 类型已按 PRD §6 落实,`schema/validate.ts` 有运行时校验 |
 | `packages/engine` state(状态机) | Episode/Shot 转移函数 + 合法性判断已完成，有测试 |
 | `packages/engine` rules(FR-02) | 镜数/景别连续/地标覆盖/地标引用规则已实现 |
-| `packages/engine` stages/providers | 骨架占位,`throw new Error("not implemented")`,M0 之后才填真实逻辑 |
+| `packages/engine` stages/providers | brief/script/compose 已实现;compose 出 ComposePlan(卡拍 `rules/beat.ts`、账号级 LUT、片头片尾、AI 标识水印+元数据、选曲),ffmpeg 执行在 `apps/worker`;assets/keyframe/video 仍是 `throw new Error("not implemented")` |
 | `packages/store` | episodes(读/patch/replace,乐观锁)、destinations(读/upsert)、tasks(入队/出队/完成/失败重试)均已实现，有测试 |
 | `apps/web` | Hono `/api/health` 可用,其余 `/api/*` 路由空壳,没有 `/internal/*` 了 |
-| `apps/worker` | 消费循环真实实现（轮询 `packages/store` 的 tasks 表），产物存本地 `projects/` 目录 |
+| `apps/worker` | 消费循环真实实现（轮询 `packages/store` 的 tasks 表），产物存本地 `projects/` 目录;`compose/ffmpeg.ts` 是全系统唯一调 ffmpeg 的地方（环境要求见 `apps/worker/README.md`） |
 | `services/inference` | FastAPI `/health` 可用,四个模型 router 占位 501 |
 | `infra` | 不需要本地容器编排；DGX 侦察记录见 `infra/dgx/README.md` |
 

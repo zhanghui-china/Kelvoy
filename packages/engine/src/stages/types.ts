@@ -1,3 +1,4 @@
+import type { ComposeProvider } from "../providers/types";
 import type { Destination, Persona } from "../schema";
 
 /**
@@ -11,4 +12,9 @@ import type { Destination, Persona } from "../schema";
 export interface StageContext {
   destination?: Destination;
   persona?: Persona;
+  /**
+   * compose 阶段专用：执行 ffmpeg 的后端。engine 只出 ComposePlan，实现由
+   * apps/worker 注入（CLAUDE.md：ffmpeg 只在 worker 上跑）。
+   */
+  compose?: ComposeProvider;
 }

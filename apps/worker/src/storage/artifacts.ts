@@ -30,3 +30,14 @@ export async function saveArtifact(
 export function artifactPath(episodeId: string, relativeKey: string): string {
   return join(projectsRoot(), episodeId, relativeKey);
 }
+
+/**
+ * Resolves a *shared* (not episode-scoped) asset key: the music library,
+ * account LUTs, and template intro/outro clips live directly under the
+ * projects root because they're reused across every episode —
+ * <root>/music/calm_morning.mp3, <root>/lut/warm_film.cube. Those files are
+ * put there by hand (see apps/worker/README.md), not produced by the pipeline.
+ */
+export function sharedAssetPath(relativeKey: string): string {
+  return join(projectsRoot(), relativeKey);
+}

@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { Destination, Episode } from "@kelvoy/engine";
-import { close, dequeueTask, enqueueTask, getEpisode, insertEpisode, open, upsertDestination } from "@kelvoy/store";
-import { consumeLoop, handleTask } from "./consumer";
+import type { Destination, Episode, Persona } from "@kelvoy/engine";
+import {
+  close,
+  dequeueTask,
+  enqueueTask,
+  getEpisode,
+  insertEpisode,
+  insertPersona,
+  open,
+  upsertDestination,
+} from "@kelvoy/store";
+import { ffmpegComposeProvider } from "../compose/ffmpeg";
+import { buildStageContext, consumeLoop, handleTask } from "./consumer";
 
 function fixtureEpisode(id: string): Episode {
   return {
@@ -49,6 +59,20 @@ function destinationFixture(id: string): Destination {
     food: [],
     transport: "",
     stay: "",
+  };
+}
+
+function personaFixture(id: string): Persona {
+  return {
+    persona_id: id,
+    owner_id: "u_test",
+    version: 1,
+    name: "测试角色",
+    desc: "",
+    locked: [],
+    default_outfit: "",
+    refs: [],
+    style: { lut: "lut/warm_film.cube", title_style: "serif-center" },
   };
 }
 
@@ -134,4 +158,21 @@ test("consumeLoop stops promptly once its AbortSignal fires", async () => {
   // immediately rather than polling forever.
   await consumeLoop(controller.signal);
   expect(true).toBe(true);
+});
+
+test("buildStageContext reads destination + persona and injects ffmpeg only for compose (#28)", async () => {
+  const episode = fixtureEpisode("e_ctx");
+  await insertEpisode(episode);
+  await upsertDestination(destinationFixture("d_test"));
+  await insertPersona(personaFixture("c_test"));
+
+  const scriptContext = await buildStageContext("script", episode);
+  expect(scriptContext.destination?.destination_id).toBe("d_test");
+  // compose 要拿角色的账号级 LUT / 标题样式，所以 persona 每个 stage 都读。
+  expect(scriptContext.persona?.persona_id).toBe("c_test");
+  // ffmpeg 只在 worker 上跑，engine 不 import 它——只有 compose 任务才注入。
+  expect(scriptContext.compose).toBeUndefined();
+
+  const composeContext = await buildStageContext("compose", episode);
+  expect(composeContext.compose).toBe(ffmpegComposeProvider);
 });
