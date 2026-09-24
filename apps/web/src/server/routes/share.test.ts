@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { close, insertEpisode, open } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Episode } from "@kelvoy/engine";
@@ -36,12 +39,18 @@ function buildApp() {
   return app;
 }
 
-beforeEach(() => {
+let tmpRoot: string;
+
+beforeEach(async () => {
   open(":memory:");
+  tmpRoot = await mkdtemp(join(tmpdir(), "kelvoy-share-api-"));
+  process.env.KELVOY_PROJECTS_ROOT = join(tmpRoot, "projects");
 });
 
-afterEach(() => {
+afterEach(async () => {
   close();
+  delete process.env.KELVOY_PROJECTS_ROOT;
+  await rm(tmpRoot, { recursive: true, force: true });
 });
 
 test("returns the film + shot-table fields with no login required, and no account info", async () => {
@@ -76,5 +85,34 @@ test("404s when share.enabled is false", async () => {
 test("404s an unknown slug", async () => {
   const app = buildApp();
   const res = await app.request("/api/share/no-such-slug");
+  expect(res.status).toBe(404);
+});
+
+test("GET /:slug/final.mp4 serves the final video with no login required", async () => {
+  await insertEpisode(fixture("e_1", true, "abc123"));
+  await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1.mp4"), "fake-mp4-bytes");
+
+  const app = buildApp();
+  const res = await app.request("/api/share/abc123/final.mp4");
+  expect(res.status).toBe(200);
+  expect(await res.text()).toBe("fake-mp4-bytes");
+});
+
+test("GET /:slug/final.mp4 404s when sharing is off, even if the file exists", async () => {
+  await insertEpisode(fixture("e_1", false, "abc123"));
+  await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1.mp4"), "fake-mp4-bytes");
+
+  const app = buildApp();
+  const res = await app.request("/api/share/abc123/final.mp4");
+  expect(res.status).toBe(404);
+});
+
+test("GET /:slug/final.mp4 404s when composing hasn't produced the file yet", async () => {
+  await insertEpisode(fixture("e_1", true, "abc123"));
+
+  const app = buildApp();
+  const res = await app.request("/api/share/abc123/final.mp4");
   expect(res.status).toBe(404);
 });

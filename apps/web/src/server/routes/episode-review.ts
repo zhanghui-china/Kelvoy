@@ -14,6 +14,7 @@ import {
   patchEpisode,
   patchShot,
   replaceEpisode,
+  setShare,
 } from "@kelvoy/store";
 import { Hono } from "hono";
 import { loadOwnedEpisode, parseRowVersion, patchErrorResponse } from "./episode-common";
@@ -277,6 +278,26 @@ review.post("/:id/shots/:no/report-bad", async (c) => {
   const result = await regenShotAndEnqueue(episodeId, shotNo, parsed.rowVersion, regenStage, true);
   if (!result.ok) return patchErrorResponse(c, result);
   return c.json({ ok: true, row_version: result.row_version });
+});
+
+// FR-12：开关分享。slug 生成锁在 packages/store 的 setShare 里，不接受
+// 调用方传 slug——关掉分享不清 slug，链接发出去了不该失效，重新开启
+// 拿回同一个。
+review.post("/:id/share", async (c) => {
+  const episodeId = c.req.param("id");
+  const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
+  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+
+  const body = await c.req.json().catch(() => null);
+  const rowVersion = parseRowVersion(body);
+  const enabled = (body as Record<string, unknown> | null)?.enabled;
+  if (rowVersion === null || typeof enabled !== "boolean") {
+    return c.json({ ok: false, error: "invalid_body" }, 400);
+  }
+
+  const result = await setShare(episodeId, rowVersion, enabled);
+  if (!result.ok) return patchErrorResponse(c, result);
+  return c.json({ ok: true, row_version: result.row_version, slug: result.slug });
 });
 
 export default review;

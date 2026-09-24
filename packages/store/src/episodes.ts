@@ -73,6 +73,31 @@ export async function getEpisodeBySlug(slug: string): Promise<Episode | null> {
   return row ? (JSON.parse(row.doc) as Episode) : null;
 }
 
+export type SetShareResult = Extract<PatchResult, { ok: false }> | { ok: true; row_version: number; slug: string };
+
+/**
+ * FR-12 分享开关：slug 首次开启时生成，之后关闭/重开都复用同一个，链接
+ * 发出去了不该失效。不走 patchEpisode 的通用 `EpisodePatch`——slug 不该
+ * 由调用方随便传一个字符串，生成逻辑锁在这里。
+ */
+export async function setShare(
+  episodeId: string,
+  clientRowVersion: number,
+  enabled: boolean,
+): Promise<SetShareResult> {
+  const row = readRow(episodeId);
+  if (!row) return { ok: false, error: "not_found" };
+  if (row.row_version !== clientRowVersion) {
+    return { ok: false, error: "version_conflict", current_row_version: row.row_version };
+  }
+
+  const episode = JSON.parse(row.doc) as Episode;
+  const slug = episode.share.slug || crypto.randomUUID().slice(0, 8);
+  const result = commit(episodeId, clientRowVersion, { ...episode, share: { enabled, slug } }, row.row_version);
+  if (!result.ok) return result;
+  return { ok: true, row_version: result.row_version, slug };
+}
+
 export async function patchEpisode(
   episodeId: string,
   clientRowVersion: number,

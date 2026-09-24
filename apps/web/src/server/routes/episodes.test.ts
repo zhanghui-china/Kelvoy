@@ -1057,3 +1057,52 @@ test("POST /:id/shots/reorder 404s on someone else's episode", async () => {
   });
   expect(res.status).toBe(404);
 });
+
+// ---- FR-12 分享开关 ----
+
+test("POST /:id/share enables sharing and returns a slug", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "done";
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/share", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, enabled: true }),
+  });
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { slug: string };
+  expect(body.slug.length).toBeGreaterThan(0);
+
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const gotEpisode = ((await got.json()) as { episode: Episode }).episode;
+  expect(gotEpisode.share).toEqual({ enabled: true, slug: body.slug });
+});
+
+test("POST /:id/share 404s on someone else's episode", async () => {
+  const { cookie } = await login("dannei");
+  await insertEpisode(fixture("e_1", "u_someone_else"));
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/share", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, enabled: true }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("POST /:id/share 400s on a missing enabled flag", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertEpisode(fixture("e_1", ownerId));
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/share", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(400);
+});

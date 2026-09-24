@@ -95,6 +95,18 @@ export function getEpisode(episodeId: string) {
   );
 }
 
+/** FR-12 分享页看到的字段——服务端只挑这几个，见 share.ts，不含账号信息。 */
+export type SharedEpisode = Pick<Episode, "episode_id" | "status" | "scenes" | "shots" | "music" | "render">;
+
+/** 公开路由，不带 cookie 也能拿到——分享页不要求登录。 */
+export function getShare(slug: string) {
+  return apiFetch<{ episode: SharedEpisode }>(`/api/share/${encodeURIComponent(slug)}`);
+}
+
+export function shareFinalVideoUrl(slug: string): string {
+  return `/api/share/${encodeURIComponent(slug)}/final.mp4`;
+}
+
 export function listTemplates() {
   return apiFetch<{ templates: Template[] }>("/api/templates");
 }
@@ -176,6 +188,17 @@ export function continueEpisode(episodeId: string, rowVersion: number) {
 
 export function recompose(episodeId: string, rowVersion: number) {
   return post(episodePath(episodeId, "/recompose"), { row_version: rowVersion });
+}
+
+// slug 不用从响应里读——写成功后 mutation.run 会 refresh()，slug 跟着
+// episode.share 一起回来，见 DoneView.tsx。
+export function setEpisodeShare(episodeId: string, rowVersion: number, enabled: boolean) {
+  return post(episodePath(episodeId, "/share"), { row_version: rowVersion, enabled });
+}
+
+/** FR-12 分享页链接——不需要登录，前端路由见 App.tsx 的 /s/:slug。 */
+export function shareUrl(slug: string): string {
+  return `${window.location.origin}/s/${encodeURIComponent(slug)}`;
 }
 
 export function reorderShots(episodeId: string, rowVersion: number, order: number[]) {

@@ -7,6 +7,7 @@ import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import NewEpisodePage from "./pages/NewEpisodePage";
 import PersonasPage from "./pages/PersonasPage";
+import SharePage from "./pages/SharePage";
 import TemplatesPage from "./pages/TemplatesPage";
 
 // M2-7: read-only skeleton (ADR-0005). Template management (M2-10, #32) and
@@ -22,6 +23,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/s/:slug" element={<SharePage />} />
         <Route element={<Layout />}>
           <Route path="/episodes" element={<EpisodesPage />} />
           <Route path="/episodes/new" element={<NewEpisodePage />} />

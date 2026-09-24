@@ -1,5 +1,5 @@
 import type { Episode, ShotModelRecord } from "@kelvoy/engine";
-import { episodeFileUrl, recompose } from "../api/client";
+import { episodeFileUrl, recompose, setEpisodeShare, shareUrl } from "../api/client";
 import { MutationError } from "./ShotHeader";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
@@ -77,6 +77,42 @@ export default function DoneView({
           下载成片
         </a>
       </p>
+
+      <div className="k-card k-share-card">
+        <div className="k-card-title">分享</div>
+        {episode.share.enabled ? (
+          <>
+            <div className="k-share-row">
+              <input className="k-share-input" readOnly value={shareUrl(episode.share.slug)} />
+              <button
+                type="button"
+                className="k-btn k-btn-secondary"
+                onClick={() => navigator.clipboard?.writeText(shareUrl(episode.share.slug))}
+              >
+                复制链接
+              </button>
+            </div>
+            <button
+              type="button"
+              className="k-btn k-btn-secondary"
+              disabled={mutation.pending}
+              onClick={() => mutation.run((rowVersion) => setEpisodeShare(episode.episode_id, rowVersion, false))}
+            >
+              关闭分享
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="k-btn k-btn-primary"
+            disabled={mutation.pending}
+            onClick={() => mutation.run((rowVersion) => setEpisodeShare(episode.episode_id, rowVersion, true))}
+          >
+            开启分享
+          </button>
+        )}
+        <div className="k-card-meta">分享页不含账号信息，链接不随 90 天清理失效（FR-12）。</div>
+      </div>
 
       <div className="k-card">
         <div className="k-card-title">成本报告</div>

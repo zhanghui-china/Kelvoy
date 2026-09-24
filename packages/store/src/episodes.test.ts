@@ -9,6 +9,7 @@ import {
   patchEpisode,
   patchShot,
   replaceEpisode,
+  setShare,
 } from "./episodes";
 
 function fixtureEpisode(id: string, ownerId = "u_test"): Episode {
@@ -227,5 +228,42 @@ describe("getEpisodeBySlug", () => {
 
   test("returns null for an unknown slug", async () => {
     expect(await getEpisodeBySlug("no-such-slug")).toBeNull();
+  });
+});
+
+describe("setShare", () => {
+  test("enabling for the first time generates a slug", async () => {
+    await insertEpisode(fixtureEpisode("e_share"));
+    const result = await setShare("e_share", 1, true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.slug.length).toBeGreaterThan(0);
+
+    const stored = await getEpisode("e_share");
+    expect(stored.ok && stored.episode.share).toEqual({ enabled: true, slug: result.slug });
+  });
+
+  test("disabling then re-enabling reuses the same slug", async () => {
+    await insertEpisode(fixtureEpisode("e_share2"));
+    const first = await setShare("e_share2", 1, true);
+    if (!first.ok) throw new Error("expected ok");
+
+    const off = await setShare("e_share2", 2, false);
+    if (!off.ok) throw new Error("expected ok");
+    expect(off.slug).toBe(first.slug);
+
+    const backOn = await setShare("e_share2", 3, true);
+    if (!backOn.ok) throw new Error("expected ok");
+    expect(backOn.slug).toBe(first.slug);
+  });
+
+  test("returns not_found for a missing episode", async () => {
+    expect(await setShare("e_missing", 1, true)).toEqual({ ok: false, error: "not_found" });
+  });
+
+  test("rejects a stale row_version", async () => {
+    await insertEpisode(fixtureEpisode("e_share3"));
+    const result = await setShare("e_share3", 99, true);
+    expect(result).toEqual({ ok: false, error: "version_conflict", current_row_version: 1 });
   });
 });

@@ -298,3 +298,27 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* 成片页分享（FR-12，DoneView）*/
+
+.k-share-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.k-share-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.k-share-input {
+  flex: 1;
+  height: 40px;
+  padding: 0 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-ink-soft);
+  font-size: 0.85rem;
+}
