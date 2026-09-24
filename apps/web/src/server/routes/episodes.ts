@@ -1,6 +1,7 @@
 import { join, resolve, sep } from "node:path";
 import type { Episode, EpisodeStatus, RegenStage, StageName } from "@kelvoy/engine";
 import {
+  checkContent,
   checkScriptRules,
   removeShot,
   transitionEpisode,
@@ -39,6 +40,17 @@ episodes.post("/", async (c) => {
   const result = validateCreateEpisodeRequest(body);
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
   const req = result.value;
+
+  // MVP 内容审核（PRD §8/§11，#29）：建期时用户能填的自由文本只有这三项，
+  // 命中直接拦截，不浪费后面的外键查询和写库。
+  const contentViolations = checkContent([
+    ...(req.season !== undefined ? [{ field: "season", text: req.season }] : []),
+    ...(req.tone !== undefined ? [{ field: "tone", text: req.tone }] : []),
+    ...(req.banned ?? []).map((term, i) => ({ field: `banned[${i}]`, text: term })),
+  ]);
+  if (contentViolations.length > 0) {
+    return c.json({ ok: false, error: "content_blocked", violations: contentViolations }, 400);
+  }
 
   const [persona, destination, template] = await Promise.all([
     getPersona(req.persona_id),

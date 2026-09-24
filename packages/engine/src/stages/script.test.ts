@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Destination } from "../schema/destination";
 import type { Episode } from "../schema/episode";
+import { ContentBlockedError } from "../rules/content";
 import { runScript } from "./script";
 
 const destination: Destination = {
@@ -86,6 +87,18 @@ test("advances scripting -> script_review and fills shots/scenes", async () => {
   expect(updated.status).toBe("script_review");
   expect(updated.shots).toHaveLength(26);
   expect(updated.scenes).toHaveLength(1);
+});
+
+test("throws ContentBlockedError before calling the provider when brief.banned hits the blocklist", async () => {
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error("不应该走到这里");
+  }) as unknown as typeof fetch;
+
+  const episode = { ...fixtureEpisode(), brief: { ...fixtureEpisode().brief, banned: ["色情"] } };
+  await expect(runScript(episode, undefined, { destination })).rejects.toBeInstanceOf(ContentBlockedError);
+  expect(fetchCalled).toBe(false);
 });
 
 test("throws (via state machine) when the episode isn't in scripting", async () => {

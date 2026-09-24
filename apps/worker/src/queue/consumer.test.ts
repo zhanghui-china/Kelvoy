@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { Episode } from "@kelvoy/engine";
-import { close, dequeueTask, enqueueTask, insertEpisode, open } from "@kelvoy/store";
+import type { Destination, Episode } from "@kelvoy/engine";
+import { close, dequeueTask, enqueueTask, getEpisode, insertEpisode, open, upsertDestination } from "@kelvoy/store";
 import { consumeLoop, handleTask } from "./consumer";
 
 function fixtureEpisode(id: string): Episode {
@@ -33,6 +33,22 @@ function fixtureEpisode(id: string): Episode {
     removed_shots: [],
     music: { file: "", bpm: 0, license: "" },
     render: { res: "1080x1920", fps: 30, title: "", intro: null, outro: null, ai_label: true },
+  };
+}
+
+function destinationFixture(id: string): Destination {
+  return {
+    destination_id: id,
+    version: 1,
+    name: "测试景区",
+    city: "测试市",
+    type: "scenic_area",
+    season_best: [],
+    landmarks: [],
+    route: [],
+    food: [],
+    transport: "",
+    stay: "",
   };
 }
 
@@ -91,6 +107,24 @@ test("handleTask stops requeuing once MAX_LOCAL_ATTEMPTS is exhausted", async ()
   // Second attempt: fails again, budget exhausted -> no more requeue.
   await handleTask(secondAttempt!);
   expect(await dequeueTask()).toBeNull();
+});
+
+test("handleTask fails permanently and marks the episode failed when content is blocked (#29)", async () => {
+  const episode = fixtureEpisode("e_blocked");
+  episode.status = "scripting";
+  episode.brief.tone = "色情";
+  await insertEpisode(episode);
+  await upsertDestination(destinationFixture("d_test"));
+
+  const task = await enqueueTask({ episode_id: "e_blocked", stage: "script" });
+  await dequeueTask();
+  await handleTask(task);
+
+  // requeue: false -> not pending again
+  expect(await dequeueTask()).toBeNull();
+
+  const result = await getEpisode("e_blocked");
+  expect(result.ok && result.episode.status).toBe("failed");
 });
 
 test("consumeLoop stops promptly once its AbortSignal fires", async () => {

@@ -1,5 +1,6 @@
 import type { DestinationType } from "../schema/destination";
 import type { Scene, SceneTime, Shot, ShotCamera, ShotSize } from "../schema/episode";
+import { checkContent, ContentBlockedError } from "../rules/content";
 import { checkScriptRules } from "../rules/script";
 import { SKELETONS } from "../templates/skeletons";
 import type { ScriptProvider } from "./types";
@@ -66,6 +67,7 @@ ${skeleton.notes}
 - 至少 5 镜的 landmark 字段非 null，且必须是上面给的 id
 - camera 只能是 static/pan/push/follow 之一；time 只能是 morning/noon/afternoon/evening/night 之一，按段落推进順序递进
 - 画面里不能出现可读文字、不能出现真人（vlog 角色除外，角色由后续阶段用参考图控制，这里的 kf_prompt 不用具体描述角色外貌）
+- 不得出现政治、色情、暴力、违法、歧视内容及他人商标
 - scene 字段填这一镜所属的段落名（同一段落内的镜头用完全相同的字符串，用于后续分组）
 
 每个元素字段：scene, time, size, beat, camera, landmark, kf_prompt, motion_prompt。
@@ -155,6 +157,17 @@ function buildScenesAndShots(raw: RawShot[], durationTotal: number): { shots: Sh
   return { shots, scenes };
 }
 
+// 生成后的关键词拦截（PRD §8/§11，#29）：LLM 产出的每镜文案都要过一遍，
+// 命中的字段用"第 N 镜 xxx"当 field，方便直接拼进自动修正的 feedback。
+function checkShotsContent(shots: Shot[]) {
+  const inputs = shots.flatMap((shot) => [
+    { field: `第 ${shot.no} 镜 beat`, text: shot.beat },
+    { field: `第 ${shot.no} 镜 kf_prompt`, text: shot.kf_prompt },
+    { field: `第 ${shot.no} 镜 motion_prompt`, text: shot.motion_prompt },
+  ]);
+  return checkContent(inputs);
+}
+
 async function callChatCompletion(prompt: string): Promise<string> {
   const apiKey = process.env.STEPFUN_API_KEY;
   if (!apiKey) throw new Error("缺少环境变量 STEPFUN_API_KEY");
@@ -182,6 +195,7 @@ async function callChatCompletion(prompt: string): Promise<string> {
 export const stepfunScriptProvider: ScriptProvider = {
   async generateShots({ brief, destination }) {
     let feedback: string | undefined;
+    let contentViolations: ReturnType<typeof checkShotsContent> = [];
 
     for (let round = 1; round <= MAX_CORRECTION_ROUNDS; round++) {
       const prompt = buildPrompt({
@@ -200,13 +214,21 @@ export const stepfunScriptProvider: ScriptProvider = {
       const raw = parseRawShots(extractJsonArray(content));
       const { shots, scenes } = buildScenesAndShots(raw, brief.duration_s);
 
-      const violations = checkScriptRules(shots, destination);
-      if (violations.length === 0) {
+      const ruleViolations = checkScriptRules(shots, destination);
+      contentViolations = checkShotsContent(shots);
+      if (ruleViolations.length === 0 && contentViolations.length === 0) {
         return { shots, scenes };
       }
-      feedback = violations.map((v) => `- ${v.message}`).join("\n");
+
+      feedback = [
+        ...ruleViolations.map((v) => `- ${v.message}`),
+        ...contentViolations.map((v) => `- ${v.field} 含不允许出现的内容："${v.term}"`),
+      ].join("\n");
     }
 
+    if (contentViolations.length > 0) {
+      throw new ContentBlockedError(contentViolations);
+    }
     throw new Error(`脚本生成 ${MAX_CORRECTION_ROUNDS} 轮自动修正后仍不满足规则：\n${feedback}`);
   },
 };

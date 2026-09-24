@@ -356,6 +356,31 @@ test("POST 400s on a missing required field", async () => {
   expect(res.status).toBe(400);
 });
 
+// ---- M1-14: 内容审核关键词拦截 (#29) ----
+
+test("POST 400s with content_blocked when tone hits the keyword blocklist", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertPersona(personaFixture("c_1", ownerId));
+  await upsertDestination(destinationFixture("d_1"));
+  await upsertTemplate(templateFixture("t_1"));
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({
+      persona_id: "c_1",
+      destination_id: "d_1",
+      template_id: "t_1",
+      tone: "色情",
+    }),
+  });
+  expect(res.status).toBe(400);
+  const body = (await res.json()) as { ok: boolean; error: string };
+  expect(body.ok).toBe(false);
+  expect(body.error).toBe("content_blocked");
+});
+
 // ---- M2-6: 审片台写路由 ----
 
 test("PATCH /:id applies a field patch and bumps row_version", async () => {

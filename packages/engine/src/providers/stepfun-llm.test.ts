@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Destination } from "../schema/destination";
 import type { EpisodeBrief } from "../schema/episode";
+import { ContentBlockedError } from "../rules/content";
 import { stepfunScriptProvider } from "./stepfun-llm";
 
 const destination: Destination = {
@@ -97,6 +98,34 @@ test("retries with rule-violation feedback and succeeds on a later round", async
 
   expect(call).toBe(2);
   expect(result.shots).toHaveLength(26);
+});
+
+test("retries when a generated shot hits the content blocklist, and succeeds once it's clean", async () => {
+  const dirty = buildValidRawShots(26).map((s, i) => (i === 0 ? { ...s, kf_prompt: "色情场景" } : s));
+  const clean = buildValidRawShots(26);
+  let call = 0;
+  (globalThis as { fetch: typeof fetch }).fetch = (async () => {
+    call += 1;
+    const raw = call === 1 ? dirty : clean;
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(raw) } }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof fetch;
+
+  const result = await stepfunScriptProvider.generateShots({ brief, destination });
+
+  expect(call).toBe(2);
+  expect(result.shots).toHaveLength(26);
+});
+
+test("throws ContentBlockedError after exhausting all correction rounds while still hitting the blocklist", async () => {
+  const dirty = buildValidRawShots(26).map((s, i) => (i === 0 ? { ...s, kf_prompt: "色情场景" } : s));
+  mockFetchOnce(JSON.stringify(dirty));
+
+  await expect(stepfunScriptProvider.generateShots({ brief, destination })).rejects.toBeInstanceOf(
+    ContentBlockedError,
+  );
 });
 
 test("throws after exhausting all correction rounds", async () => {

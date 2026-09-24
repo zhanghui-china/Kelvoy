@@ -1,4 +1,4 @@
-import { type EpisodeStatus, type StageName, type Task, runStage } from "@kelvoy/engine";
+import { ContentBlockedError, type EpisodeStatus, type StageName, type Task, runStage } from "@kelvoy/engine";
 import {
   completeTask,
   dequeueTask,
@@ -6,6 +6,7 @@ import {
   failTask,
   getDestination,
   getEpisode,
+  patchEpisode,
   replaceEpisode,
 } from "@kelvoy/store";
 
@@ -77,7 +78,14 @@ export async function handleTask(task: Task): Promise<void> {
     if (nextStage) {
       await enqueueTask({ episode_id: task.episode_id, stage: nextStage });
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof ContentBlockedError) {
+      // 内容审核拦截是确定性失败，重试也还是命中同样的词——不重试，直接
+      // 把期标成 failed（同 packages/cli/src/run-stage.ts 的失败写回方式）。
+      await failTask(task.task_id, { requeue: false });
+      await patchEpisode(task.episode_id, result.row_version, { status: "failed" });
+      return;
+    }
     await failTask(task.task_id, { requeue: task.attempt < MAX_LOCAL_ATTEMPTS });
   }
 }
