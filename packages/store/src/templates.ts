@@ -46,3 +46,17 @@ export async function upsertTemplate(template: Template): Promise<void> {
     )
     .run(template.template_id, template.owner_id, JSON.stringify(template));
 }
+
+/**
+ * Deletes a template, scoped to `ownerId` in the SQL itself (not a
+ * fetch-then-check) so an official template (owner_id null) or someone
+ * else's private one can never be deleted no matter what the caller
+ * intends. Returns whether a row was actually removed, for the route to
+ * turn into 404 without leaking whether the id exists at all.
+ */
+export async function deleteTemplate(templateId: string, ownerId: string): Promise<boolean> {
+  const result = getDb()
+    .query("delete from templates where template_id = ? and owner_id = ?")
+    .run(templateId, ownerId);
+  return result.changes > 0;
+}

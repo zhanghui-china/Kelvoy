@@ -1,5 +1,5 @@
 import { join, resolve, sep } from "node:path";
-import type { Episode, EpisodeStatus, RegenStage, StageName } from "@kelvoy/engine";
+import type { Episode, EpisodeStatus, RegenStage, StageName, Template } from "@kelvoy/engine";
 import {
   checkContent,
   checkScriptRules,
@@ -21,6 +21,7 @@ import {
   patchEpisode,
   patchShot,
   replaceEpisode,
+  upsertTemplate,
 } from "@kelvoy/store";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -222,6 +223,43 @@ episodes.patch("/:id/shots/:no", async (c) => {
   );
   if (!patchResult.ok) return patchErrorResponse(c, patchResult);
   return c.json({ ok: true, row_version: patchResult.row_version });
+});
+
+// FR-10: 把当前期的骨架/LUT/片头片尾/标题样式存为私有模板（M2-10, #32）。
+// 骨架取自目的地的 type，LUT/标题样式取自角色的 style（Persona.style），
+// 片头片尾取自期自己的 render.intro/outro——四处来源在建期时(POST /)已经
+// 从 persona/destination/template 快照进了 episode.render，这里只是把它
+// 们重新打包成一个新模板，不重新校验期的当前状态（存模板和期处于哪个
+// status 无关，issue 没有限制）。
+episodes.post("/:id/save-as-template", async (c) => {
+  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
+  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+
+  const body = await c.req.json().catch(() => null);
+  const name = typeof body === "object" && body !== null ? (body as Record<string, unknown>).name : null;
+  if (typeof name !== "string" || name.trim().length === 0) {
+    return c.json({ ok: false, errors: ["name: 缺失或为空"] }, 400);
+  }
+
+  const [destination, persona] = await Promise.all([
+    getDestination(loaded.episode.destination_id),
+    getPersona(loaded.episode.persona_id),
+  ]);
+  if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
+  if (!persona) return c.json({ ok: false, error: "persona_not_found" }, 404);
+
+  const template: Template = {
+    template_id: `t_${crypto.randomUUID()}`,
+    owner_id: c.get("ownerId"),
+    name,
+    skeleton: destination.type,
+    lut: persona.style.lut,
+    intro: loaded.episode.render.intro,
+    outro: loaded.episode.render.outro,
+    title_style: persona.style.title_style,
+  };
+  await upsertTemplate(template);
+  return c.json({ ok: true, template }, 201);
 });
 
 // 三个人工审核点各自的"继续"动作——下一个生成态用哪个 stage、是否要按镜

@@ -1,6 +1,7 @@
 import type { Episode, EpisodeMode, Shot } from "./episode";
 import type { Persona, PersonaStyle } from "./persona";
 import type { StageName } from "../stages";
+import type { Template } from "./template";
 
 /**
  * Task queue payload (PRD v0.2 §6, ADR-0004). Transient — carries only a
@@ -103,3 +104,10 @@ export interface CreateEpisodeRequest {
   banned?: string[];
   mode?: EpisodeMode;
 }
+
+// FR-10 模板: apps/web 的 POST /api/templates 请求体. 不含 template_id/
+// owner_id(服务端生成/从会话取)，其余字段和 Template 一一对应。
+export type CreateTemplateRequest = Pick<
+  Template,
+  "name" | "skeleton" | "lut" | "intro" | "outro" | "title_style"
+>;

@@ -3,6 +3,7 @@ import type { Episode, Shot } from "./episode";
 import type { Persona } from "./persona";
 import type { Template } from "./template";
 import {
+  validateCreateTemplateRequest,
   validateEpisode,
   validatePatchEpisodeRequest,
   validatePatchShotRequest,
@@ -253,5 +254,39 @@ describe("validateTemplate", () => {
   test("rejects a missing lut", () => {
     const t = { ...validTemplate(), lut: "" };
     expect(validateTemplate(t).valid).toBe(false);
+  });
+});
+
+function validCreateTemplateRequest() {
+  const { template_id: _template_id, owner_id: _owner_id, ...rest } = validTemplate();
+  return rest;
+}
+
+describe("validateCreateTemplateRequest", () => {
+  test("accepts a well-formed body", () => {
+    expect(validateCreateTemplateRequest(validCreateTemplateRequest()).valid).toBe(true);
+  });
+
+  test("accepts null intro/outro", () => {
+    const body = { ...validCreateTemplateRequest(), intro: null, outro: null };
+    expect(validateCreateTemplateRequest(body).valid).toBe(true);
+  });
+
+  test("rejects an invalid skeleton enum value", () => {
+    const body = { ...validCreateTemplateRequest(), skeleton: "beach" };
+    const result = validateCreateTemplateRequest(body);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.errors.some((e) => e.startsWith("skeleton:"))).toBe(true);
+  });
+
+  test("rejects a missing name", () => {
+    const body = { ...validCreateTemplateRequest(), name: "" };
+    expect(validateCreateTemplateRequest(body).valid).toBe(false);
+  });
+
+  test("collects every error at once", () => {
+    const result = validateCreateTemplateRequest({});
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.errors.length).toBeGreaterThan(1);
   });
 });

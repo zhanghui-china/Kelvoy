@@ -20,6 +20,9 @@ export default function Layout() {
         <NavLink to="/destinations" className={({ isActive }) => `k-nav-link${isActive ? " active" : ""}`}>
           目的地
         </NavLink>
+        <NavLink to="/templates" className={({ isActive }) => `k-nav-link${isActive ? " active" : ""}`}>
+          模板
+        </NavLink>
         <span className="k-nav-spacer" />
         <button type="button" className="k-btn k-btn-secondary" onClick={handleLogout}>
           退出登录

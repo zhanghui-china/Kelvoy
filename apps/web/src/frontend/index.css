@@ -170,6 +170,31 @@ a:hover {
   border-color: var(--color-accent);
 }
 
+.k-field select,
+.k-field textarea {
+  height: 44px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  background: #ffffff;
+  color: var(--color-ink);
+}
+
+.k-field textarea {
+  height: auto;
+  min-height: 88px;
+  padding: 0.6rem 0.9rem;
+  resize: vertical;
+}
+
+.k-field select:focus,
+.k-field textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
 .k-auth-shell {
   min-height: 100vh;
   display: flex;
@@ -408,4 +433,34 @@ a:hover {
   .k-hero h1 {
     font-size: 2.1rem;
   }
+}
+
+/* Template management (M2-10, #32) */
+
+.k-tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.k-tpl-card-actions {
+  margin-top: 0.75rem;
+}
+
+.k-tpl-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.k-tpl-inline-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.k-tpl-inline-form .k-field {
+  flex: 1;
 }

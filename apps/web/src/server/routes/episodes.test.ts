@@ -474,6 +474,80 @@ test("PATCH /:id/shots/:no 404s on a shot number that doesn't exist", async () =
   expect(res.status).toBe(404);
 });
 
+test("POST /:id/save-as-template requires login", async () => {
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/save-as-template", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "我的模板" }),
+  });
+  expect(res.status).toBe(401);
+});
+
+test("POST /:id/save-as-template derives a private template from the episode's skeleton/style/render", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await upsertDestination(destinationFixture("d_1"));
+  await insertPersona(personaFixture("c_1", ownerId));
+  const episode = fixture("e_1", ownerId);
+  episode.destination_id = "d_1";
+  episode.persona_id = "c_1";
+  episode.render.intro = "intro/custom.mp4";
+  episode.render.outro = "outro/custom.mp4";
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/save-as-template", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ name: "我的模板" }),
+  });
+  expect(res.status).toBe(201);
+  const body = (await res.json()) as { ok: boolean; template: Template };
+  expect(body.template.owner_id).toBe(ownerId);
+  expect(body.template.name).toBe("我的模板");
+  expect(body.template.skeleton).toBe("scenic_area");
+  expect(body.template.lut).toBe("lut/warm_film.cube");
+  expect(body.template.title_style).toBe("serif-center");
+  expect(body.template.intro).toBe("intro/custom.mp4");
+  expect(body.template.outro).toBe("outro/custom.mp4");
+});
+
+test("POST /:id/save-as-template 400s on a missing name", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await upsertDestination(destinationFixture("d_1"));
+  await insertPersona(personaFixture("c_1", ownerId));
+  const episode = fixture("e_1", ownerId);
+  episode.destination_id = "d_1";
+  episode.persona_id = "c_1";
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/save-as-template", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("POST /:id/save-as-template 404s on someone else's episode", async () => {
+  const { cookie } = await login("dannei");
+  await upsertDestination(destinationFixture("d_1"));
+  await insertPersona(personaFixture("c_1", "u_someone_else"));
+  const episode = fixture("e_1", "u_someone_else");
+  episode.destination_id = "d_1";
+  episode.persona_id = "c_1";
+  await insertEpisode(episode);
+
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/save-as-template", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ name: "我的模板" }),
+  });
+  expect(res.status).toBe(404);
+});
+
 test("POST /:id/continue advances script_review -> assets and enqueues one whole-episode task", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);

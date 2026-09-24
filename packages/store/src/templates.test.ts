@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Template } from "@kelvoy/engine";
 import { close, open } from "./db";
-import { getTemplate, listTemplates, upsertTemplate } from "./templates";
+import { deleteTemplate, getTemplate, listTemplates, upsertTemplate } from "./templates";
 
 function fixture(id: string, ownerId: string | null): Template {
   return {
@@ -56,4 +56,26 @@ test("listTemplates with an ownerId returns official + that user's own", async (
 
   const result = await listTemplates("u_1");
   expect(result.map((t) => t.template_id).sort()).toEqual(["t_mine", "t_official"]);
+});
+
+test("deleteTemplate removes an owned private template", async () => {
+  await upsertTemplate(fixture("t_mine", "u_1"));
+  expect(await deleteTemplate("t_mine", "u_1")).toBe(true);
+  expect(await getTemplate("t_mine")).toBeNull();
+});
+
+test("deleteTemplate refuses to delete an official template", async () => {
+  await upsertTemplate(fixture("t_official", null));
+  expect(await deleteTemplate("t_official", "u_1")).toBe(false);
+  expect(await getTemplate("t_official")).not.toBeNull();
+});
+
+test("deleteTemplate refuses to delete someone else's private template", async () => {
+  await upsertTemplate(fixture("t_theirs", "u_2"));
+  expect(await deleteTemplate("t_theirs", "u_1")).toBe(false);
+  expect(await getTemplate("t_theirs")).not.toBeNull();
+});
+
+test("deleteTemplate returns false for a missing id", async () => {
+  expect(await deleteTemplate("t_missing", "u_1")).toBe(false);
 });

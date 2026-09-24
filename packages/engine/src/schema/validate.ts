@@ -1,6 +1,7 @@
 import type {
   CreateEpisodeRequest,
   CreatePersonaRequest,
+  CreateTemplateRequest,
   LoginRequest,
   PatchEpisodeRequest,
   PatchShotRequest,
@@ -512,6 +513,22 @@ export function validatePersonaPatchRequest(input: unknown): ValidationResult<Pe
   return { valid: true, value: p as PersonaPatch };
 }
 
+// Shared by validateTemplate (whole document) and validateCreateTemplateRequest
+// (POST /api/templates body) — both need the same name/skeleton/lut/intro/
+// outro/title_style checks, they only differ on template_id/owner_id.
+function validateTemplateFields(t: Partial<Template>, errors: string[]): void {
+  if (!isNonEmptyString(t.name)) errors.push("name: 缺失或为空");
+  if (!t.skeleton || !DESTINATION_TYPES.includes(t.skeleton as DestinationType)) {
+    errors.push(
+      `skeleton: 必须是 ${DESTINATION_TYPES.join(" / ")} 之一，实际是 ${JSON.stringify(t.skeleton)}`,
+    );
+  }
+  if (!isNonEmptyString(t.lut)) errors.push("lut: 缺失或为空");
+  if (t.intro !== null && !isNonEmptyString(t.intro)) errors.push("intro: 必须是字符串或 null");
+  if (t.outro !== null && !isNonEmptyString(t.outro)) errors.push("outro: 必须是字符串或 null");
+  if (!isNonEmptyString(t.title_style)) errors.push("title_style: 缺失或为空");
+}
+
 /** Validates a whole template document (used by `import-template`). */
 export function validateTemplate(input: unknown): ValidationResult<Template> {
   const errors: string[] = [];
@@ -524,19 +541,27 @@ export function validateTemplate(input: unknown): ValidationResult<Template> {
   if (t.owner_id !== null && !isNonEmptyString(t.owner_id)) {
     errors.push("owner_id: 必须是字符串或 null（null = 官方模板）");
   }
-  if (!isNonEmptyString(t.name)) errors.push("name: 缺失或为空");
-  if (!t.skeleton || !DESTINATION_TYPES.includes(t.skeleton as DestinationType)) {
-    errors.push(
-      `skeleton: 必须是 ${DESTINATION_TYPES.join(" / ")} 之一，实际是 ${JSON.stringify(t.skeleton)}`,
-    );
-  }
-  if (!isNonEmptyString(t.lut)) errors.push("lut: 缺失或为空");
-  if (t.intro !== null && !isNonEmptyString(t.intro)) errors.push("intro: 必须是字符串或 null");
-  if (t.outro !== null && !isNonEmptyString(t.outro)) errors.push("outro: 必须是字符串或 null");
-  if (!isNonEmptyString(t.title_style)) errors.push("title_style: 缺失或为空");
+  validateTemplateFields(t, errors);
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: t as Template };
+}
+
+/**
+ * Validates apps/web's POST /api/templates request body (M2-10, FR-10).
+ * template_id/owner_id 都不在请求体里——服务端生成 template_id、owner_id
+ * 从会话取，和 validateCreatePersonaRequest 排除 persona_id/owner_id 同理。
+ */
+export function validateCreateTemplateRequest(input: unknown): ValidationResult<CreateTemplateRequest> {
+  const errors: string[] = [];
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: ["不是一个 JSON 对象"] };
+  }
+  const t = input as Partial<Template>;
+  validateTemplateFields(t, errors);
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true, value: t as CreateTemplateRequest };
 }
 
 /**

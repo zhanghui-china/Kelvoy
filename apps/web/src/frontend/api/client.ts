@@ -1,11 +1,11 @@
-import type { Destination, Episode, Persona } from "@kelvoy/engine";
+import type { Destination, Episode, Persona, Template } from "@kelvoy/engine";
 
 // Typed wrapper around the /api/* routes apps/web/src/server/routes/*.ts
-// actually serve. Scoped to what M2-7's read-only pages need (auth +
-// personas/destinations/episodes lists + episode detail) — no functions
-// for templates/persona-refs-upload/episode-writes, since no page in this
-// issue calls them (brief form and review desk are explicitly out of
-// scope here, see M2-7 issue's "不做" list).
+// actually serve. M2-7 scoped this to read-only pages (auth +
+// personas/destinations/episodes lists + episode detail); M2-10 (#32) adds
+// the templates create/list/delete + save-episode-as-template functions.
+// Still no functions for persona-refs-upload/episode-writes — no page
+// calls them yet.
 
 export type ApiOk<T> = { ok: true } & T;
 export type ApiFail = { ok: false; error?: string; errors?: unknown; message?: string };
@@ -56,5 +56,34 @@ export function listEpisodes() {
 export function getEpisode(episodeId: string) {
   return apiFetch<{ episode: Episode; row_version: number }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
+  );
+}
+
+export function listTemplates() {
+  return apiFetch<{ templates: Template[] }>("/api/templates");
+}
+
+export type CreateTemplateBody = Pick<
+  Template,
+  "name" | "skeleton" | "lut" | "intro" | "outro" | "title_style"
+>;
+
+export function createTemplate(body: CreateTemplateBody) {
+  return apiFetch<{ template: Template }>("/api/templates", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteTemplate(templateId: string) {
+  return apiFetch<Record<string, never>>(`/api/templates/${encodeURIComponent(templateId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function saveEpisodeAsTemplate(episodeId: string, name: string) {
+  return apiFetch<{ template: Template }>(
+    `/api/episodes/${encodeURIComponent(episodeId)}/save-as-template`,
+    { method: "POST", body: JSON.stringify({ name }) },
   );
 }
