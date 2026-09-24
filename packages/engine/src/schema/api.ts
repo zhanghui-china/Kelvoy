@@ -31,9 +31,15 @@ export interface Task {
  * domain snapshots baked into the episode doc itself.
  */
 
-// Fields allowed to be patched on a single shot. Anything else
-// (schema-defining fields like `scene`/`camera`/`beat`) is script-stage
-// output, not write-back.
+// Fields allowed to be patched on a single shot: the first group is
+// worker/review-desk write-back (generation results + review decisions),
+// the second is what PRD v0.2 §4 lets a human change at 审核 1（镜头顺序
+// 之外的脚本字段）和 审核 2（改 prompt 后重生成）。
+//
+// Still not patchable: `no`（顺序由 state/episode.ts 的 reorderShots 整体
+// 重排，不能单镜改号）、`scene`（场景是 script 阶段的产出结构，审核 1 只
+// 改镜、不改场景表）、`duration_s`（节拍对齐由 FR-07 的合成逻辑决定，不是
+// 人工字段）。
 export type ShotPatch = Partial<
   Pick<
     Shot,
@@ -45,6 +51,12 @@ export type ShotPatch = Partial<
     | "regen_stage"
     | "bad_shot_reported"
     | "model"
+    | "beat"
+    | "size"
+    | "camera"
+    | "landmark"
+    | "kf_prompt"
+    | "motion_prompt"
   >
 >;
 

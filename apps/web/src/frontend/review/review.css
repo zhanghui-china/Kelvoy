@@ -1,0 +1,327 @@
+/*
+ * 审片台（M2-9, #31）。前缀统一 k-desk-，只用 index.css 已定义的 CSS 变量
+ * 和 .k-card/.k-btn/.k-field/.k-pill 工具类，不重定设计规范。
+ *
+ * 单独一个文件而不是继续往 index.css 里追加：index.css 已经 466 行，贴着
+ * CLAUDE.md 的 500 行上限，#30 的 NewEpisodePage.css 已经按同一个理由拆过
+ * 一次，这里沿用。
+ */
+
+.k-desk-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0.5rem 0 1.25rem 0;
+}
+
+.k-desk-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.k-desk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.k-desk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.k-desk-viewswitch {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.k-btn-tiny {
+  height: 34px;
+  padding: 0 0.85rem;
+  font-size: 0.8rem;
+}
+
+.k-btn-secondary.is-active {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+
+/* 待审队列 */
+
+.k-desk-queue {
+  position: sticky;
+  top: 1rem;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.k-desk-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.k-desk-queue-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.k-desk-queue-item.is-current {
+  border-color: var(--color-accent);
+  background: #e3f0ee;
+}
+
+/* 镜块 */
+
+.k-desk-shot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  scroll-margin-top: 1rem;
+}
+
+.k-desk-shot.is-current {
+  border-color: var(--color-accent);
+}
+
+.k-desk-shot-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.k-desk-shot-no {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.k-desk-shot-beat {
+  font-size: 0.9rem;
+  color: var(--color-ink-soft);
+}
+
+.k-desk-shot-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+/* 候选并排 / 参考图 / 媒体占位 */
+
+.k-desk-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.k-desk-candidate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  border: 2px solid var(--color-border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.k-desk-candidate.is-selected {
+  border-color: var(--color-accent);
+  background: #e3f0ee;
+}
+
+.k-desk-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.k-desk-figure {
+  margin: 0;
+}
+
+.k-desk-media {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  background: #eeebe3;
+}
+
+.k-desk-final {
+  max-width: 320px;
+}
+
+.k-desk-media-missing {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 120px;
+  padding: 0.75rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* 起点滑块 / 质量红线 */
+
+.k-desk-slider {
+  margin-top: 0.75rem;
+}
+
+.k-desk-slider input[type="range"] {
+  width: 100%;
+}
+
+.k-desk-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+}
+
+.k-desk-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 脚本视图表格 / 故事板 / 编辑器 */
+
+.k-desk-tablewrap {
+  overflow-x: auto;
+}
+
+.k-desk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  background: var(--color-card);
+}
+
+.k-desk-table th,
+.k-desk-table td {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.k-desk-prompt-cell {
+  max-width: 260px;
+  color: var(--color-muted);
+}
+
+.k-desk-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.k-desk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.k-desk-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg);
+}
+
+.k-desk-editor-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.k-desk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* 阶段步骤条 */
+
+.k-desk-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.k-desk-step {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  background: var(--color-card);
+}
+
+.k-desk-step.is-done {
+  color: var(--color-ink-soft);
+  border-color: var(--color-ink-soft);
+}
+
+.k-desk-step.is-current {
+  color: #ffffff;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+@media (max-width: 720px) {
+  .k-desk-layout,
+  .k-desk-shot-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .k-desk-queue {
+    position: static;
+  }
+  .k-desk-candidates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

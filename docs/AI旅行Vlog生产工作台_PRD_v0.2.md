@@ -321,7 +321,7 @@ flowchart LR
 
 - 期 JSON 存本地 SQLite（`episodes.doc`），是唯一真源；产物文件（关键帧、片段、成片）落本地磁盘 `projects/<episode_id>/kf/07_a.png` 这种路径，角色与目的地的参考图各在自己的目录。
 - 队列任务只带 `{episode_id, stage, shot_no?, attempt}`（§6），存在 SQLite 的 `tasks` 表里。worker 出队后直接调 `packages/store` 的 `getEpisode`/`replaceEpisode`（带乐观锁 `row_version`）读写期数据，不经过 HTTP。
-- 审片台只改期 JSON 里的 `kf_selected / trim_start_s / status / regen_stage / bad_shot_reported`，改完写一条任务进队列；进度靠浏览器 2–5 秒轮询 `apps/web`，`apps/web` 读同一个 SQLite。
+- 审片台只改期 JSON 里这几处：审核决策与产物指针 `kf_selected / trim_start_s / status / regen_stage / bad_shot_reported`，审核 1/2 人工可改的脚本字段 `beat / size / camera / landmark / kf_prompt / motion_prompt`，以及审核 1 的整体镜序重排（重排后 `no` 连续重编号，删镜走 `removed_shots`）。改完写一条任务进队列；进度靠浏览器 2–5 秒轮询 `apps/web`，`apps/web` 读同一个 SQLite。
 - 单机部署意味着当前没有"一台机器宕机不停服"这种冗余——MVP 阶段接受，上线前重新评估；队列超阈值自动溢出到国内 API；ffmpeg 合成也在 worker 上跑。
 
 **目录结构**（已落地，见仓库根目录、`docs/decisions/0002`、`docs/decisions/0004`）

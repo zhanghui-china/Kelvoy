@@ -1,0 +1,64 @@
+{
+  "destination_id": "d_lingshan",
+  "version": 1,
+  "name": "灵山大佛",
+  "city": "无锡",
+  "type": "scenic_area",
+  "season_best": [
+    "秋",
+    "春"
+  ],
+  "landmarks": [
+    {
+      "id": "l_buddha",
+      "name": "灵山大佛",
+      "refs": [
+        "dest/lingshan/buddha_01.jpg",
+        "dest/lingshan/buddha_02.jpg",
+        "dest/lingshan/buddha_03.jpg"
+      ],
+      "best_time": "上午 9–11 点",
+      "must_keep": [
+        "右手施无畏印",
+        "莲花座"
+      ]
+    },
+    {
+      "id": "l_bridge",
+      "name": "五明桥",
+      "refs": [
+        "dest/lingshan/bridge_01.jpg",
+        "dest/lingshan/bridge_02.jpg",
+        "dest/lingshan/bridge_03.jpg"
+      ],
+      "best_time": "清晨",
+      "must_keep": [
+        "五孔石桥"
+      ]
+    },
+    {
+      "id": "l_hall",
+      "name": "梵宫",
+      "refs": [
+        "dest/lingshan/hall_01.jpg",
+        "dest/lingshan/hall_02.jpg",
+        "dest/lingshan/hall_03.jpg"
+      ],
+      "best_time": "下午",
+      "must_keep": [
+        "穹顶藻井"
+      ]
+    }
+  ],
+  "route": [
+    "五明桥",
+    "梵宫",
+    "大佛"
+  ],
+  "food": [
+    "无锡小笼",
+    "素斋"
+  ],
+  "transport": "无锡地铁 + 景区接驳车",
+  "stay": "景区旁酒店"
+}

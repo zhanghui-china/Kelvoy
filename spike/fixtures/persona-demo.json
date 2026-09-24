@@ -1,0 +1,22 @@
+{
+  "persona_id": "c_demo",
+  "owner_id": "u_demo",
+  "version": 1,
+  "name": "小岛",
+  "desc": "30 岁男性，短发，身形偏瘦",
+  "locked": [
+    "脸型",
+    "发型",
+    "体态"
+  ],
+  "default_outfit": "浅灰亚麻衬衫 + 米白长裤",
+  "refs": [
+    "persona/c_demo/front.png",
+    "persona/c_demo/side.png",
+    "persona/c_demo/full.png"
+  ],
+  "style": {
+    "lut": "lut/warm_film.cube",
+    "title_style": "serif-center"
+  }
+}

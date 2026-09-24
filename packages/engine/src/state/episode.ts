@@ -115,3 +115,35 @@ export function removeShot(episode: Episode, shotNo: number): Episode {
     removed_shots: [...episode.removed_shots, shot],
   };
 }
+
+/**
+ * Review 1 (FR-05, PRD v0.2 §4「可改镜头顺序」): reorders the whole shot
+ * list into `order` (a permutation of the current `shots[].no`) and
+ * renumbers `no` to 1..n.
+ *
+ * Renumbering is only safe at review 1, hence the status guard: before the
+ * assets/keyframe stages run, no artifact key (kf/07_a.png, clip/07.mp4)
+ * or queued task references a shot number yet, so changing `no` cannot
+ * orphan anything. Reordering later would have to rename files and rewrite
+ * in-flight tasks — out of scope, and the guard makes that explicit rather
+ * than leaving it to the caller.
+ *
+ * Returns a new Episode; does not mutate the input. FR-02 re-validation
+ * (size_run changes when shots move) is the caller's job, same as
+ * removeShot.
+ */
+export function reorderShots(episode: Episode, order: number[]): Episode {
+  if (episode.status !== "script_review") {
+    throw illegalTransition(episode.status, "reorder_shots");
+  }
+  const byNo = new Map(episode.shots.map((s) => [s.no, s]));
+  if (order.length !== episode.shots.length || new Set(order).size !== order.length) {
+    throw new Error(`reorder order must be a permutation of the ${episode.shots.length} current shots`);
+  }
+  const shots = order.map((no, index) => {
+    const shot = byNo.get(no);
+    if (!shot) throw new Error(`reorder order references unknown shot ${no}`);
+    return { ...shot, no: index + 1 };
+  });
+  return { ...episode, shots };
+}

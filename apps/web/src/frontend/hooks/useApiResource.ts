@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ApiResult } from "../api/client";
 
@@ -47,11 +47,17 @@ export function useApiResource<T>(fetcher: () => Promise<ApiResult<T>>, deps: un
 // finer requirement given.
 const POLL_INTERVAL_MS = 3000;
 
-export function usePolledApiResource<T>(fetcher: () => Promise<ApiResult<T>>, deps: unknown[]): State<T> {
+// 审片台 (#31) 的写操作成功后要立刻看到新状态，不能等下一个 3 秒 tick——
+// `refresh()` 就是手动跑一次同一个 tick，轮询本身的行为没变。
+export function usePolledApiResource<T>(
+  fetcher: () => Promise<ApiResult<T>>,
+  deps: unknown[],
+): State<T> & { refresh: () => void } {
   const [state, setState] = useState<State<T>>({ loading: true, data: null, error: null });
   const navigate = useNavigate();
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const tickRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +77,9 @@ export function usePolledApiResource<T>(fetcher: () => Promise<ApiResult<T>>, de
     }
 
     setState({ loading: true, data: null, error: null });
+    tickRef.current = () => {
+      void tick();
+    };
     tick();
     const id = setInterval(tick, POLL_INTERVAL_MS);
     return () => {
@@ -80,5 +89,6 @@ export function usePolledApiResource<T>(fetcher: () => Promise<ApiResult<T>>, de
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  return state;
+  const refresh = useCallback(() => tickRef.current(), []);
+  return { ...state, refresh };
 }

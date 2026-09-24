@@ -1,7 +1,14 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { ContentViolation, EpisodeMode } from "@kelvoy/engine";
-import { createEpisode, getEstimate, listDestinations, listPersonas, listTemplates } from "../api/client";
+import {
+  createEpisode,
+  getEstimate,
+  isContentViolation,
+  listDestinations,
+  listPersonas,
+  listTemplates,
+} from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import "./NewEpisodePage.css";
@@ -111,7 +118,9 @@ export default function NewEpisodePage() {
 
     if (!result.ok) {
       if (result.error === "content_blocked") {
-        setViolations(result.violations ?? []);
+        // violations 是内容违规 / FR-02 结构违规的联合类型（client.ts），
+        // 建期这条路由只会回前者。
+        setViolations((result.violations ?? []).filter(isContentViolation));
         return;
       }
       setFormErrors(

@@ -1,0 +1,134 @@
+import type { Episode, ShotModelRecord } from "@kelvoy/engine";
+import { episodeFileUrl, recompose } from "../api/client";
+import { MutationError } from "./ShotHeader";
+import type { EpisodeMutation } from "./useEpisodeMutation";
+
+/**
+ * 成片文件名约定和 engine 的 `finalOutputKey(episodeId)`
+ * （packages/engine/src/stages/compose.ts）保持一致。前端不 import engine
+ * 的运行时代码（会把 providers/stages 一起拉进 bundle，见 #30 的取舍），
+ * 所以这里手抄同一个字符串；改约定时两处一起改。
+ */
+function finalKey(episodeId: string): string {
+  return `final/${episodeId}.mp4`;
+}
+
+interface ProviderTally {
+  provider: string;
+  model: string;
+  shots: number;
+  attempts: number;
+  costUsd: number;
+}
+
+// 成本报告按 provider+model 汇总每镜的 model.image / model.video 记录
+// （§6 的可复现记录里就有 attempts 和 cost_usd，不用另存一份账）。
+function tally(episode: Episode): ProviderTally[] {
+  const rows = new Map<string, ProviderTally>();
+  const records: ShotModelRecord[] = [];
+  for (const shot of episode.shots) {
+    if (shot.model.image) records.push(shot.model.image);
+    if (shot.model.video) records.push(shot.model.video);
+  }
+  for (const record of records) {
+    const key = `${record.provider}/${record.model}`;
+    const row = rows.get(key) ?? {
+      provider: record.provider,
+      model: record.model,
+      shots: 0,
+      attempts: 0,
+      costUsd: 0,
+    };
+    row.shots += 1;
+    row.attempts += record.attempts;
+    row.costUsd += record.cost_usd;
+    rows.set(key, row);
+  }
+  return [...rows.values()];
+}
+
+export default function DoneView({
+  episode,
+  mutation,
+}: {
+  episode: Episode;
+  mutation: EpisodeMutation;
+}) {
+  const url = episodeFileUrl(episode.episode_id, finalKey(episode.episode_id));
+  const rows = tally(episode);
+  const totalCost = rows.reduce((sum, row) => sum + row.costUsd, 0);
+
+  if (episode.status === "composing") {
+    return (
+      <section className="k-desk-main">
+        <div className="k-card-title">合成中</div>
+        <p className="k-empty">ffmpeg 正在合成成片，页面每 3 秒自动刷新。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="k-desk-main">
+      <div className="k-card-title">成片</div>
+      <video className="k-desk-media k-desk-final" src={url} controls aria-label="成片" />
+      <p className="k-card-meta">文件还没生成时播放器会是空的，那说明合成还没跑完。</p>
+      <p>
+        <a href={url} download>
+          下载成片
+        </a>
+      </p>
+
+      <div className="k-card">
+        <div className="k-card-title">成本报告</div>
+        <div className="k-card-meta">
+          预估 {episode.estimated_credits} GPU 分钟 · 实际用掉 {episode.credits_used} GPU 分钟
+        </div>
+        {rows.length === 0 ? (
+          <p className="k-empty">还没有模型调用记录。</p>
+        ) : (
+          <div className="k-desk-tablewrap">
+            <table className="k-desk-table">
+              <thead>
+                <tr>
+                  <th>provider</th>
+                  <th>模型</th>
+                  <th>镜次</th>
+                  <th>尝试次数</th>
+                  <th>成本 (USD)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={`${row.provider}/${row.model}`}>
+                    <td>{row.provider}</td>
+                    <td>{row.model}</td>
+                    <td>{row.shots}</td>
+                    <td>{row.attempts}</td>
+                    <td>{row.costUsd.toFixed(4)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td colSpan={4}>合计</td>
+                  <td>{totalCost.toFixed(4)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <MutationError error={mutation.error} />
+      <div className="k-desk-actions">
+        <button
+          type="button"
+          className="k-btn k-btn-secondary"
+          disabled={mutation.pending}
+          onClick={() => mutation.run((rowVersion) => recompose(episode.episode_id, rowVersion))}
+        >
+          重新合成
+        </button>
+        <span className="k-card-meta">重新合成只重跑合成，不动任何镜（FR-08）。</span>
+      </div>
+    </section>
+  );
+}

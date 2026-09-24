@@ -406,6 +406,29 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
   }
   if ("model" in patch) validateShotModelRef(patch.model, "patch.model", errors);
 
+  // 审核 1/2 人工可改字段（PRD v0.2 §4）。landmark 只在这里查"是不是字符串
+  // 或 null"，"这个 id 在不在目的地库里"要拿到目的地才能判断，由调用方
+  // （apps/web 的 PATCH shot 路由）用 rules/script.ts 同一条规则去查。
+  if ("beat" in patch && !isNonEmptyString(patch.beat)) {
+    errors.push("patch.beat: 必须是非空字符串");
+  }
+  if ("size" in patch && !isOneOf(patch.size, SHOT_SIZES)) {
+    errors.push(`patch.size: 必须是 ${SHOT_SIZES.join(" / ")} 之一`);
+  }
+  if ("camera" in patch && !isOneOf(patch.camera, SHOT_CAMERAS)) {
+    errors.push(`patch.camera: 必须是 ${SHOT_CAMERAS.join(" / ")} 之一`);
+  }
+  if ("landmark" in patch && patch.landmark !== null && !isNonEmptyString(patch.landmark)) {
+    errors.push("patch.landmark: 必须是字符串或 null");
+  }
+  // prompt 允许清空（还没生成过的镜本来就是空字符串），所以不是 isNonEmptyString。
+  if ("kf_prompt" in patch && typeof patch.kf_prompt !== "string") {
+    errors.push("patch.kf_prompt: 必须是字符串");
+  }
+  if ("motion_prompt" in patch && typeof patch.motion_prompt !== "string") {
+    errors.push("patch.motion_prompt: 必须是字符串");
+  }
+
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: input as unknown as PatchShotRequest };
 }

@@ -1,0 +1,1320 @@
+{
+  "episode_id": "e_demo_clip",
+  "owner_id": "u_demo",
+  "persona_id": "c_demo",
+  "persona_version": 1,
+  "destination_id": "d_lingshan",
+  "destination_version": 1,
+  "series_id": "d_lingshan",
+  "template_id": "t_scenic_area_day",
+  "status": "clip_review",
+  "mode": "per_shot",
+  "created_at": "2026-09-24T09:00:00+08:00",
+  "estimated_credits": 42,
+  "credits_used": 35,
+  "share": {
+    "enabled": false,
+    "slug": ""
+  },
+  "brief": {
+    "season": "秋",
+    "aspect": "9:16",
+    "duration_s": 30,
+    "tone": "松弛",
+    "outfit_override": null,
+    "banned": []
+  },
+  "grid_refs": [
+    "grid/plan_01.png"
+  ],
+  "scenes": [
+    {
+      "id": "sc_arrive",
+      "name": "山门抵达",
+      "time": "morning",
+      "landmarks": [
+        "l_bridge"
+      ]
+    },
+    {
+      "id": "sc_climb",
+      "name": "登台阶",
+      "time": "noon",
+      "landmarks": [
+        "l_hall"
+      ]
+    },
+    {
+      "id": "sc_summit",
+      "name": "大佛脚下",
+      "time": "afternoon",
+      "landmarks": [
+        "l_buddha"
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "no": 1,
+      "scene": "sc_arrive",
+      "size": "wide",
+      "beat": "推开山门",
+      "camera": "static",
+      "landmark": "l_buddha",
+      "kf_prompt": "灵山大佛景区，推开山门，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/01_a.png",
+        "kf/01_b.png",
+        "kf/01_c.png"
+      ],
+      "kf_selected": "kf/01_a.png",
+      "clip": "clip/01.mp4",
+      "trim_start_s": 0.4,
+      "status": "approved",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1001,
+          "prompt": "第 1 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0001"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1001,
+          "prompt": "第 1 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0001"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 2,
+      "scene": "sc_arrive",
+      "size": "medium",
+      "beat": "抬头望牌坊",
+      "camera": "pan",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，抬头望牌坊，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/02_a.png",
+        "kf/02_b.png",
+        "kf/02_c.png"
+      ],
+      "kf_selected": "kf/02_a.png",
+      "clip": "clip/02.mp4",
+      "trim_start_s": 0.4,
+      "status": "approved",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1002,
+          "prompt": "第 2 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0002"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1002,
+          "prompt": "第 2 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0002"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 3,
+      "scene": "sc_arrive",
+      "size": "close",
+      "beat": "走过石板桥",
+      "camera": "push",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，走过石板桥，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/03_a.png",
+        "kf/03_b.png",
+        "kf/03_c.png"
+      ],
+      "kf_selected": "kf/03_a.png",
+      "clip": "clip/03.mp4",
+      "trim_start_s": 0.4,
+      "status": "approved",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1003,
+          "prompt": "第 3 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0003"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1003,
+          "prompt": "第 3 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0003"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 4,
+      "scene": "sc_arrive",
+      "size": "detail",
+      "beat": "看水面倒影",
+      "camera": "follow",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，看水面倒影，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/04_a.png",
+        "kf/04_b.png",
+        "kf/04_c.png"
+      ],
+      "kf_selected": "kf/04_a.png",
+      "clip": "clip/04.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1004,
+          "prompt": "第 4 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0004"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1004,
+          "prompt": "第 4 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0004"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 5,
+      "scene": "sc_arrive",
+      "size": "pov",
+      "beat": "整理衣领",
+      "camera": "static",
+      "landmark": "l_bridge",
+      "kf_prompt": "灵山大佛景区，整理衣领，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/05_a.png",
+        "kf/05_b.png",
+        "kf/05_c.png"
+      ],
+      "kf_selected": "kf/05_a.png",
+      "clip": "clip/05.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": true,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1005,
+          "prompt": "第 5 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0005"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1005,
+          "prompt": "第 5 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0005"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 6,
+      "scene": "sc_arrive",
+      "size": "wide",
+      "beat": "抬脚上台阶",
+      "camera": "pan",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，抬脚上台阶，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/06_a.png",
+        "kf/06_b.png",
+        "kf/06_c.png"
+      ],
+      "kf_selected": "kf/06_a.png",
+      "clip": "clip/06.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1006,
+          "prompt": "第 6 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0006"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1006,
+          "prompt": "第 6 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0006"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 7,
+      "scene": "sc_arrive",
+      "size": "medium",
+      "beat": "回头看来路",
+      "camera": "push",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，回头看来路，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/07_a.png",
+        "kf/07_b.png",
+        "kf/07_c.png"
+      ],
+      "kf_selected": "kf/07_a.png",
+      "clip": "clip/07.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1007,
+          "prompt": "第 7 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0007"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1007,
+          "prompt": "第 7 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0007"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 8,
+      "scene": "sc_arrive",
+      "size": "close",
+      "beat": "停下喘口气",
+      "camera": "follow",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，停下喘口气，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/08_a.png",
+        "kf/08_b.png",
+        "kf/08_c.png"
+      ],
+      "kf_selected": "kf/08_a.png",
+      "clip": "clip/08.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1008,
+          "prompt": "第 8 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0008"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1008,
+          "prompt": "第 8 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0008"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 9,
+      "scene": "sc_arrive",
+      "size": "detail",
+      "beat": "伸手摸栏杆",
+      "camera": "static",
+      "landmark": "l_hall",
+      "kf_prompt": "灵山大佛景区，伸手摸栏杆，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/09_a.png",
+        "kf/09_b.png",
+        "kf/09_c.png"
+      ],
+      "kf_selected": "kf/09_a.png",
+      "clip": "clip/09.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1009,
+          "prompt": "第 9 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0009"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1009,
+          "prompt": "第 9 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0009"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 10,
+      "scene": "sc_climb",
+      "size": "pov",
+      "beat": "继续往上走",
+      "camera": "pan",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，继续往上走，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/10_a.png",
+        "kf/10_b.png",
+        "kf/10_c.png"
+      ],
+      "kf_selected": "kf/10_a.png",
+      "clip": "clip/10.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1010,
+          "prompt": "第 10 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0010"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1010,
+          "prompt": "第 10 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0010"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 11,
+      "scene": "sc_climb",
+      "size": "wide",
+      "beat": "抬头看大佛",
+      "camera": "push",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，抬头看大佛，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/11_a.png",
+        "kf/11_b.png",
+        "kf/11_c.png"
+      ],
+      "kf_selected": "kf/11_a.png",
+      "clip": "clip/11.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1011,
+          "prompt": "第 11 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0011"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1011,
+          "prompt": "第 11 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0011"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 12,
+      "scene": "sc_climb",
+      "size": "medium",
+      "beat": "退后两步取全景",
+      "camera": "follow",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，退后两步取全景，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/12_a.png",
+        "kf/12_b.png",
+        "kf/12_c.png"
+      ],
+      "kf_selected": "kf/12_a.png",
+      "clip": "clip/12.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1012,
+          "prompt": "第 12 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0012"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1012,
+          "prompt": "第 12 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0012"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 13,
+      "scene": "sc_climb",
+      "size": "close",
+      "beat": "侧身看侧脸",
+      "camera": "static",
+      "landmark": "l_buddha",
+      "kf_prompt": "灵山大佛景区，侧身看侧脸，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/13_a.png",
+        "kf/13_b.png",
+        "kf/13_c.png"
+      ],
+      "kf_selected": "kf/13_a.png",
+      "clip": "clip/13.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1013,
+          "prompt": "第 13 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0013"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1013,
+          "prompt": "第 13 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0013"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 14,
+      "scene": "sc_climb",
+      "size": "detail",
+      "beat": "蹲下看基座",
+      "camera": "pan",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，蹲下看基座，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/14_a.png",
+        "kf/14_b.png",
+        "kf/14_c.png"
+      ],
+      "kf_selected": "kf/14_a.png",
+      "clip": "clip/14.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1014,
+          "prompt": "第 14 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0014"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1014,
+          "prompt": "第 14 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0014"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 15,
+      "scene": "sc_climb",
+      "size": "pov",
+      "beat": "起身环顾",
+      "camera": "push",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，起身环顾，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/15_a.png",
+        "kf/15_b.png",
+        "kf/15_c.png"
+      ],
+      "kf_selected": "kf/15_a.png",
+      "clip": "clip/15.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1015,
+          "prompt": "第 15 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0015"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1015,
+          "prompt": "第 15 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0015"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 16,
+      "scene": "sc_climb",
+      "size": "wide",
+      "beat": "沿回廊慢走",
+      "camera": "follow",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，沿回廊慢走，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/16_a.png",
+        "kf/16_b.png",
+        "kf/16_c.png"
+      ],
+      "kf_selected": "kf/16_a.png",
+      "clip": "clip/16.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1016,
+          "prompt": "第 16 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0016"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1016,
+          "prompt": "第 16 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0016"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 17,
+      "scene": "sc_climb",
+      "size": "medium",
+      "beat": "推开殿门",
+      "camera": "static",
+      "landmark": "l_bridge",
+      "kf_prompt": "灵山大佛景区，推开殿门，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/17_a.png",
+        "kf/17_b.png",
+        "kf/17_c.png"
+      ],
+      "kf_selected": "kf/17_a.png",
+      "clip": "clip/17.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1017,
+          "prompt": "第 17 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0017"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1017,
+          "prompt": "第 17 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0017"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 18,
+      "scene": "sc_climb",
+      "size": "close",
+      "beat": "抬头看藻井",
+      "camera": "pan",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，抬头看藻井，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/18_a.png",
+        "kf/18_b.png",
+        "kf/18_c.png"
+      ],
+      "kf_selected": "kf/18_a.png",
+      "clip": "clip/18.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1018,
+          "prompt": "第 18 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0018"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1018,
+          "prompt": "第 18 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0018"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 19,
+      "scene": "sc_summit",
+      "size": "detail",
+      "beat": "转身走出殿",
+      "camera": "push",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，转身走出殿，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/19_a.png",
+        "kf/19_b.png",
+        "kf/19_c.png"
+      ],
+      "kf_selected": "kf/19_a.png",
+      "clip": "clip/19.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1019,
+          "prompt": "第 19 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0019"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1019,
+          "prompt": "第 19 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0019"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 20,
+      "scene": "sc_summit",
+      "size": "pov",
+      "beat": "眺望远山",
+      "camera": "follow",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，眺望远山，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/20_a.png",
+        "kf/20_b.png",
+        "kf/20_c.png"
+      ],
+      "kf_selected": "kf/20_a.png",
+      "clip": "clip/20.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1020,
+          "prompt": "第 20 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0020"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1020,
+          "prompt": "第 20 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0020"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 21,
+      "scene": "sc_summit",
+      "size": "wide",
+      "beat": "坐在台阶上",
+      "camera": "static",
+      "landmark": "l_hall",
+      "kf_prompt": "灵山大佛景区，坐在台阶上，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/21_a.png",
+        "kf/21_b.png",
+        "kf/21_c.png"
+      ],
+      "kf_selected": "kf/21_a.png",
+      "clip": "clip/21.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1021,
+          "prompt": "第 21 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0021"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1021,
+          "prompt": "第 21 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0021"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 22,
+      "scene": "sc_summit",
+      "size": "medium",
+      "beat": "喝一口水",
+      "camera": "pan",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，喝一口水，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/22_a.png",
+        "kf/22_b.png",
+        "kf/22_c.png"
+      ],
+      "kf_selected": "kf/22_a.png",
+      "clip": "clip/22.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1022,
+          "prompt": "第 22 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0022"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1022,
+          "prompt": "第 22 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0022"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 23,
+      "scene": "sc_summit",
+      "size": "close",
+      "beat": "起身拍衣摆",
+      "camera": "push",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，起身拍衣摆，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/23_a.png",
+        "kf/23_b.png",
+        "kf/23_c.png"
+      ],
+      "kf_selected": "kf/23_a.png",
+      "clip": "clip/23.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1023,
+          "prompt": "第 23 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0023"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1023,
+          "prompt": "第 23 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0023"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 24,
+      "scene": "sc_summit",
+      "size": "detail",
+      "beat": "沿原路下山",
+      "camera": "follow",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，沿原路下山，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/24_a.png",
+        "kf/24_b.png",
+        "kf/24_c.png"
+      ],
+      "kf_selected": "kf/24_a.png",
+      "clip": "clip/24.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1024,
+          "prompt": "第 24 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0024"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1024,
+          "prompt": "第 24 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0024"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 25,
+      "scene": "sc_summit",
+      "size": "pov",
+      "beat": "回望大佛",
+      "camera": "static",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，回望大佛，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/25_a.png",
+        "kf/25_b.png",
+        "kf/25_c.png"
+      ],
+      "kf_selected": "kf/25_a.png",
+      "clip": "clip/25.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1025,
+          "prompt": "第 25 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0025"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1025,
+          "prompt": "第 25 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0025"
+          ],
+          "attempts": 2,
+          "cost_usd": 0.081
+        }
+      }
+    },
+    {
+      "no": 26,
+      "scene": "sc_summit",
+      "size": "wide",
+      "beat": "走向出口",
+      "camera": "pan",
+      "landmark": null,
+      "kf_prompt": "灵山大佛景区，走向出口，9:16 竖构图",
+      "motion_prompt": "镜头缓慢移动，1 秒内完成",
+      "duration_s": 1.2,
+      "candidates": [
+        "kf/26_a.png",
+        "kf/26_b.png",
+        "kf/26_c.png"
+      ],
+      "kf_selected": "kf/26_a.png",
+      "clip": "clip/26.mp4",
+      "trim_start_s": 0.4,
+      "status": "clip_ready",
+      "regen_stage": null,
+      "bad_shot_reported": false,
+      "model": {
+        "image": {
+          "provider": "local",
+          "model": "flux-dev",
+          "version": "0.1.0",
+          "seed": 1026,
+          "prompt": "第 26 镜 image prompt",
+          "ref_hashes": [
+            "sha256:0026"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.012
+        },
+        "video": {
+          "provider": "local",
+          "model": "wan-2.2-i2v",
+          "version": "0.1.0",
+          "seed": 1026,
+          "prompt": "第 26 镜 video prompt",
+          "ref_hashes": [
+            "sha256:0026"
+          ],
+          "attempts": 1,
+          "cost_usd": 0.081
+        }
+      }
+    }
+  ],
+  "removed_shots": [],
+  "music": {
+    "file": "music/autumn_walk.mp3",
+    "bpm": 92,
+    "license": "cc-by"
+  },
+  "render": {
+    "res": "1080x1920",
+    "fps": 30,
+    "title": "无锡 · 灵山大佛",
+    "intro": "intro/default.mp4",
+    "outro": null,
+    "ai_label": true
+  }
+}

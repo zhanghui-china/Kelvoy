@@ -1,0 +1,10 @@
+{
+  "template_id": "t_scenic_area_day",
+  "owner_id": null,
+  "name": "大型景区 · 一日",
+  "skeleton": "scenic_area",
+  "lut": "lut/warm_film.cube",
+  "intro": "intro/default.mp4",
+  "outro": null,
+  "title_style": "serif-center"
+}

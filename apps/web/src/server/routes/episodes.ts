@@ -1,16 +1,11 @@
 import { join, resolve, sep } from "node:path";
-import type { Episode, EpisodeStatus, RegenStage, StageName, Template } from "@kelvoy/engine";
+import type { Episode, Template } from "@kelvoy/engine";
 import {
   checkContent,
-  checkScriptRules,
   estimateCost,
-  removeShot,
-  transitionEpisode,
   validateCreateEpisodeRequest,
   validatePatchEpisodeRequest,
-  validatePatchShotRequest,
 } from "@kelvoy/engine";
-import type { GetEpisodeResult, PatchResult } from "@kelvoy/store";
 import {
   enqueueTask,
   getDestination,
@@ -20,15 +15,15 @@ import {
   insertEpisode,
   listEpisodes,
   patchEpisode,
-  patchShot,
-  replaceEpisode,
   upsertTemplate,
 } from "@kelvoy/store";
-import type { Context } from "hono";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
+import { loadOwnedEpisode, patchErrorResponse } from "./episode-common";
+import review from "./episode-review";
 
-// FR-01/FR-05/FR-08: 建期/期列表/详情/产物文件/审片台写路由.
+// FR-01/FR-05: 建期/期列表/详情/存为模板/产物文件。审片台的写路由在
+// episode-review.ts，挂在同一个前缀下（见文件末尾的 episodes.route）。
 const episodes = new Hono();
 
 episodes.use("*", requireOwner);
@@ -136,74 +131,6 @@ episodes.get("/:id", async (c) => {
   return c.json({ ok: true, episode: result.episode, row_version: result.row_version });
 });
 
-// ---- 审片台写路由 (M2-6, FR-05/FR-08) ----
-
-async function loadOwnedEpisode(
-  ownerId: string,
-  episodeId: string,
-): Promise<Extract<GetEpisodeResult, { ok: true }> | null> {
-  const result = await getEpisode(episodeId);
-  if (!result.ok || result.episode.owner_id !== ownerId) return null;
-  return result;
-}
-
-// packages/store's patch/replace functions all share this ok:false shape —
-// one mapping to HTTP status for every write route below.
-function patchErrorResponse(c: Context, result: Extract<PatchResult, { ok: false }>) {
-  switch (result.error) {
-    case "not_found":
-      return c.json({ ok: false, error: "not_found" }, 404);
-    case "illegal_transition":
-      return c.json({ ok: false, error: "illegal_transition" }, 400);
-    case "version_conflict":
-      return c.json(
-        { ok: false, error: "version_conflict", current_row_version: result.current_row_version },
-        409,
-      );
-  }
-}
-
-function parseRowVersion(body: unknown): number | null {
-  if (typeof body !== "object" || body === null) return null;
-  const v = (body as Record<string, unknown>).row_version;
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
-}
-
-function parseRegenBody(body: unknown): { rowVersion: number; regenStage?: RegenStage } | null {
-  const rowVersion = parseRowVersion(body);
-  if (rowVersion === null) return null;
-  const regenStage = (body as Record<string, unknown>).regen_stage;
-  if (regenStage === undefined) return { rowVersion };
-  if (regenStage !== "keyframe" && regenStage !== "video") return null;
-  return { rowVersion, regenStage };
-}
-
-// REGEN_SOURCE_STATES (packages/engine/src/state/shot.ts) is kf_ready |
-// clip_ready | approved — a still-unselected keyframe set means the
-// reviewer wants new candidates, anything past keyframe selection means
-// they want the clip redone with the keyframe kept.
-function inferRegenStage(shotStatus: string): RegenStage {
-  return shotStatus === "kf_ready" ? "keyframe" : "video";
-}
-
-async function regenShotAndEnqueue(
-  episodeId: string,
-  shotNo: number,
-  rowVersion: number,
-  regenStage: RegenStage,
-  bad_shot_reported?: true,
-): Promise<PatchResult> {
-  const result = await patchShot(episodeId, shotNo, rowVersion, {
-    status: "rejected",
-    regen_stage: regenStage,
-    ...(bad_shot_reported ? { bad_shot_reported } : {}),
-  });
-  if (result.ok) {
-    await enqueueTask({ episode_id: episodeId, stage: regenStage, shot_no: shotNo });
-  }
-  return result;
-}
-
 episodes.patch("/:id", async (c) => {
   const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
@@ -214,24 +141,6 @@ episodes.patch("/:id", async (c) => {
 
   const patchResult = await patchEpisode(
     loaded.episode.episode_id,
-    result.value.row_version,
-    result.value.patch,
-  );
-  if (!patchResult.ok) return patchErrorResponse(c, patchResult);
-  return c.json({ ok: true, row_version: patchResult.row_version });
-});
-
-episodes.patch("/:id/shots/:no", async (c) => {
-  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
-  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const body = await c.req.json().catch(() => null);
-  const result = validatePatchShotRequest(body);
-  if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
-
-  const patchResult = await patchShot(
-    loaded.episode.episode_id,
-    Number(c.req.param("no")),
     result.value.row_version,
     result.value.patch,
   );
@@ -274,143 +183,6 @@ episodes.post("/:id/save-as-template", async (c) => {
   };
   await upsertTemplate(template);
   return c.json({ ok: true, template }, 201);
-});
-
-// 三个人工审核点各自的"继续"动作——下一个生成态用哪个 stage、是否要按镜
-// 拆分任务，是 apps/web 这一层的决定（engine 的状态机只知道 script_review
-// 的下一个合法状态是 assets，不知道那对应哪个 StageName）。assets/compose
-// 是整期一个任务；kf_review -> clipping 每镜各生成一次视频，所以要给
-// 已经选定关键帧(kf_selected)的镜各发一条带 shot_no 的任务。
-const REVIEW_GATE_ADVANCE: Partial<Record<EpisodeStatus, { stage: StageName; perShot: boolean }>> = {
-  script_review: { stage: "assets", perShot: false },
-  kf_review: { stage: "video", perShot: true },
-  clip_review: { stage: "compose", perShot: false },
-};
-
-episodes.post("/:id/continue", async (c) => {
-  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
-  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const body = await c.req.json().catch(() => null);
-  const rowVersion = parseRowVersion(body);
-  if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
-
-  const gate = REVIEW_GATE_ADVANCE[loaded.episode.status];
-  if (!gate) return c.json({ ok: false, error: "illegal_transition" }, 400);
-  const nextStatus = transitionEpisode(loaded.episode.status, { type: "advance" });
-
-  const patchResult = await patchEpisode(loaded.episode.episode_id, rowVersion, { status: nextStatus });
-  if (!patchResult.ok) return patchErrorResponse(c, patchResult);
-
-  if (gate.perShot) {
-    const readyShots = loaded.episode.shots.filter((s) => s.status === "kf_selected");
-    await Promise.all(
-      readyShots.map((s) =>
-        enqueueTask({ episode_id: loaded.episode.episode_id, stage: gate.stage, shot_no: s.no }),
-      ),
-    );
-  } else {
-    await enqueueTask({ episode_id: loaded.episode.episode_id, stage: gate.stage });
-  }
-
-  return c.json({ ok: true, row_version: patchResult.row_version });
-});
-
-episodes.post("/:id/shots/:no/regen", async (c) => {
-  const episodeId = c.req.param("id");
-  const shotNo = Number(c.req.param("no"));
-  const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
-  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const shot = loaded.episode.shots.find((s) => s.no === shotNo);
-  if (!shot) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const body = await c.req.json().catch(() => null);
-  const parsed = parseRegenBody(body);
-  if (!parsed) return c.json({ ok: false, error: "invalid_body" }, 400);
-
-  const regenStage = parsed.regenStage ?? inferRegenStage(shot.status);
-  const result = await regenShotAndEnqueue(episodeId, shotNo, parsed.rowVersion, regenStage);
-  if (!result.ok) return patchErrorResponse(c, result);
-  return c.json({ ok: true, row_version: result.row_version });
-});
-
-episodes.post("/:id/shots/:no/remove", async (c) => {
-  const episodeId = c.req.param("id");
-  const shotNo = Number(c.req.param("no"));
-  const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
-  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const shot = loaded.episode.shots.find((s) => s.no === shotNo);
-  if (!shot) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const body = await c.req.json().catch(() => null);
-  const rowVersion = parseRowVersion(body);
-  if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
-
-  let updated: Episode;
-  try {
-    updated = removeShot(loaded.episode, shotNo);
-  } catch {
-    return c.json({ ok: false, error: "below_min_shots" }, 400);
-  }
-
-  // FR-02 是固定产品规则（不是 M0 待测数字），删镜后一样要过——不重新校验
-  // 的话，删掉唯一的地标镜之类会静默产出一份不合规的分镜表。
-  const destination = await getDestination(loaded.episode.destination_id);
-  if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
-  const violations = checkScriptRules(updated.shots, destination);
-  if (violations.length > 0) {
-    return c.json({ ok: false, error: "script_rule_violation", violations }, 400);
-  }
-
-  const result = await replaceEpisode(episodeId, rowVersion, updated);
-  if (!result.ok) return patchErrorResponse(c, result);
-  return c.json({ ok: true, row_version: result.row_version });
-});
-
-episodes.post("/:id/recompose", async (c) => {
-  const episodeId = c.req.param("id");
-  const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
-  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
-
-  // patchEpisode 的合法性检查只问"能不能转到 composing"，clip_review 通过
-  // /continue 也能到 composing——这里要求必须来自 done，否则会和 /continue
-  // 的正常推进撞在一起。
-  if (loaded.episode.status !== "done") {
-    return c.json({ ok: false, error: "illegal_transition" }, 400);
-  }
-
-  const body = await c.req.json().catch(() => null);
-  const rowVersion = parseRowVersion(body);
-  if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
-
-  const result = await patchEpisode(episodeId, rowVersion, { status: "composing" });
-  if (!result.ok) return patchErrorResponse(c, result);
-
-  await enqueueTask({ episode_id: episodeId, stage: "compose" });
-  return c.json({ ok: true, row_version: result.row_version });
-});
-
-episodes.post("/:id/shots/:no/report-bad", async (c) => {
-  const episodeId = c.req.param("id");
-  const shotNo = Number(c.req.param("no"));
-  const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
-  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const shot = loaded.episode.shots.find((s) => s.no === shotNo);
-  if (!shot) return c.json({ ok: false, error: "not_found" }, 404);
-
-  const body = await c.req.json().catch(() => null);
-  const parsed = parseRegenBody(body);
-  if (!parsed) return c.json({ ok: false, error: "invalid_body" }, 400);
-
-  // FR-06: 免费重生成一次——不涉及积分扣减/次数上限，那是 M0-6 定价公式
-  // 落地之后的事，这里只负责把镜标记为坏镜并触发一次重生成。
-  const regenStage = parsed.regenStage ?? inferRegenStage(shot.status);
-  const result = await regenShotAndEnqueue(episodeId, shotNo, parsed.rowVersion, regenStage, true);
-  if (!result.ok) return patchErrorResponse(c, result);
-  return c.json({ ok: true, row_version: result.row_version });
 });
 
 // 本地磁盘路径解析，和 apps/worker/src/storage/artifacts.ts 的 artifactPath
@@ -464,5 +236,9 @@ episodes.get("/:id/files/:path{.+}", async (c) => {
   }
   return new Response(file);
 });
+
+// 审片台写路由（episode-review.ts）：URL 前缀和 owner 中间件都沿用这里的，
+// 挂在具体路由都注册完之后，不影响上面 "/estimate" 先于 "/:id" 的顺序。
+episodes.route("/", review);
 
 export default episodes;

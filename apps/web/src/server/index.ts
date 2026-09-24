@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
+import assets from "./routes/assets";
 import auth from "./routes/auth";
 import destinations from "./routes/destinations";
 import episodes from "./routes/episodes";
@@ -17,6 +18,7 @@ app.route("/api/destinations", destinations);
 app.route("/api/templates", templates);
 app.route("/api/episodes", episodes);
 app.route("/api/share", share);
+app.route("/api/assets", assets);
 
 // No /internal HTTP layer (ADR-0004): apps/web and apps/worker share the
 // same machine for now and both call packages/store directly.

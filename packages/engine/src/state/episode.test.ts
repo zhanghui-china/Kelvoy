@@ -5,6 +5,7 @@ import {
   MIN_SHOTS,
   isLegalEpisodeStatusChange,
   removeShot,
+  reorderShots,
   transitionEpisode,
 } from "./episode";
 
@@ -186,5 +187,38 @@ describe("isLegalEpisodeStatusChange", () => {
 
   test("rejects recompose from a non-done state", () => {
     expect(isLegalEpisodeStatusChange("composing", "composing")).toBe(false);
+  });
+});
+
+describe("reorderShots", () => {
+  function scriptReviewEpisode(shotCount: number): Episode {
+    return { ...makeEpisode(shotCount), status: "script_review" };
+  }
+
+  test("reorders the shots and renumbers no to 1..n", () => {
+    const episode = scriptReviewEpisode(3);
+    const beat3 = episode.shots[2].beat;
+    const reordered = reorderShots({ ...episode, shots: episode.shots.map((s, i) => ({ ...s, beat: `b${i + 1}` })) }, [3, 1, 2]);
+    expect(reordered.shots.map((s) => s.no)).toEqual([1, 2, 3]);
+    expect(reordered.shots.map((s) => s.beat)).toEqual(["b3", "b1", "b2"]);
+    expect(beat3).toBe("test");
+  });
+
+  test("does not mutate the input episode", () => {
+    const episode = scriptReviewEpisode(3);
+    reorderShots(episode, [3, 2, 1]);
+    expect(episode.shots.map((s) => s.no)).toEqual([1, 2, 3]);
+  });
+
+  test("rejects an order that is not a permutation of the current shots", () => {
+    const episode = scriptReviewEpisode(3);
+    expect(() => reorderShots(episode, [1, 2])).toThrow();
+    expect(() => reorderShots(episode, [1, 2, 2])).toThrow();
+    expect(() => reorderShots(episode, [1, 2, 9])).toThrow();
+  });
+
+  test("rejects reordering outside review 1 — renumbering would orphan artifact keys", () => {
+    expect(() => reorderShots({ ...makeEpisode(3), status: "kf_review" }, [3, 2, 1])).toThrow();
+    expect(() => reorderShots({ ...makeEpisode(3), status: "done" }, [3, 2, 1])).toThrow();
   });
 });
