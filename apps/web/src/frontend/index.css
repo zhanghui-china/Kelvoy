@@ -1,15 +1,22 @@
+/* 新设计稿第二版 token（M2-12, #40）——比 M2-7/4d0afeb 落进来的那套细：
+   背景/卡片拆成两级（卡片不再是纯白），边框拆成强/弱两级，品牌红从
+   --color-danger 里独立出来给 logo 专用（错误态照旧用 --color-danger，
+   两个变量当前同值但语义不共享，以后要改错误色不会连带改 logo）。 */
 :root {
-  --color-bg: #f5f2ec;
-  --color-ink: #1e1b17;
+  --color-bg: #f4efe6;
+  --color-card: #fbf8f2;
+  --color-ink: #1c1a17;
   --color-ink-soft: #4a453d;
   --color-muted: #6b655c;
-  --color-border: #e3ded4;
+  --color-border: #e2d9c8;
+  --color-border-strong: #d3c8b4;
   --color-accent: #2e5e63;
   --color-accent-dark: #1f4448;
+  --color-brand: #b7482f;
   --color-danger: #b7482f;
-  --color-card: #ffffff;
   --font-display: "Noto Serif SC", serif;
   --font-body: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 * {
@@ -81,6 +88,12 @@ a:hover {
   font-size: 0.9rem;
 }
 
+/* 数字类展示专用等宽字体（M2-12, #40）——只包成本报告/估价/统计数字里的
+   数字本身，不要套在整句中英混排文案上，否则中文也会被拉成等宽。 */
+.k-mono {
+  font-family: var(--font-mono);
+}
+
 /* 会缺文件的图/视频（AssetImage 组件，frontend/AssetImage.tsx）——关键帧/
    片段/角色参考图/地标实景图都可能还没生成或还没上传，"文件不在"是正常
    状态不是错误，加载失败显示占位而不是破图。三处都要用：审片台、角色
@@ -95,7 +108,7 @@ a:hover {
   width: 100%;
   max-width: 100%;
   border-radius: 8px;
-  background: #eeebe3;
+  background: var(--color-border);
 }
 
 .k-media-missing {
@@ -120,7 +133,7 @@ a:hover {
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 500;
-  background: #eeebe3;
+  background: var(--color-border);
   color: var(--color-muted);
   white-space: nowrap;
 }
@@ -162,7 +175,7 @@ a:hover {
 
 .k-btn-secondary {
   background: transparent;
-  border-color: var(--color-border);
+  border-color: var(--color-border-strong);
   color: var(--color-ink);
 }
 
@@ -181,10 +194,10 @@ a:hover {
   height: 44px;
   padding: 0 0.9rem;
   border-radius: 10px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   font-size: 0.95rem;
   font-family: var(--font-body);
-  background: #ffffff;
+  background: var(--color-card);
   color: var(--color-ink);
 }
 
@@ -198,10 +211,10 @@ a:hover {
   height: 44px;
   padding: 0 0.9rem;
   border-radius: 10px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   font-size: 0.95rem;
   font-family: var(--font-body);
-  background: #ffffff;
+  background: var(--color-card);
   color: var(--color-ink);
 }
 
@@ -244,12 +257,6 @@ a:hover {
   gap: 1rem;
 }
 
-.k-auth-footer {
-  font-size: 0.85rem;
-  color: var(--color-muted);
-  text-align: center;
-}
-
 .k-nav-brand {
   font-family: var(--font-display);
   font-size: 1.1rem;
@@ -284,6 +291,9 @@ a:hover {
 }
 
 .k-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 700;
@@ -292,12 +302,18 @@ a:hover {
 }
 
 .k-sidebar-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
   padding: 0.7rem 0.75rem;
   border-radius: 8px;
   color: var(--color-bg);
   text-decoration: none;
   font-size: 0.95rem;
+}
+
+.k-sidebar-link svg {
+  flex-shrink: 0;
 }
 
 .k-sidebar-link:hover {
@@ -385,177 +401,6 @@ a:hover {
   }
 }
 
-/* Landing page (#38) */
-
-.k-landing-nav {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-  padding: 0 2.5rem;
-  height: 72px;
-}
-
-.k-landing-nav .k-nav-spacer {
-  flex: 1;
-}
-
-.k-section {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 3rem 2rem 0 2rem;
-}
-
-.k-section-head {
-  display: flex;
-  align-items: baseline;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.25rem;
-}
-
-.k-hero {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 4rem 2rem 2rem 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.4rem;
-  max-width: 640px;
-}
-
-.k-hero h1 {
-  font-size: 2.75rem;
-  line-height: 1.2;
-}
-
-.k-hero p {
-  font-size: 1.05rem;
-  line-height: 1.8;
-  color: var(--color-ink-soft);
-  margin: 0;
-}
-
-.k-feature-strip {
-  max-width: 1120px;
-  margin: 2.5rem auto 0 auto;
-  padding: 0 2rem;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--color-ink);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.k-feature-item {
-  padding: 1.25rem 1.25rem 1.25rem 0;
-  border-right: 1px solid var(--color-border);
-}
-
-.k-feature-item:last-child {
-  border-right: none;
-}
-
-.k-feature-title {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.05rem;
-}
-
-.k-feature-desc {
-  font-size: 0.85rem;
-  color: var(--color-muted);
-  margin-top: 0.4rem;
-  line-height: 1.6;
-}
-
-.k-dest-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.k-dest-card {
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-}
-
-.k-dest-card-visual {
-  height: 96px;
-}
-
-.k-dest-card-body {
-  padding: 0.85rem 1rem 1rem 1rem;
-}
-
-.k-steps-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--color-ink);
-}
-
-.k-step {
-  padding: 1.25rem 1.25rem 0 0;
-  border-right: 1px solid var(--color-border);
-}
-
-.k-step:last-child {
-  border-right: none;
-}
-
-.k-step-no {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.6rem;
-  color: var(--color-accent);
-}
-
-.k-dark-banner {
-  max-width: 1120px;
-  margin: 3rem auto 0 auto;
-  padding: 2.5rem 2.5rem;
-  border-radius: 20px;
-  background: var(--color-ink);
-  color: var(--color-bg);
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.k-dark-banner h2 {
-  color: var(--color-bg);
-  font-size: 1.9rem;
-}
-
-.k-dark-banner p {
-  color: #bdb6aa;
-  margin: 0;
-  max-width: 560px;
-  line-height: 1.8;
-}
-
-.k-footer {
-  max-width: 1120px;
-  margin: 3rem auto 0 auto;
-  padding: 1.75rem 2rem 2.5rem 2rem;
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  border-top: 1px solid var(--color-border);
-  font-size: 0.8rem;
-  color: var(--color-muted);
-}
-
-@media (max-width: 720px) {
-  .k-feature-strip,
-  .k-steps-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .k-hero h1 {
-    font-size: 2.1rem;
-  }
-}
-
 /* 分享页（SharePage，公开，不登录）*/
 
 .k-share-page {
@@ -576,23 +421,13 @@ a:hover {
   background: #000000;
 }
 
-/* 首页（EpisodesPage）*/
+/* 首页（HomePage）与我的作品（WorksPage）——#42 把原来一页两用的
+   EpisodesPage 拆成这两个页面，.k-series-* 那组行样式两边共用。 */
 
-.k-home-top-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
-  gap: 1rem;
-}
-
-.k-home-resume,
-.k-home-new,
-.k-home-stats {
+.k-home-resume {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-}
-
-.k-home-resume {
   text-decoration: none;
   color: inherit;
   position: relative;
@@ -605,26 +440,56 @@ a:hover {
   padding: 0 1rem;
 }
 
-.k-home-new {
+.k-home-section {
+  margin-top: 1.75rem;
+}
+
+.k-home-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.k-home-section-more {
+  font-size: 0.85rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.k-home-week-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+/* 灵感目的地：横向滚动，一行排完整个目的地库（条数是个位数，不做懒加载）。*/
+.k-dest-strip {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.k-dest-strip-card {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
   text-decoration: none;
   color: inherit;
-  border-style: dashed;
-  justify-content: center;
 }
 
-.k-home-new-plus {
-  font-size: 1.6rem;
-  color: var(--color-muted);
-  line-height: 1;
-}
-
-.k-home-stats-row {
-  display: flex;
-  gap: 1.25rem;
+.k-dest-strip-warn {
+  margin-top: 0.4rem;
+  background: var(--color-card);
+  border: 1px solid var(--color-border-strong);
 }
 
 .k-home-stat-value {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: 1.3rem;
   font-weight: 700;
 }
@@ -656,7 +521,7 @@ a:hover {
 }
 
 @media (max-width: 780px) {
-  .k-home-top-row {
+  .k-home-week-grid {
     grid-template-columns: 1fr;
   }
   .k-series-row {
@@ -666,6 +531,14 @@ a:hover {
 }
 
 /* 角色工作室（PersonasPage）*/
+
+.k-persona-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.4rem 0 1rem;
+}
 
 .k-persona-grid {
   display: grid;
@@ -677,6 +550,10 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+.k-persona-card > .k-btn {
+  align-self: flex-start;
 }
 
 .k-persona-refs {

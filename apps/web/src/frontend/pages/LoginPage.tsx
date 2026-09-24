@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../api/client";
+import { LogoMark } from "../icons";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -31,6 +32,7 @@ export default function LoginPage() {
   return (
     <div className="k-auth-shell">
       <div className="k-auth-card">
+        <LogoMark size={36} />
         <h1>登录 Kelvoy</h1>
         <form onSubmit={handleSubmit}>
           <label className="k-field">

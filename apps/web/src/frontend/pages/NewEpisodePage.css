@@ -38,8 +38,8 @@
   gap: 0.35rem;
   padding: 0.3rem 0.8rem;
   border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: #ffffff;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-card);
   color: var(--color-ink-soft);
   font-size: 0.85rem;
   cursor: pointer;
@@ -51,7 +51,7 @@
 }
 
 .k-chip-removable {
-  background: #eeebe3;
+  background: var(--color-border);
   cursor: default;
 }
 
