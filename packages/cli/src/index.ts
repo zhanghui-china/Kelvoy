@@ -7,6 +7,7 @@
  *   kelvoy import-episode <path.json>
  *   kelvoy import-template <path.json>
  *   kelvoy create-user <username> <password>
+ *   kelvoy set-password <username> <password>
  */
 import type { StageName } from "@kelvoy/engine";
 import { createUserAccount } from "./create-user";
@@ -14,6 +15,7 @@ import { importDestination } from "./import-destination";
 import { importEpisode } from "./import-episode";
 import { importTemplate } from "./import-template";
 import { runEpisodeStage } from "./run-stage";
+import { setUserPassword } from "./set-password";
 
 function usage(): never {
   console.error("usage:");
@@ -22,6 +24,7 @@ function usage(): never {
   console.error("  kelvoy import-episode <path.json>");
   console.error("  kelvoy import-template <path.json>");
   console.error("  kelvoy create-user <username> <password>");
+  console.error("  kelvoy set-password <username> <password>");
   process.exit(1);
 }
 
@@ -100,6 +103,18 @@ async function runCreateUser(argv: string[]): Promise<void> {
   console.log(`创建成功：${username}（${result.user_id}）`);
 }
 
+async function runSetPassword(argv: string[]): Promise<void> {
+  const [username, password] = argv;
+  if (!username || !password) usage();
+  const result = await setUserPassword(username, password);
+  if (!result.ok) {
+    console.error(`修改失败：${result.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`密码已更新：${username}`);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   switch (command) {
@@ -113,6 +128,8 @@ async function main() {
       return runImportTemplate(rest);
     case "create-user":
       return runCreateUser(rest);
+    case "set-password":
+      return runSetPassword(rest);
     default:
       usage();
   }

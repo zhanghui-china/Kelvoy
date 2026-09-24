@@ -48,6 +48,20 @@ export async function createUser(input: {
   };
 }
 
+export type SetPasswordResult = { ok: true } | { ok: false; error: "not_found" };
+
+/**
+ * 比赛 demo 阶段没有开放注册也没有"忘记密码"流程（FR-11）——账号密码忘了
+ * 只能靠团队用这个改，不走用户自助。
+ */
+export async function setPassword(username: string, passwordHash: string): Promise<SetPasswordResult> {
+  const result = getDb()
+    .query("update users set password_hash = ? where username = ?")
+    .run(passwordHash, username);
+  if (result.changes === 0) return { ok: false, error: "not_found" };
+  return { ok: true };
+}
+
 export async function getUserByUsername(username: string): Promise<User | null> {
   const row = getDb()
     .query<UserRow, [string]>(
