@@ -4,23 +4,27 @@ import { useApiResource } from "../hooks/useApiResource";
 export default function PersonasPage() {
   const { loading, data, error } = useApiResource(listPersonas, []);
 
-  if (loading) return <p>加载中…</p>;
-  if (error) return <p style={{ color: "red" }}>加载失败：{error}</p>;
+  if (loading) return <p className="k-empty">加载中…</p>;
+  if (error) return <p className="k-error">加载失败：{error}</p>;
   const personas = data?.personas ?? [];
 
   return (
     <div>
+      <div className="k-eyebrow">账号级资产</div>
       <h1>角色</h1>
       {personas.length === 0 ? (
-        <p>还没有角色。</p>
+        <p className="k-empty">还没有角色。</p>
       ) : (
-        <ul>
+        <div className="k-card-list">
           {personas.map((p) => (
-            <li key={p.persona_id}>
-              {p.name}（v{p.version}）— {p.desc}
-            </li>
+            <div className="k-card" key={p.persona_id}>
+              <div className="k-card-title">
+                {p.name} <span className="k-pill">v{p.version}</span>
+              </div>
+              <div className="k-card-meta">{p.desc}</div>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

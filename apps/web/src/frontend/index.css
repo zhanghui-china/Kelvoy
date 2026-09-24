@@ -1,8 +1,240 @@
+:root {
+  --color-bg: #f5f2ec;
+  --color-ink: #1e1b17;
+  --color-ink-soft: #4a453d;
+  --color-muted: #6b655c;
+  --color-border: #e3ded4;
+  --color-accent: #2e5e63;
+  --color-accent-dark: #1f4448;
+  --color-danger: #b7482f;
+  --color-card: #ffffff;
+  --font-display: "Noto Serif SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+a:hover {
+  color: var(--color-accent-dark);
+}
+
+.k-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.k-eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  color: var(--color-muted);
+  text-transform: uppercase;
+}
+
+.k-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+}
+
+.k-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.k-card-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.k-card-meta {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin-top: 0.2rem;
+}
+
+.k-empty {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.k-error {
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+.k-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #eeebe3;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.k-pill-accent {
+  background: #e3f0ee;
+  color: var(--color-accent-dark);
+}
+
+.k-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 44px;
+  padding: 0 1.3rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.k-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.k-btn-primary {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.k-btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-dark);
+}
+
+.k-btn-secondary {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-ink);
+}
+
+.k-btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-ink);
+}
+
+.k-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.k-field input {
+  height: 44px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  background: #ffffff;
+  color: var(--color-ink);
+}
+
+.k-field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.k-auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.k-auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  padding: 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.k-auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.k-auth-footer {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.k-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  padding: 0 2rem;
+  height: 64px;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.k-nav-brand {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.k-nav-link {
+  font-size: 0.9rem;
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  padding: 0.4rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.k-nav-link.active {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-accent);
+  font-weight: 500;
+}
+
+.k-nav-spacer {
+  flex: 1;
 }

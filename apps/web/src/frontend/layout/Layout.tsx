@@ -1,4 +1,4 @@
-import { Link, Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { logout } from "../api/client";
 
 export default function Layout() {
@@ -9,14 +9,23 @@ export default function Layout() {
 
   return (
     <div>
-      <nav style={{ display: "flex", gap: "1rem", padding: "1rem", borderBottom: "1px solid #ddd" }}>
-        <Link to="/episodes">期</Link>
-        <Link to="/personas">角色</Link>
-        <Link to="/destinations">目的地</Link>
-        <span style={{ flex: 1 }} />
-        <button onClick={handleLogout}>退出登录</button>
+      <nav className="k-nav">
+        <span className="k-nav-brand">Kelvoy</span>
+        <NavLink to="/episodes" className={({ isActive }) => `k-nav-link${isActive ? " active" : ""}`}>
+          期
+        </NavLink>
+        <NavLink to="/personas" className={({ isActive }) => `k-nav-link${isActive ? " active" : ""}`}>
+          角色
+        </NavLink>
+        <NavLink to="/destinations" className={({ isActive }) => `k-nav-link${isActive ? " active" : ""}`}>
+          目的地
+        </NavLink>
+        <span className="k-nav-spacer" />
+        <button type="button" className="k-btn k-btn-secondary" onClick={handleLogout}>
+          退出登录
+        </button>
       </nav>
-      <main style={{ padding: "1rem" }}>
+      <main className="k-page">
         <Outlet />
       </main>
     </div>

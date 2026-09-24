@@ -23,29 +23,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div>
-      <h1>登录</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>
+    <div className="k-auth-shell">
+      <div className="k-auth-card">
+        <h1>登录 Kelvoy</h1>
+        <form onSubmit={handleSubmit}>
+          <label className="k-field">
             用户名
             <input value={username} onChange={(e) => setUsername(e.target.value)} required />
           </label>
-        </div>
-        <div>
-          <label>
+          <label className="k-field">
             密码
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>
-        </div>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <button type="submit" disabled={submitting}>
-          {submitting ? "登录中…" : "登录"}
-        </button>
-      </form>
-      <p>
-        没有账号？<Link to="/register">注册</Link>
-      </p>
+          {error && <p className="k-error">{error}</p>}
+          <button type="submit" className="k-btn k-btn-primary" disabled={submitting}>
+            {submitting ? "登录中…" : "登录"}
+          </button>
+        </form>
+        <p className="k-auth-footer">
+          没有账号？<Link to="/register">注册</Link>
+        </p>
+      </div>
     </div>
   );
 }
