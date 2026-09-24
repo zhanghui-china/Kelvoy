@@ -44,11 +44,8 @@ export default function LandingPage() {
       <nav className="k-landing-nav">
         <span className="k-nav-brand">Kelvoy</span>
         <span className="k-nav-spacer" />
-        <Link to="/login" className="k-btn k-btn-secondary">
+        <Link to="/login" className="k-btn k-btn-primary">
           登录
-        </Link>
-        <Link to="/register" className="k-btn k-btn-primary">
-          开始创作
         </Link>
       </nav>
 
@@ -60,8 +57,8 @@ export default function LandingPage() {
           vlog。
         </p>
         <div>
-          <Link to="/register" className="k-btn k-btn-primary">
-            开始创作
+          <Link to="/login" className="k-btn k-btn-primary">
+            登录使用
           </Link>
         </div>
       </section>

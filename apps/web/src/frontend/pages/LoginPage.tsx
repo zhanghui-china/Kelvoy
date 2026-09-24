@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { login } from "../api/client";
 
 export default function LoginPage() {
@@ -40,9 +40,6 @@ export default function LoginPage() {
             {submitting ? "登录中…" : "登录"}
           </button>
         </form>
-        <p className="k-auth-footer">
-          没有账号？<Link to="/register">注册</Link>
-        </p>
       </div>
     </div>
   );

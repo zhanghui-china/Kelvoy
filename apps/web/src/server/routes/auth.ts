@@ -1,12 +1,13 @@
-import { validateLoginRequest, validateRegisterRequest } from "@kelvoy/engine";
+import { validateLoginRequest } from "@kelvoy/engine";
 import type { Session } from "@kelvoy/engine";
-import { createSession, createUser, deleteSession, getUserByUsername } from "@kelvoy/store";
+import { createSession, deleteSession, getUserByUsername } from "@kelvoy/store";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Context } from "hono";
 import { SESSION_COOKIE } from "../middleware/auth";
 
-// FR-11: 用户名密码注册登录. 密码用 Bun.password 哈希(内置 argon2id,不加依赖)。
+// FR-11（比赛 demo 阶段）：预置账号登录，不开放注册（防止其他参赛队误入项目），
+// 见 packages/cli 的 create-user 命令。密码用 Bun.password 哈希(内置 argon2id,不加依赖)。
 const auth = new Hono();
 
 // 用户名不存在时也要跑一次 verify(对着这个占位哈希),避免响应耗时暴露
@@ -21,20 +22,6 @@ function setSessionCookie(c: Context, session: Session): void {
     expires: new Date(session.expires_at),
   });
 }
-
-auth.post("/register", async (c) => {
-  const body = await c.req.json().catch(() => null);
-  const result = validateRegisterRequest(body);
-  if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
-
-  const password_hash = await Bun.password.hash(result.value.password);
-  const created = await createUser({ username: result.value.username, password_hash });
-  if (!created.ok) return c.json({ ok: false, error: created.error }, 409);
-
-  const session = await createSession(created.user.user_id);
-  setSessionCookie(c, session);
-  return c.json({ ok: true, user: { user_id: created.user.user_id, username: created.user.username } }, 201);
-});
 
 auth.post("/login", async (c) => {
   const body = await c.req.json().catch(() => null);

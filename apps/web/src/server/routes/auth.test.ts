@@ -1,4 +1,4 @@
-import { close, getUserByUsername, open } from "@kelvoy/store";
+import { close, createUser, open } from "@kelvoy/store";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
@@ -25,6 +25,13 @@ async function postJson(app: Hono, path: string, body: unknown, cookie?: string)
   });
 }
 
+// 比赛 demo 阶段账号是预置的（packages/cli create-user），不走 HTTP 注册，
+// 测试里直接调 store 建号。
+async function seedUser(username: string, password: string): Promise<void> {
+  const password_hash = await Bun.password.hash(password);
+  await createUser({ username, password_hash });
+}
+
 beforeEach(() => {
   open(":memory:");
 });
@@ -33,40 +40,10 @@ afterEach(() => {
   close();
 });
 
-describe("POST /api/auth/register", () => {
-  test("creates a user, hashes the password, and sets a session cookie", async () => {
-    const app = buildApp();
-    const res = await postJson(app, "/api/auth/register", { username: "dannei", password: "hunter2" });
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { ok: boolean; user: { username: string } };
-    expect(body.ok).toBe(true);
-    expect(body.user.username).toBe("dannei");
-    expect(res.headers.get("set-cookie")).toContain("kelvoy_session=");
-    expect(res.headers.get("set-cookie")).toContain("HttpOnly");
-
-    const stored = await getUserByUsername("dannei");
-    expect(stored?.password_hash).not.toBe("hunter2");
-    expect(stored?.password_hash.length).toBeGreaterThan(20);
-  });
-
-  test("rejects a duplicate username", async () => {
-    const app = buildApp();
-    await postJson(app, "/api/auth/register", { username: "dannei", password: "hunter2" });
-    const res = await postJson(app, "/api/auth/register", { username: "dannei", password: "other" });
-    expect(res.status).toBe(409);
-  });
-
-  test("rejects a missing password", async () => {
-    const app = buildApp();
-    const res = await postJson(app, "/api/auth/register", { username: "dannei" });
-    expect(res.status).toBe(400);
-  });
-});
-
 describe("POST /api/auth/login", () => {
   test("rejects wrong credentials", async () => {
     const app = buildApp();
-    await postJson(app, "/api/auth/register", { username: "dannei", password: "hunter2" });
+    await seedUser("dannei", "hunter2");
     const res = await postJson(app, "/api/auth/login", { username: "dannei", password: "wrong" });
     expect(res.status).toBe(401);
   });
@@ -79,21 +56,20 @@ describe("POST /api/auth/login", () => {
 
   test("logs in with correct credentials and sets a fresh session cookie", async () => {
     const app = buildApp();
-    await postJson(app, "/api/auth/register", { username: "dannei", password: "hunter2" });
+    await seedUser("dannei", "hunter2");
     const res = await postJson(app, "/api/auth/login", { username: "dannei", password: "hunter2" });
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie")).toContain("kelvoy_session=");
+    expect(res.headers.get("set-cookie")).toContain("HttpOnly");
   });
 });
 
-describe("full flow: register -> access protected route -> logout -> access is refused", () => {
+describe("full flow: login -> access protected route -> logout -> access is refused", () => {
   test("cookie grants access to requireOwner routes until logout", async () => {
     const app = buildApp();
-    const registerRes = await postJson(app, "/api/auth/register", {
-      username: "dannei",
-      password: "hunter2",
-    });
-    const cookie = sessionCookie(registerRes);
+    await seedUser("dannei", "hunter2");
+    const loginRes = await postJson(app, "/api/auth/login", { username: "dannei", password: "hunter2" });
+    const cookie = sessionCookie(loginRes);
 
     const protectedRes = await app.request("/api/protected", { headers: { cookie } });
     expect(protectedRes.status).toBe(200);

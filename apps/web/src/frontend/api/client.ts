@@ -30,13 +30,6 @@ export interface AuthedUser {
   username: string;
 }
 
-export function register(username: string, password: string) {
-  return apiFetch<{ user: AuthedUser }>("/api/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ username, password }),
-  });
-}
-
 export function login(username: string, password: string) {
   return apiFetch<{ user: AuthedUser }>("/api/auth/login", {
     method: "POST",

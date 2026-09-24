@@ -6,8 +6,10 @@
  *   kelvoy import-destination <path.json>
  *   kelvoy import-episode <path.json>
  *   kelvoy import-template <path.json>
+ *   kelvoy create-user <username> <password>
  */
 import type { StageName } from "@kelvoy/engine";
+import { createUserAccount } from "./create-user";
 import { importDestination } from "./import-destination";
 import { importEpisode } from "./import-episode";
 import { importTemplate } from "./import-template";
@@ -19,6 +21,7 @@ function usage(): never {
   console.error("  kelvoy import-destination <path.json>");
   console.error("  kelvoy import-episode <path.json>");
   console.error("  kelvoy import-template <path.json>");
+  console.error("  kelvoy create-user <username> <password>");
   process.exit(1);
 }
 
@@ -85,6 +88,18 @@ async function runImportTemplate(argv: string[]): Promise<void> {
   console.log(`导入成功：${result.template_id}`);
 }
 
+async function runCreateUser(argv: string[]): Promise<void> {
+  const [username, password] = argv;
+  if (!username || !password) usage();
+  const result = await createUserAccount(username, password);
+  if (!result.ok) {
+    console.error(`创建失败：${result.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`创建成功：${username}（${result.user_id}）`);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   switch (command) {
@@ -96,6 +111,8 @@ async function main() {
       return runImportEpisode(rest);
     case "import-template":
       return runImportTemplate(rest);
+    case "create-user":
+      return runCreateUser(rest);
     default:
       usage();
   }
