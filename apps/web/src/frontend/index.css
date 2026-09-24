@@ -39,15 +39,6 @@ a:hover {
   color: var(--color-accent-dark);
 }
 
-.k-page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2.5rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
 .k-eyebrow {
   font-size: 0.75rem;
   letter-spacing: 0.2em;
@@ -88,6 +79,38 @@ a:hover {
 .k-error {
   color: var(--color-danger);
   font-size: 0.9rem;
+}
+
+/* 会缺文件的图/视频（AssetImage 组件，frontend/AssetImage.tsx）——关键帧/
+   片段/角色参考图/地标实景图都可能还没生成或还没上传，"文件不在"是正常
+   状态不是错误，加载失败显示占位而不是破图。三处都要用：审片台、角色
+   工作室、目的地库。 */
+
+.k-figure {
+  margin: 0;
+}
+
+.k-media {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  background: #eeebe3;
+}
+
+.k-media-missing {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 120px;
+  padding: 0.75rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-align: center;
 }
 
 .k-pill {
@@ -227,16 +250,6 @@ a:hover {
   text-align: center;
 }
 
-.k-nav {
-  display: flex;
-  align-items: center;
-  gap: 1.75rem;
-  padding: 0 2rem;
-  height: 64px;
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
-}
-
 .k-nav-brand {
   font-family: var(--font-display);
   font-size: 1.1rem;
@@ -246,22 +259,130 @@ a:hover {
   text-decoration: none;
 }
 
-.k-nav-link {
-  font-size: 0.9rem;
-  color: var(--color-ink-soft);
-  text-decoration: none;
-  padding: 0.4rem 0;
-  border-bottom: 2px solid transparent;
-}
-
-.k-nav-link.active {
-  color: var(--color-ink);
-  border-bottom-color: var(--color-accent);
-  font-weight: 500;
-}
-
 .k-nav-spacer {
   flex: 1;
+}
+
+/* 登录后的工作台外壳（M2-7 起，跟共享设计稿的深色侧栏对齐）——侧栏放
+   导航和账号状态，主区顶栏 + 内容区。GPU 队列/积分余额这些设计稿里画的
+   常显数字目前没有真实数据源，没有做假——侧栏底部只放真实的当前账号。 */
+
+.k-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.k-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1.5rem 1rem;
+}
+
+.k-sidebar-brand {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0 0.6rem 1.25rem 0.6rem;
+}
+
+.k-sidebar-link {
+  display: block;
+  padding: 0.7rem 0.75rem;
+  border-radius: 8px;
+  color: var(--color-bg);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.k-sidebar-link:hover {
+  background: rgba(245, 242, 236, 0.08);
+  color: var(--color-bg);
+}
+
+.k-sidebar-link.active {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.k-sidebar-spacer {
+  flex: 1;
+}
+
+.k-sidebar-account {
+  padding: 0.85rem 0.9rem;
+  border-radius: 8px;
+  background: #2b2723;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.k-sidebar-account-label {
+  color: #bdb6aa;
+}
+
+.k-sidebar-account-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* .k-btn-secondary is dark-text-on-transparent — invisible against the
+   sidebar's own dark background, hence a dedicated light variant here. */
+.k-sidebar-logout {
+  background: transparent;
+  border: 1px solid rgba(245, 242, 236, 0.3);
+  color: var(--color-bg);
+}
+
+.k-sidebar-logout:hover {
+  border-color: var(--color-bg);
+  background: rgba(245, 242, 236, 0.08);
+}
+
+.k-content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 3rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.k-content > * {
+  max-width: 1080px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 860px) {
+  .k-shell {
+    flex-direction: column;
+  }
+  .k-sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 0.75rem 1rem;
+  }
+  .k-sidebar-brand {
+    padding: 0 1rem 0 0;
+  }
+  .k-sidebar-spacer,
+  .k-sidebar-account {
+    display: none;
+  }
 }
 
 /* Landing page (#38) */
@@ -432,6 +553,101 @@ a:hover {
   }
   .k-hero h1 {
     font-size: 2.1rem;
+  }
+}
+
+/* 角色工作室（PersonasPage）*/
+
+.k-persona-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.k-persona-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.k-persona-refs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.k-persona-refs .k-media,
+.k-persona-refs .k-media-missing {
+  aspect-ratio: 3 / 4;
+  height: auto;
+  min-height: 0;
+}
+
+.k-persona-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* 目的地库（DestinationsPage）*/
+
+.k-dest-lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.k-dest-lib-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.k-dest-lib-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.k-landmark-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.k-landmark-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.k-landmark-card .k-media,
+.k-landmark-card .k-media-missing {
+  aspect-ratio: 4 / 3;
+  height: auto;
+  min-height: 0;
+}
+
+.k-dest-lib-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .k-persona-grid {
+    grid-template-columns: 1fr;
+  }
+  .k-dest-lib-meta {
+    grid-template-columns: 1fr;
   }
 }
 

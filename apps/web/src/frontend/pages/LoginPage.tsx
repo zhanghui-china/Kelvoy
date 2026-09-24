@@ -19,6 +19,12 @@ export default function LoginPage() {
       setError(result.error === "invalid_credentials" ? "用户名或密码不对" : (result.error ?? "登录失败"));
       return;
     }
+    // 仅用于侧栏展示当前账号，不是鉴权凭据——鉴权靠 httpOnly session cookie。
+    try {
+      localStorage.setItem("kelvoy_username", result.user.username);
+    } catch {
+      // 隐私模式等场景下 localStorage 可能不可用，不影响登录本身。
+    }
     navigate("/episodes");
   }
 

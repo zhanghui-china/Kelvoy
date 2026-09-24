@@ -164,35 +164,8 @@
   gap: 0.75rem;
 }
 
-.k-desk-figure {
-  margin: 0;
-}
-
-.k-desk-media {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  border-radius: 8px;
-  background: #eeebe3;
-}
-
 .k-desk-final {
   max-width: 320px;
-}
-
-.k-desk-media-missing {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 0.25rem;
-  min-height: 120px;
-  padding: 0.75rem;
-  border: 1px dashed var(--color-border);
-  border-radius: 8px;
-  color: var(--color-muted);
-  font-size: 0.8rem;
-  text-align: center;
 }
 
 /* 起点滑块 / 质量红线 */

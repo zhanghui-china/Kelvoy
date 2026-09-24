@@ -70,7 +70,7 @@ export default function DoneView({
   return (
     <section className="k-desk-main">
       <div className="k-card-title">成片</div>
-      <video className="k-desk-media k-desk-final" src={url} controls aria-label="成片" />
+      <video className="k-media k-desk-final" src={url} controls aria-label="成片" />
       <p className="k-card-meta">文件还没生成时播放器会是空的，那说明合成还没跑完。</p>
       <p>
         <a href={url} download>

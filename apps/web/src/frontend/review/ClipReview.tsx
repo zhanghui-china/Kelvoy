@@ -100,14 +100,14 @@ function ClipShot({
       <div className="k-desk-shot-body">
         <div>
           {shot.clip === null ? (
-            <div className="k-desk-media-missing">
+            <div className="k-media-missing">
               <div>第 {shot.no} 镜片段</div>
               <div className="k-card-meta">文件未生成</div>
             </div>
           ) : (
             <video
               ref={videoRef}
-              className="k-desk-media"
+              className="k-media"
               src={episodeFileUrl(episode.episode_id, shot.clip)}
               controls
               muted
