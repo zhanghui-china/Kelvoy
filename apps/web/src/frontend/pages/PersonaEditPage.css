@@ -1,0 +1,111 @@
+/* 角色新建/编辑页（M2-13, #41）。复用 index.css 的 .k-field/.k-btn/.k-chip/
+   .k-card/.k-pill/.k-persona-refs 等工具类，这里只补这一页独有的布局和
+   参考图上传区样式——跟 NewEpisodePage.css 同样的取舍（index.css 已经
+   超过 CLAUDE.md 的 500 行上限，不再往里加）。 */
+
+.k-persona-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.k-persona-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+  align-items: start;
+}
+
+.k-persona-edit-span2 {
+  grid-column: 1 / -1;
+}
+
+.k-persona-edit-version {
+  margin-left: 0.6rem;
+  vertical-align: middle;
+}
+
+.k-persona-edit-locked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.k-persona-edit-trait-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #ffffff;
+}
+
+.k-persona-edit-trait-active:hover {
+  border-color: var(--color-accent-dark);
+  color: #ffffff;
+}
+
+.k-persona-edit-refs h2 {
+  margin-bottom: 0.5rem;
+}
+
+.k-persona-edit-insufficient {
+  margin-left: 0.4rem;
+}
+
+.k-persona-edit-existing-refs {
+  margin-top: 0.5rem;
+}
+
+.k-persona-edit-dropzone {
+  margin-top: 0.75rem;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.k-persona-edit-pending-refs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.k-persona-edit-pending-item {
+  position: relative;
+}
+
+.k-persona-edit-pending-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.k-persona-edit-pending-item button {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(28, 26, 23, 0.65);
+  color: #ffffff;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.k-persona-edit-submit-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .k-persona-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}

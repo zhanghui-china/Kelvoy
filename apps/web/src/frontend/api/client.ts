@@ -1,24 +1,26 @@
 import type {
   ContentViolation,
   CreateEpisodeRequest,
+  CreatePersonaRequest,
   Destination,
   Episode,
   EpisodeMode,
   EpisodePatch,
   EstimateCostResult,
   Persona,
+  PersonaPatch,
   RegenStage,
   ScriptRuleViolation,
   ShotPatch,
   Template,
+  UserSettings,
 } from "@kelvoy/engine";
 
 // Typed wrapper around the /api/* routes apps/web/src/server/routes/*.ts
 // actually serve. M2-7 scoped this to read-only pages (auth +
 // personas/destinations/episodes lists + episode detail); M2-10 (#32) adds
-// the templates create/list/delete + save-episode-as-template functions.
-// Still no functions for persona-refs-upload/episode-writes — no page
-// calls them yet.
+// the templates create/list/delete + save-episode-as-template functions;
+// M2-13 (#41) adds the persona create/patch/refs-upload functions below.
 
 export type ApiOk<T> = { ok: true } & T;
 
@@ -61,6 +63,20 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<ApiResult<
   return body ?? { ok: false, error: "invalid_response" };
 }
 
+// 参考图上传（POST /api/personas/:id/refs）走 multipart/form-data，不能复用
+// apiFetch——它固定塞 content-type: application/json，一旦 body 是 FormData
+// 就丢了 multipart 需要的 boundary。不设 content-type，交给浏览器自己算。
+async function apiFetchMultipart<T>(path: string, formData: FormData): Promise<ApiResult<T>> {
+  let res: Response;
+  try {
+    res = await fetch(path, { method: "POST", body: formData });
+  } catch {
+    return { ok: false, error: "network_error" };
+  }
+  const body = (await res.json().catch(() => null)) as ApiResult<T> | null;
+  return body ?? { ok: false, error: "invalid_response" };
+}
+
 export interface AuthedUser {
   user_id: string;
   username: string;
@@ -77,8 +93,58 @@ export function logout() {
   return apiFetch<Record<string, never>>("/api/auth/logout", { method: "POST" });
 }
 
+// M2-15 (#43) 设置页：当前登录账号自己的出片默认值 + 改密码。路由前缀
+// /api/me/* 都在 requireOwner 后面，改的永远是 cookie 对应的那个账号。
+
+export function getMySettings() {
+  return apiFetch<{ settings: UserSettings }>("/api/me/settings");
+}
+
+/** 合并式更新：只传要改的项，没传的保持原值（服务端 json_patch）。 */
+export function updateMySettings(patch: UserSettings) {
+  return apiFetch<{ settings: UserSettings }>("/api/me/settings", {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return apiFetch<Record<string, never>>("/api/me/password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
 export function listPersonas() {
   return apiFetch<{ personas: Persona[] }>("/api/personas");
+}
+
+// M2-13 (#41): 角色新建/编辑页.
+
+export function createPersona(body: CreatePersonaRequest) {
+  return apiFetch<{ persona: Persona }>("/api/personas", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchPersona(personaId: string, patch: PersonaPatch) {
+  return apiFetch<{ persona: Persona }>(`/api/personas/${encodeURIComponent(personaId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+/** files.length 必须落在 [3, 7]（合上角色已有的张数）——后端校验，见
+ * personas.ts；这里只管把 multipart 请求发出去，数量校验留给调用方在提交
+ * 前做，好给出"至少 3 张 / 最多 7 张"这种即时反馈，不用等一趟网络。 */
+export function uploadPersonaRefs(personaId: string, files: File[]) {
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  return apiFetchMultipart<{ persona: Persona }>(
+    `/api/personas/${encodeURIComponent(personaId)}/refs`,
+    form,
+  );
 }
 
 export function listDestinations() {
@@ -145,9 +211,9 @@ export function createEpisode(body: CreateEpisodeRequest) {
   });
 }
 
-export function getEstimate(mode: EpisodeMode) {
+export function getEstimate(mode: EpisodeMode, candidates: number) {
   return apiFetch<{ estimate: EstimateCostResult }>(
-    `/api/episodes/estimate?mode=${encodeURIComponent(mode)}`,
+    `/api/episodes/estimate?mode=${encodeURIComponent(mode)}&candidates=${encodeURIComponent(candidates)}`,
   );
 }
 
