@@ -3,6 +3,7 @@ import type { Episode, Shot } from "./episode";
 import type { Persona } from "./persona";
 import type { Template } from "./template";
 import {
+  validateCreateEpisodeRequest,
   validateCreateTemplateRequest,
   validateEpisode,
   validatePatchEpisodeRequest,
@@ -288,5 +289,39 @@ describe("validateCreateTemplateRequest", () => {
     const result = validateCreateTemplateRequest({});
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.errors.length).toBeGreaterThan(1);
+  });
+});
+
+function validCreateEpisodeRequest() {
+  return { persona_id: "c_1", destination_id: "d_1", template_id: "t_1" };
+}
+
+describe("validateCreateEpisodeRequest", () => {
+  test("accepts the three required foreign keys with nothing else", () => {
+    expect(validateCreateEpisodeRequest(validCreateEpisodeRequest()).valid).toBe(true);
+  });
+
+  test("rejects a missing persona_id", () => {
+    const { persona_id: _persona_id, ...rest } = validCreateEpisodeRequest();
+    const result = validateCreateEpisodeRequest(rest);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.errors.some((e) => e.startsWith("persona_id:"))).toBe(true);
+  });
+
+  test("accepts a non-empty outfit_override", () => {
+    const body = { ...validCreateEpisodeRequest(), outfit_override: "冲锋衣" };
+    expect(validateCreateEpisodeRequest(body).valid).toBe(true);
+  });
+
+  test("rejects an empty outfit_override", () => {
+    const body = { ...validCreateEpisodeRequest(), outfit_override: "" };
+    const result = validateCreateEpisodeRequest(body);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.errors.some((e) => e.startsWith("outfit_override:"))).toBe(true);
+  });
+
+  test("rejects an invalid mode enum value", () => {
+    const body = { ...validCreateEpisodeRequest(), mode: "square" };
+    expect(validateCreateEpisodeRequest(body).valid).toBe(false);
   });
 });

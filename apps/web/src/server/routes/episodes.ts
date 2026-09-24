@@ -3,6 +3,7 @@ import type { Episode, EpisodeStatus, RegenStage, StageName, Template } from "@k
 import {
   checkContent,
   checkScriptRules,
+  estimateCost,
   removeShot,
   transitionEpisode,
   validateCreateEpisodeRequest,
@@ -69,6 +70,7 @@ episodes.post("/", async (c) => {
   // 补：series_id 缺省时 1 目的地 = 1 系列(PRD 没有定义"系列"怎么分组多个
   // 目的地，等以后真需要跨目的地系列时再改)；season 缺省取目的地的
   // season_best 第一项，没有就空字符串；tone/banned 缺省给空。
+  const mode = req.mode ?? "per_shot";
   const episode: Episode = {
     episode_id: `e_${crypto.randomUUID()}`,
     owner_id: c.get("ownerId"),
@@ -79,9 +81,11 @@ episodes.post("/", async (c) => {
     series_id: req.series_id ?? destination.destination_id,
     template_id: template.template_id,
     status: "draft",
-    mode: req.mode ?? "per_shot",
+    mode,
     created_at: new Date().toISOString(),
-    estimated_credits: 0, // FR-09 估价公式卡 M0-6，estimateCredits() 占位未接入，见 credits.ts
+    // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
+    // 镜数/候选数常量（credits.ts，M0-6 占位），只有 mode 是真实输入。
+    estimated_credits: estimateCost({ mode }).estimated_credits,
     credits_used: 0,
     share: { enabled: false, slug: "" },
     brief: {
@@ -89,7 +93,7 @@ episodes.post("/", async (c) => {
       aspect: "9:16",
       duration_s: 30,
       tone: req.tone ?? "",
-      outfit_override: null,
+      outfit_override: req.outfit_override ?? null,
       banned: req.banned ?? [],
     },
     grid_refs: [],
@@ -112,6 +116,16 @@ episodes.post("/", async (c) => {
   await insertEpisode(episode);
   await enqueueTask({ episode_id: episode.episode_id, stage: "brief" });
   return c.json({ ok: true, episode }, 201);
+});
+
+// FR-01/FR-09: 建期表单提交前的粗估价，不落库、不查外键，纯计算——挂在
+// "/:id" 之前，否则 Hono 会把 "estimate" 当成 :id 匹配掉。
+episodes.get("/estimate", (c) => {
+  const mode = c.req.query("mode");
+  if (mode !== "per_shot" && mode !== "grid") {
+    return c.json({ ok: false, error: "invalid_mode" }, 400);
+  }
+  return c.json({ ok: true, estimate: estimateCost({ mode }) });
 });
 
 episodes.get("/:id", async (c) => {

@@ -15,6 +15,7 @@ import {
 } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Destination, Episode, Persona, Shot, ShotSize, Template } from "@kelvoy/engine";
+import { estimateCost } from "@kelvoy/engine";
 import { Hono } from "hono";
 import episodes, { resolveArtifactPath } from "./episodes";
 
@@ -264,10 +265,13 @@ test("POST creates a draft episode, snapshots versions, prefills render from the
   expect(episode.persona_version).toBe(1);
   expect(episode.destination_version).toBe(1);
   expect(episode.mode).toBe("per_shot"); // FR-01: 默认逐镜
-  expect(episode.estimated_credits).toBe(0);
+  // FR-01/FR-09 粗估：建期这一刻没有真实镜数，estimateCost 用它的默认常量。
+  expect(episode.estimated_credits).toBe(estimateCost({ mode: "per_shot" }).estimated_credits);
+  expect(episode.estimated_credits).toBeGreaterThan(0);
   expect(episode.render.intro).toBe("intro/default.mp4");
   expect(episode.render.outro).toBeNull();
   expect(episode.brief.season).toBe("秋"); // 缺省取 destination.season_best[0]
+  expect(episode.brief.outfit_override).toBeNull(); // FR-01: 缺省不覆盖角色默认穿搭
 
   const task = await dequeueTask();
   expect(task?.episode_id).toBe(episode.episode_id);
@@ -292,6 +296,7 @@ test("POST honors an explicit season/tone/banned/mode over the defaults", async 
       tone: "松弛",
       banned: ["真人"],
       mode: "grid",
+      outfit_override: "冲锋衣",
     }),
   });
   expect(res.status).toBe(201);
@@ -301,10 +306,45 @@ test("POST honors an explicit season/tone/banned/mode over the defaults", async 
     aspect: "9:16",
     duration_s: 30,
     tone: "松弛",
-    outfit_override: null,
+    outfit_override: "冲锋衣",
     banned: ["真人"],
   });
   expect(body.episode.mode).toBe("grid");
+  // grid 模式关键帧成本打五折，估价应该比默认 per_shot 低。
+  expect(body.episode.estimated_credits).toBe(estimateCost({ mode: "grid" }).estimated_credits);
+});
+
+test("GET /estimate returns a cost estimate for a given mode without touching the db", async () => {
+  const { cookie } = await login("dannei");
+  const app = buildApp();
+
+  const perShotRes = await app.request("/api/episodes/estimate?mode=per_shot", { headers: { cookie } });
+  expect(perShotRes.status).toBe(200);
+  const perShotBody = (await perShotRes.json()) as { ok: boolean; estimate: unknown };
+  expect(perShotBody.estimate).toEqual(estimateCost({ mode: "per_shot" }));
+
+  const gridRes = await app.request("/api/episodes/estimate?mode=grid", { headers: { cookie } });
+  const gridBody = (await gridRes.json()) as { estimate: { gpu_minutes: number } };
+  expect(gridBody.estimate.gpu_minutes).toBeLessThan(
+    (perShotBody.estimate as { gpu_minutes: number }).gpu_minutes,
+  );
+});
+
+test("GET /estimate rejects a missing or invalid mode", async () => {
+  const { cookie } = await login("dannei");
+  const app = buildApp();
+
+  const missing = await app.request("/api/episodes/estimate", { headers: { cookie } });
+  expect(missing.status).toBe(400);
+
+  const invalid = await app.request("/api/episodes/estimate?mode=widescreen", { headers: { cookie } });
+  expect(invalid.status).toBe(400);
+});
+
+test("GET /estimate requires login", async () => {
+  const app = buildApp();
+  const res = await app.request("/api/episodes/estimate?mode=per_shot");
+  expect(res.status).toBe(401);
 });
 
 test("POST snapshots the persona version at submit time, not the latest one", async () => {

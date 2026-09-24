@@ -1,0 +1,131 @@
+/* Brief form / new episode (M2-8, #30). 拆成独立文件而不是继续往
+   index.css 里加——index.css 已经接近 CLAUDE.md 的 500 行上限，这里复用它
+   定义的 CSS 变量和 .k-field/.k-btn/.k-error 工具类，不重定设计规范，只补
+   这一个页面独有的 k-brief- 前缀类。 */
+
+.k-brief-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.k-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+  align-items: start;
+}
+
+.k-brief-template-preview {
+  grid-column: 1 / -1;
+  margin: -0.5rem 0 0 0;
+}
+
+.k-brief-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.k-brief-tone-chips {
+  margin-top: -0.5rem;
+}
+
+.k-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: #ffffff;
+  color: var(--color-ink-soft);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.k-chip:hover {
+  border-color: var(--color-accent);
+  color: var(--color-ink);
+}
+
+.k-chip-removable {
+  background: #eeebe3;
+  cursor: default;
+}
+
+.k-chip-removable button {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.k-chip-removable button:hover {
+  color: var(--color-danger);
+}
+
+.k-brief-banned-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.k-brief-banned-input input {
+  flex: 1;
+}
+
+.k-brief-mode {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.k-brief-mode legend {
+  font-family: var(--font-display);
+  font-weight: 700;
+  padding: 0 0.3rem;
+}
+
+.k-brief-radio {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.k-brief-aspect {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.k-brief-submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.k-brief-estimate {
+  font-size: 0.9rem;
+  color: var(--color-ink-soft);
+}
+
+@media (max-width: 720px) {
+  .k-brief-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -588,6 +588,9 @@ export function validateCreateEpisodeRequest(input: unknown): ValidationResult<C
   if ("mode" in r && !EPISODE_MODES.includes(r.mode as EpisodeMode)) {
     errors.push(`mode: 必须是 ${EPISODE_MODES.join(" / ")} 之一`);
   }
+  if ("outfit_override" in r && !isNonEmptyString(r.outfit_override)) {
+    errors.push("outfit_override: 必须是非空字符串");
+  }
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: r as CreateEpisodeRequest };

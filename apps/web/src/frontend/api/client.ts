@@ -1,4 +1,13 @@
-import type { Destination, Episode, Persona, Template } from "@kelvoy/engine";
+import type {
+  ContentViolation,
+  CreateEpisodeRequest,
+  Destination,
+  Episode,
+  EpisodeMode,
+  EstimateCostResult,
+  Persona,
+  Template,
+} from "@kelvoy/engine";
 
 // Typed wrapper around the /api/* routes apps/web/src/server/routes/*.ts
 // actually serve. M2-7 scoped this to read-only pages (auth +
@@ -8,7 +17,15 @@ import type { Destination, Episode, Persona, Template } from "@kelvoy/engine";
 // calls them yet.
 
 export type ApiOk<T> = { ok: true } & T;
-export type ApiFail = { ok: false; error?: string; errors?: unknown; message?: string };
+// violations 只有 POST /api/episodes 命中关键词拦截(#29)时才有，其它路由的
+// 失败响应没有这个字段——放在通用 ApiFail 上是因为 apiFetch 是唯一的解析点。
+export type ApiFail = {
+  ok: false;
+  error?: string;
+  errors?: unknown;
+  message?: string;
+  violations?: ContentViolation[];
+};
 export type ApiResult<T> = ApiOk<T> | ApiFail;
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
@@ -85,5 +102,20 @@ export function saveEpisodeAsTemplate(episodeId: string, name: string) {
   return apiFetch<{ template: Template }>(
     `/api/episodes/${encodeURIComponent(episodeId)}/save-as-template`,
     { method: "POST", body: JSON.stringify({ name }) },
+  );
+}
+
+// M2-8 (#30): brief 表单页.
+
+export function createEpisode(body: CreateEpisodeRequest) {
+  return apiFetch<{ episode: Episode }>("/api/episodes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getEstimate(mode: EpisodeMode) {
+  return apiFetch<{ estimate: EstimateCostResult }>(
+    `/api/episodes/estimate?mode=${encodeURIComponent(mode)}`,
   );
 }

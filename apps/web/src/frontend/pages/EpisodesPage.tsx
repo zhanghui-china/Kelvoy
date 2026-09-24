@@ -13,8 +13,13 @@ export default function EpisodesPage() {
     <div>
       <div className="k-eyebrow">一期一个目的地</div>
       <h1>期</h1>
+      <Link to="/episodes/new" className="k-btn k-btn-primary">
+        新建一期
+      </Link>
       {episodes.length === 0 ? (
-        <p className="k-empty">还没有期。</p>
+        <p className="k-empty">
+          还没有期，点上面"新建一期"开始第一期。
+        </p>
       ) : (
         <div className="k-card-list">
           {episodes.map((e) => (

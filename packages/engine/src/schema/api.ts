@@ -103,6 +103,7 @@ export interface CreateEpisodeRequest {
   tone?: string;
   banned?: string[];
   mode?: EpisodeMode;
+  outfit_override?: string;
 }
 
 // FR-10 模板: apps/web 的 POST /api/templates 请求体. 不含 template_id/
