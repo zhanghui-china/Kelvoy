@@ -1,9 +1,8 @@
 import { AssetImage } from "../AssetImage";
 import { listDestinations } from "../api/client";
+import { MIN_LANDMARK_REFS } from "../destination-refs";
 import { useApiResource } from "../hooks/useApiResource";
 import { DESTINATION_TYPE_LABELS } from "../labels";
-
-const MIN_LANDMARK_REFS = 3;
 
 export default function DestinationsPage() {
   const { loading, data, error } = useApiResource(listDestinations, []);
