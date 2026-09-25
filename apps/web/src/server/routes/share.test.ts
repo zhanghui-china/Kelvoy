@@ -109,6 +109,18 @@ test("GET /:slug/final.mp4 404s when sharing is off, even if the file exists", a
   expect(res.status).toBe(404);
 });
 
+test("share temporarily hides an old film while a shot is being regenerated", async () => {
+  const episode = fixture("e_1", true, "abc123");
+  episode.status = "clip_review";
+  await insertEpisode(episode);
+  await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1.mp4"), "old-film");
+
+  const app = buildApp();
+  expect((await app.request("/api/share/abc123")).status).toBe(404);
+  expect((await app.request("/api/share/abc123/final.mp4")).status).toBe(404);
+});
+
 test("GET /:slug/final.mp4 404s when composing hasn't produced the file yet", async () => {
   await insertEpisode(fixture("e_1", true, "abc123"));
 
