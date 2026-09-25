@@ -1,0 +1,145 @@
+{
+  "482": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "473",
+        0
+      ]
+    }
+  },
+  "474": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 1030888277124413,
+      "control_after_generate": "randomize",
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "490",
+        0
+      ],
+      "positive": [
+        "469",
+        0
+      ],
+      "negative": [
+        "469",
+        1
+      ],
+      "latent_image": [
+        "494",
+        0
+      ]
+    }
+  },
+  "469": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "prompt": "两个女人一起在漫展上",
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "470",
+        0
+      ],
+      "images.image_1": [
+        "489",
+        0
+      ],
+      "images.image_2": [
+        "491",
+        0
+      ],
+      "vae": [
+        "471",
+        0
+      ]
+    }
+  },
+  "473": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "474",
+        0
+      ],
+      "vae": [
+        "471",
+        0
+      ]
+    }
+  },
+  "471": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "468": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "470": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "489": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__frieren_peach_con_free5__fern.png",
+      "upload": "image"
+    }
+  },
+  "490": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "468",
+        0
+      ]
+    }
+  },
+  "491": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__frieren_peach_con_free5__linie.png",
+      "upload": "image"
+    }
+  },
+  "493": {
+    "class_type": "ResolutionSelector",
+    "inputs": {
+      "aspect_ratio": "3:4 (Portrait Standard)",
+      "megapixels": 1,
+      "multiple": 8
+    }
+  },
+  "494": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": [
+        "493",
+        0
+      ],
+      "height": [
+        "493",
+        1
+      ],
+      "batch_size": 1
+    }
+  }
+}

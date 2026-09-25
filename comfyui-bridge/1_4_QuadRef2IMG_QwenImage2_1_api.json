@@ -1,0 +1,167 @@
+{
+  "482": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "473",
+        0
+      ]
+    }
+  },
+  "474": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 908324969678902,
+      "control_after_generate": "randomize",
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "490",
+        0
+      ],
+      "positive": [
+        "469",
+        0
+      ],
+      "negative": [
+        "469",
+        1
+      ],
+      "latent_image": [
+        "492",
+        0
+      ]
+    }
+  },
+  "469": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "prompt": "把女人的衣服改成绿色",
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "470",
+        0
+      ],
+      "images.image_1": [
+        "489",
+        0
+      ],
+      "images.image_2": [
+        "494",
+        0
+      ],
+      "images.image_3": [
+        "493",
+        0
+      ],
+      "images.image_4": [
+        "495",
+        0
+      ],
+      "vae": [
+        "471",
+        0
+      ]
+    }
+  },
+  "473": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "474",
+        0
+      ],
+      "vae": [
+        "471",
+        0
+      ]
+    }
+  },
+  "471": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "468": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "470": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "489": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__frieren_peach_con_free5__fern.png",
+      "upload": "image"
+    }
+  },
+  "490": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "468",
+        0
+      ]
+    }
+  },
+  "491": {
+    "class_type": "ResolutionSelector",
+    "inputs": {
+      "aspect_ratio": "3:4 (Portrait Standard)",
+      "megapixels": 1,
+      "multiple": 8
+    }
+  },
+  "492": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": [
+        "491",
+        0
+      ],
+      "height": [
+        "491",
+        1
+      ],
+      "batch_size": 1
+    }
+  },
+  "493": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__frieren_peach_con_free5__serie.png",
+      "upload": "image"
+    }
+  },
+  "494": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__genshin_peach_con_free5__gi_keqing_con_free_20260910.png",
+      "upload": "image"
+    }
+  },
+  "495": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__blazblue_peach_con_free5__bb_litchi_con_free_20260910.png",
+      "upload": "image"
+    }
+  }
+}

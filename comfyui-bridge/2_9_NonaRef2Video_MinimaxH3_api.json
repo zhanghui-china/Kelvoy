@@ -1,0 +1,385 @@
+{
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "16": {
+    "class_type": "Anything Everywhere",
+    "inputs": {
+      "anything": [
+        "3",
+        0
+      ]
+    }
+  },
+  "30": {
+    "class_type": "SetNode",
+    "inputs": {
+      "Constant": "video VAE",
+      "VAE": [
+        "4",
+        0
+      ]
+    }
+  },
+  "31": {
+    "class_type": "SetNode",
+    "inputs": {
+      "Constant": "audio VAE",
+      "VAE": [
+        "5",
+        0
+      ]
+    }
+  },
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "32": {
+    "class_type": "GetNode",
+    "inputs": {
+      "Constant": "video VAE"
+    }
+  },
+  "39": {
+    "class_type": "GetNode",
+    "inputs": {
+      "Constant": "audio VAE"
+    }
+  },
+  "76": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 15,
+      "fixed": "fixed"
+    }
+  },
+  "50": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "77",
+        0
+      ]
+    }
+  },
+  "40": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "minimax h3 ref2v",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "videopreview": {
+        "paused": false,
+        "hidden": false,
+        "params": {
+          "score": 78,
+          "filename": "minimax h3 ref2v_00002-audio.mp4",
+          "cos_url": "https://rh-images.xiaoyaoyou.com//d56d31b3752039219c3230c269ddbcc7/output/minimax h3 flf2v_00001_p82-audio_svksr_1787411112.mp4",
+          "workflow": "minimax h3 ref2v_00002.png",
+          "fullpath": "/home/Developer/ComfyUI/output/minimax h3 ref2v_00002-audio.mp4",
+          "format": "video/h264-mp4",
+          "subfolder": "",
+          "label": "Porn",
+          "type": "output",
+          "frame_rate": 24
+        }
+      },
+      "images": [
+        "37",
+        0
+      ],
+      "audio": [
+        "38",
+        0
+      ]
+    }
+  },
+  "38": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "49",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    }
+  },
+  "37": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "49",
+        0
+      ],
+      "vae": [
+        "32",
+        0
+      ]
+    }
+  },
+  "82": {
+    "class_type": "ResolutionSelector",
+    "inputs": {
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": 0.9,
+      "multiple": 32
+    }
+  },
+  "77": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "prompt": "两个女孩在床边聊天",
+      "width": [
+        "82",
+        0
+      ],
+      "height": [
+        "82",
+        1
+      ],
+      "length": [
+        "90",
+        1
+      ],
+      "ref_image_size": "max",
+      "clip": [
+        "3",
+        0
+      ],
+      "vae": [
+        "32",
+        0
+      ],
+      "audio_vae": [
+        "39",
+        0
+      ],
+      "ref_images.ref_image_0": [
+        "7",
+        0
+      ],
+      "ref_images.ref_image_1": [
+        "94",
+        0
+      ],
+      "ref_images.ref_image_2": [
+        "98",
+        0
+      ],
+      "ref_images.ref_image_3": [
+        "92",
+        0
+      ],
+      "ref_images.ref_image_4": [
+        "95",
+        0
+      ],
+      "ref_images.ref_image_5": [
+        "96",
+        0
+      ],
+      "ref_images.ref_image_6": [
+        "93",
+        0
+      ],
+      "ref_images.ref_image_7": [
+        "99",
+        0
+      ],
+      "ref_images.ref_image_8": [
+        "100",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+    }
+  },
+  "53": {
+    "class_type": "LoraLoaderBypassModelOnly",
+    "inputs": {
+      "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "2",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__umamusume_peach_con_free5__uma_airgroove_con_free_20260910.png",
+      "upload": "image"
+    }
+  },
+  "49": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 834876666125950,
+      "control_after_generate": "randomize",
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "linear_quadratic",
+      "denoise": 1,
+      "model": [
+        "88",
+        0
+      ],
+      "positive": [
+        "77",
+        0
+      ],
+      "negative": [
+        "50",
+        0
+      ],
+      "latent_image": [
+        "77",
+        1
+      ]
+    }
+  },
+  "86": {
+    "class_type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
+    "inputs": {
+      "model": [
+        "53",
+        0
+      ]
+    }
+  },
+  "88": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "shift_video": 6,
+      "shift_audio": 3,
+      "model": [
+        "91",
+        0
+      ]
+    }
+  },
+  "89": {
+    "class_type": "Anything Everywhere",
+    "inputs": {
+      "anything": [
+        "88",
+        0
+      ]
+    }
+  },
+  "90": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17",
+      "values.a": [
+        "76",
+        0
+      ]
+    }
+  },
+  "91": {
+    "class_type": "BlockSparseAttention",
+    "inputs": {
+      "selection": "sol-attn",
+      "selection.tau": 1.5,
+      "start_percent": 0.1,
+      "end_percent": 0.9,
+      "dense_blocks": "",
+      "min_tokens": 4096,
+      "extra_tokens": 256,
+      "sink_conditioning": "exact_kv_and_rows",
+      "verbose": false,
+      "model": [
+        "86",
+        0
+      ]
+    }
+  },
+  "92": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__frieren_peach_con_free5__linie.png",
+      "upload": "image"
+    }
+  },
+  "93": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-16__starrail_pj_kaiseki_uniq10__firefly.png",
+      "upload": "image"
+    }
+  },
+  "94": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__wow_peach_con_free5__sylvanas.png",
+      "upload": "image"
+    }
+  },
+  "95": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__elaina_peach_con_free8__wi_elaina_con_free_02_20260910.png",
+      "upload": "image"
+    }
+  },
+  "96": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__umamusume_peach_con_free5__uma_maruzensky_con_free_20260910.png",
+      "upload": "image"
+    }
+  },
+  "98": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__umamusume_peach_con_free5__uma_manhattancafe_con_free_20260910.png",
+      "upload": "image"
+    }
+  },
+  "99": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__genshin_peach_lace5__gi_yae_pj_lace_20260910.png",
+      "upload": "image"
+    }
+  },
+  "100": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__blazblue_peach_con_free5__bb_makoto_con_free_20260910.png",
+      "upload": "image"
+    }
+  }
+}
