@@ -1,16 +1,32 @@
-"""关键帧 (PRD §7): text + persona ref + landmark ref -> image 9:16, via
-Qwen-Image/FLUX.1/HunyuanImage. Also hosts 角色一致性's image side (PuLID/
-InstantID-style adapters). Not implemented at skeleton stage —
-request/response shapes are real (M1-8), the generation logic isn't.
-"""
+"""Generate a 9:16 keyframe from persona and landmark references."""
 
 from fastapi import APIRouter, HTTPException
 
+from inference.comfyui import ComfyUIError
+from inference.comfyui import generate as generate_comfyui
+from inference.config import Settings
 from inference.schemas import InferenceRequest, InferenceResponse
 
 router = APIRouter()
 
 
 @router.post("/", response_model=InferenceResponse)
-def generate(request: InferenceRequest) -> InferenceResponse:
-    raise HTTPException(status_code=501, detail="not implemented")
+async def generate(request: InferenceRequest) -> InferenceResponse:
+    if request.count not in (None, 1):
+        raise HTTPException(status_code=422, detail="image generates one candidate per request")
+    if request.size not in (None, "9:16", "768x1376"):
+        raise HTTPException(status_code=422, detail="image supports the 9:16 preset only")
+    settings = Settings()
+    try:
+        return await generate_comfyui(
+            "image",
+            request.prompt,
+            request.refs,
+            settings.projects_root,
+            settings.comfyui_base_url,
+            seed=request.seed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ComfyUIError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc

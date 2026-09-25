@@ -1,5 +1,4 @@
-"""M1-8: request-shape validation is real even though generation isn't —
-missing `prompt` must 422, a well-formed body must reach the 501 stub."""
+"""Request validation and the remaining skeleton endpoints."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +16,7 @@ def test_missing_prompt_returns_422(endpoint):
     assert resp.status_code == 422
 
 
-@pytest.mark.parametrize("endpoint", ENDPOINTS)
+@pytest.mark.parametrize("endpoint", ["/llm/", "/upscale/"])
 def test_well_formed_request_reaches_the_501_stub(endpoint):
     resp = client.post(
         endpoint,
@@ -39,3 +38,22 @@ def test_params_defaults_to_empty_dict_when_omitted():
     # Still 501 (stub), but proves the request body itself validated fine
     # with only `prompt` given — refs/seed/size/count/params all optional.
     assert resp.status_code == 501
+
+
+@pytest.mark.parametrize("endpoint", ["/image/", "/video/"])
+def test_generation_rejects_missing_refs_before_contacting_comfyui(endpoint):
+    resp = client.post(endpoint, json={"prompt": "scene", "refs": []})
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "endpoint,body",
+    [
+        ("/image/", {"prompt": "scene", "count": 2}),
+        ("/image/", {"prompt": "scene", "size": "1080x1920"}),
+        ("/video/", {"prompt": "scene", "count": 2}),
+        ("/video/", {"prompt": "scene", "size": "704x1280"}),
+    ],
+)
+def test_generation_rejects_unimplemented_preset(endpoint, body):
+    assert client.post(endpoint, json=body).status_code == 422

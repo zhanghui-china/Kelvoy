@@ -1,15 +1,33 @@
-"""图生视频 (PRD §7): image (+prompt) -> video 3-5s, via Wan 2.x (I2V,
-VACE) / HunyuanVideo I2V / CogVideoX. Not implemented at skeleton stage —
-request/response shapes are real (M1-8), the generation logic isn't.
-"""
+"""Generate a 3–5 second clip from its selected first frame."""
 
 from fastapi import APIRouter, HTTPException
 
+from inference.comfyui import ComfyUIError
+from inference.comfyui import generate as generate_comfyui
+from inference.config import Settings
 from inference.schemas import InferenceRequest, InferenceResponse
 
 router = APIRouter()
 
 
 @router.post("/", response_model=InferenceResponse)
-def generate(request: InferenceRequest) -> InferenceResponse:
-    raise HTTPException(status_code=501, detail="not implemented")
+async def generate(request: InferenceRequest) -> InferenceResponse:
+    if request.count not in (None, 1):
+        raise HTTPException(status_code=422, detail="video generates one clip per request")
+    if request.size not in (None, "9:16", "480x864"):
+        raise HTTPException(status_code=422, detail="video supports the 480 vertical preset only")
+    settings = Settings()
+    try:
+        return await generate_comfyui(
+            "video",
+            request.prompt,
+            request.refs,
+            settings.projects_root,
+            settings.comfyui_base_url,
+            seed=request.seed,
+            duration_s=request.params.get("duration_s", 5),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ComfyUIError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc

@@ -12,39 +12,10 @@
       "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
     }
   },
-  "85": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "video VAE",
-      "VAE": [
-        "84",
-        0
-      ]
-    }
-  },
   "88": {
     "class_type": "VAELoader",
     "inputs": {
       "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
-    }
-  },
-  "89": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "audio VAE",
-      "VAE": [
-        "88",
-        0
-      ]
-    }
-  },
-  "91": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "87",
-        0
-      ]
     }
   },
   "87": {
@@ -61,7 +32,7 @@
       "shift_video": 6,
       "shift_audio": 3,
       "model": [
-        "101",
+        "100",
         0
       ]
     }
@@ -70,6 +41,10 @@
     "class_type": "MiniMaxH3ImageToVideo",
     "inputs": {
       "prompt": "一个男人过来和女人亲吻，法式热吻",
+      "clip": [
+        "87",
+        0
+      ],
       "width": [
         "9",
         3
@@ -83,7 +58,7 @@
         1
       ],
       "vae": [
-        "32",
+        "84",
         0
       ],
       "first_frame": [
@@ -104,6 +79,10 @@
   "49": {
     "class_type": "KSampler",
     "inputs": {
+      "model": [
+        "90",
+        0
+      ],
       "seed": 85451655070020,
       "control_after_generate": "randomize",
       "steps": 6,
@@ -125,12 +104,6 @@
       ]
     }
   },
-  "32": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "video VAE"
-    }
-  },
   "37": {
     "class_type": "VAEDecode",
     "inputs": {
@@ -139,7 +112,7 @@
         0
       ],
       "vae": [
-        "32",
+        "84",
         0
       ]
     }
@@ -152,15 +125,9 @@
         0
       ],
       "vae": [
-        "39",
+        "88",
         0
       ]
-    }
-  },
-  "39": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "audio VAE"
     }
   },
   "9": {
@@ -253,27 +220,6 @@
       ]
     }
   },
-  "101": {
-    "class_type": "SolAttnMiniMax",
-    "inputs": {
-      "tau": 1.8,
-      "start_percent": 0.1,
-      "end_percent": 0.9,
-      "min_tokens": 4096,
-      "sink_conditioning": "exact_kv_and_rows",
-      "morton": true,
-      "morton_curve": "3d",
-      "centroid_tail": true,
-      "routed_cap_percent": 0,
-      "reuse_qkv_memory": false,
-      "verbose": true,
-      "dense_blocks": "",
-      "model": [
-        "100",
-        0
-      ]
-    }
-  },
   "102": {
     "class_type": "LoraLoaderModelOnly",
     "inputs": {
@@ -281,15 +227,6 @@
       "strength_model": 1,
       "model": [
         "82",
-        0
-      ]
-    }
-  },
-  "105": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "90",
         0
       ]
     }
