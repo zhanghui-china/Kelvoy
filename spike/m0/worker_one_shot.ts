@@ -1,6 +1,6 @@
 /** Technical Worker smoke against a separate SQLite DB. Never use for M0 quality acceptance. */
 import { close, dequeueTask, enqueueTask, getEpisode, insertEpisode, insertPersona,
-  open, patchEpisode, patchShot, upsertDestination } from "@kelvoy/store";
+  open, patchEpisode, patchShot, upsertDestination } from "../../packages/store/src/index";
 import type { Episode, Shot } from "@kelvoy/engine";
 import { handleTask } from "../../apps/worker/src/queue/consumer";
 
