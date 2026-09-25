@@ -1,5 +1,5 @@
 import type { Episode } from "@kelvoy/engine";
-import { episodeFileUrl, recompose, setEpisodeShare, shareUrl } from "../api/client";
+import { episodeFileUrl, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
 import { MutationError } from "./ShotHeader";
 import { tally } from "./tally";
 import type { EpisodeMutation } from "./useEpisodeMutation";
@@ -122,6 +122,27 @@ export default function DoneView({
       </div>
 
       <MutationError error={mutation.error} />
+      <div className="k-card">
+        <div className="k-card-title">重做镜头</div>
+        <p className="k-card-meta">选一镜重生成；审核新结果后再合成。其他已通过的镜头继续保留。</p>
+        {episode.shots.map((shot) => (
+          <div className="k-desk-actions" key={shot.no}>
+            <span className="k-card-meta">第 {shot.no} 镜 · {shot.beat}</span>
+            <button type="button" className="k-btn k-btn-secondary k-btn-tiny"
+              disabled={mutation.pending}
+              onClick={() => mutation.run((rowVersion) =>
+                regenShot(episode.episode_id, shot.no, rowVersion, "keyframe"))}>
+              重生成关键帧
+            </button>
+            <button type="button" className="k-btn k-btn-secondary k-btn-tiny"
+              disabled={mutation.pending || !shot.kf_selected}
+              onClick={() => mutation.run((rowVersion) =>
+                regenShot(episode.episode_id, shot.no, rowVersion, "video"))}>
+              重生成视频
+            </button>
+          </div>
+        ))}
+      </div>
       <div className="k-desk-actions">
         <button
           type="button"

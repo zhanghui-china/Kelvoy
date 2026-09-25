@@ -89,7 +89,7 @@ function KeyframeShot({
                   key={candidate}
                   className={`k-desk-candidate ${shot.kf_selected === candidate ? "is-selected" : ""}`}
                   aria-pressed={shot.kf_selected === candidate}
-                  disabled={mutation.pending}
+                  disabled={mutation.pending || shot.status === "approved"}
                   onClick={() => select(candidate)}
                 >
                   <AssetImage
@@ -176,7 +176,8 @@ export default function KeyframeReview({
   const [gridOpen, setGridOpen] = useState(false);
   const { currentNo, focusShot, registerShot } = useShotNavigation(episode.shots.map((s) => s.no));
 
-  const unselected = episode.shots.filter((s) => s.kf_selected === null).length;
+  const unselected = episode.shots.filter((s) =>
+    s.status !== "approved" && (s.status !== "kf_selected" || !s.kf_selected)).length;
 
   return (
     <div className="k-desk-layout">

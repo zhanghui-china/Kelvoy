@@ -145,7 +145,7 @@ flowchart LR
 
 **期级状态机**（`Episode.status`）
 
-`draft → scripting → script_review → assets → keyframing → kf_review → clipping → clip_review → composing → done`，任一生成态可进 `failed`；`failed` 从失败的阶段重跑；`done` 可回到 `composing`（重新合成）。审核态 → 下一生成态由用户在审片台点"继续"触发。
+`draft → scripting → script_review → assets → keyframing → kf_review → clipping → clip_review → composing → done`，任一生成态可进 `failed`；`failed` 从失败的阶段重跑；`done` 可回到 `composing`（重新合成）。审核态 → 下一生成态由用户在审片台点"继续"触发：关键帧全部选定后才能进入 `clipping`，片段全部批准后才能进入 `composing`。从 `clip_review` 重生成关键帧时回到 `kf_review`；从 `done` 重生成关键帧或片段时分别回到 `kf_review` / `clip_review`，其他已批准镜头保持不变。
 
 **镜级状态机**（`Shot.status`）
 

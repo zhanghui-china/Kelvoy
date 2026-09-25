@@ -641,14 +641,14 @@ test("POST /:id/continue advances script_review -> assets and enqueues one whole
   expect(task?.shot_no).toBeUndefined();
 });
 
-test("POST /:id/continue advances kf_review -> clipping and enqueues one video task per kf_selected shot", async () => {
+test("POST /:id/continue advances kf_review only when every keyframe is selected", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);
   episode.status = "kf_review";
   episode.shots = [
-    shotFixture(1, { status: "kf_selected" }),
-    shotFixture(2, { status: "kf_selected" }),
-    shotFixture(3, { status: "kf_ready" }), // not yet selected — must not get a task
+    shotFixture(1, { status: "kf_selected", candidates: ["kf/1.png"], kf_selected: "kf/1.png" }),
+    shotFixture(2, { status: "kf_selected", candidates: ["kf/2.png"], kf_selected: "kf/2.png" }),
+    shotFixture(3, { status: "kf_ready" }),
   ];
   await insertEpisode(episode);
 
@@ -658,19 +658,53 @@ test("POST /:id/continue advances kf_review -> clipping and enqueues one video t
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 1 }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(400);
+  expect((await res.json() as { error: string }).error).toBe("keyframes_not_selected");
+  expect(await dequeueTask()).toBeNull();
+
+  const second = await app.request("/api/episodes/e_1/shots/3", {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, patch: { status: "kf_selected", candidates: ["kf/3.png"], kf_selected: "kf/3.png" } }),
+  });
+  expect(second.status).toBe(200);
+  const proceed = await app.request("/api/episodes/e_1/continue", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 2 }),
+  });
+  expect(proceed.status).toBe(200);
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
   expect(((await got.json()) as { episode: Episode }).episode.status).toBe("clipping");
 
   const shotNos = new Set<number | undefined>();
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const task = await dequeueTask();
     expect(task?.stage).toBe("video");
     shotNos.add(task?.shot_no);
   }
-  expect(shotNos).toEqual(new Set([1, 2]));
-  expect(await dequeueTask()).toBeNull(); // shot 3 (kf_ready) got no task
+  expect(shotNos).toEqual(new Set([1, 2, 3]));
+  expect(await dequeueTask()).toBeNull();
+});
+
+test("POST /:id/continue requires every clip to be approved", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "clip_review";
+  episode.shots = [
+    shotFixture(1, { status: "approved", clip: "clip/1.mp4" }),
+    shotFixture(2, { status: "clip_ready", clip: "clip/2.mp4" }),
+  ];
+  await insertEpisode(episode);
+  const app = buildApp();
+  const res = await app.request("/api/episodes/e_1/continue", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(400);
+  expect((await res.json() as { error: string }).error).toBe("clips_not_approved");
+  expect(await dequeueTask()).toBeNull();
 });
 
 test("POST /:id/continue 400s outside a review gate", async () => {
@@ -689,6 +723,7 @@ test("POST /:id/continue 400s outside a review gate", async () => {
 test("POST /:id/shots/:no/regen rejects the shot, infers regen_stage from status, and enqueues", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);
+  episode.status = "kf_review";
   episode.shots = [shotFixture(1, { status: "kf_ready" })];
   await insertEpisode(episode);
 
@@ -713,6 +748,7 @@ test("POST /:id/shots/:no/regen rejects the shot, infers regen_stage from status
 test("POST /:id/shots/:no/regen honors an explicit regen_stage override", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);
+  episode.status = "done";
   episode.shots = [shotFixture(1, { status: "approved" })];
   await insertEpisode(episode);
 
@@ -725,8 +761,62 @@ test("POST /:id/shots/:no/regen honors an explicit regen_stage override", async 
   expect(res.status).toBe(200);
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
-  const shot = ((await got.json()) as { episode: Episode }).episode.shots[0];
+  const reopened = ((await got.json()) as { episode: Episode }).episode;
+  const shot = reopened.shots[0];
   expect(shot?.regen_stage).toBe("keyframe");
+  expect(reopened.status).toBe("kf_review");
+});
+
+test("keyframe regen from clip review carries approved shots through to video", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "clip_review";
+  episode.shots = [
+    shotFixture(1, { status: "clip_ready", candidates: ["kf/old.png"],
+      kf_selected: "kf/old.png", clip: "clip/old.mp4" }),
+    shotFixture(2, { status: "approved", candidates: ["kf/keep.png"],
+      kf_selected: "kf/keep.png", clip: "clip/keep.mp4" }),
+  ];
+  await insertEpisode(episode);
+  const app = buildApp();
+  const regen = await app.request("/api/episodes/e_1/shots/1/regen", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, regen_stage: "keyframe" }),
+  });
+  expect(regen.status).toBe(200);
+  const first = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const reopened = ((await first.json()) as { episode: Episode }).episode;
+  expect(reopened.status).toBe("kf_review");
+  expect(reopened.shots[1]?.status).toBe("approved");
+  expect(reopened.shots[1]?.clip).toBe("clip/keep.mp4");
+  const generationTask = await dequeueTask();
+  expect(generationTask?.stage).toBe("keyframe");
+
+  // Simulate the worker's state hops, then make the review decision.
+  const generating = await app.request("/api/episodes/e_1/shots/1", {
+    method: "PATCH", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 2, patch: { status: "generating_kf" } }),
+  });
+  expect(generating.status).toBe(200);
+  const ready = await app.request("/api/episodes/e_1/shots/1", {
+    method: "PATCH", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 3, patch: { status: "kf_ready", candidates: ["kf/new.png"] } }),
+  });
+  expect(ready.status).toBe(200);
+  const selected = await app.request("/api/episodes/e_1/shots/1", {
+    method: "PATCH", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 4, patch: { status: "kf_selected", kf_selected: "kf/new.png" } }),
+  });
+  expect(selected.status).toBe(200);
+  const proceed = await app.request("/api/episodes/e_1/continue", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 5 }),
+  });
+  expect(proceed.status).toBe(200);
+  const videoTask = await dequeueTask();
+  expect(videoTask?.stage).toBe("video");
+  expect(videoTask?.shot_no).toBe(1);
+  expect(await dequeueTask()).toBeNull();
 });
 
 test("POST /:id/shots/:no/regen 400s from a status that isn't a regen source", async () => {
@@ -747,7 +837,10 @@ test("POST /:id/shots/:no/regen 400s from a status that isn't a regen source", a
 test("POST /:id/shots/:no/report-bad marks bad_shot_reported, rejects, and enqueues a free regen", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);
-  episode.shots = [shotFixture(1, { status: "approved" })];
+  episode.status = "done";
+  episode.shots = [shotFixture(1, {
+    status: "approved", candidates: ["kf/1.png"], kf_selected: "kf/1.png", clip: "clip/1.mp4",
+  })];
   await insertEpisode(episode);
 
   const app = buildApp();
@@ -759,10 +852,12 @@ test("POST /:id/shots/:no/report-bad marks bad_shot_reported, rejects, and enque
   expect(res.status).toBe(200);
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
-  const shot = ((await got.json()) as { episode: Episode }).episode.shots[0];
+  const reopened = ((await got.json()) as { episode: Episode }).episode;
+  const shot = reopened.shots[0];
   expect(shot?.bad_shot_reported).toBe(true);
   expect(shot?.status).toBe("rejected");
   expect(shot?.regen_stage).toBe("video"); // approved -> clip already made, redo the clip
+  expect(reopened.status).toBe("clip_review");
 
   const task = await dequeueTask();
   expect(task?.stage).toBe("video");

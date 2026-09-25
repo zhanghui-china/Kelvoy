@@ -90,6 +90,14 @@ describe("transitionEpisode: legal transitions", () => {
     });
   }
 
+  test("review can reopen for regeneration after clip review or completion", () => {
+    expect(transitionEpisode("clip_review", { type: "reopen_review", into: "kf_review" })).toBe("kf_review");
+    expect(transitionEpisode("done", { type: "reopen_review", into: "kf_review" })).toBe("kf_review");
+    expect(transitionEpisode("done", { type: "reopen_review", into: "clip_review" })).toBe("clip_review");
+    expect(isLegalEpisodeStatusChange("done", "clip_review")).toBe(true);
+    expect(() => transitionEpisode("script_review", { type: "reopen_review", into: "clip_review" })).toThrow();
+  });
+
   const generatingStates: GeneratingEpisodeStatus[] = [
     "scripting",
     "assets",

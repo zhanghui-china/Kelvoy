@@ -6,7 +6,8 @@ import { illegalTransition } from "./errors";
  * mutation of the input. Mirrors the review-gate pipeline:
  * draft → scripting → script_review → assets → keyframing → kf_review →
  * clipping → clip_review → composing → done, with any generating state
- * able to fail, and done able to re-enter composing (重新合成).
+ * able to fail, and a reviewed episode able to reopen a review gate for
+ * shot regeneration.
  */
 
 export type GeneratingEpisodeStatus = "scripting" | "assets" | "keyframing" | "clipping" | "composing";
@@ -36,7 +37,8 @@ export type EpisodeEvent =
   | { type: "advance" }
   | { type: "fail" }
   | { type: "retry"; into: GeneratingEpisodeStatus }
-  | { type: "recompose" };
+  | { type: "recompose" }
+  | { type: "reopen_review"; into: "kf_review" | "clip_review" };
 
 export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): EpisodeStatus {
   switch (event.type) {
@@ -56,6 +58,12 @@ export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): 
     case "recompose": {
       if (current !== "done") throw illegalTransition(current, event.type);
       return "composing";
+    }
+    case "reopen_review": {
+      if (current === "done" || (current === "clip_review" && event.into === "kf_review")) {
+        return event.into;
+      }
+      throw illegalTransition(current, event.type);
     }
   }
 }
@@ -80,6 +88,8 @@ export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatu
     { type: "advance" },
     { type: "fail" },
     { type: "recompose" },
+    { type: "reopen_review", into: "kf_review" },
+    { type: "reopen_review", into: "clip_review" },
     ...RETRY_TARGETS.map((into): EpisodeEvent => ({ type: "retry", into })),
   ];
   return events.some((event) => {
