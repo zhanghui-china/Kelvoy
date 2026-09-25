@@ -9,7 +9,7 @@ const TIMEOUT_MS = 5 * 60 * 1000; // PRD §8: 5-minute timeout, then retry.
 export type InferenceError =
   | { type: "timeout" }
   | { type: "network"; message: string }
-  | { type: "not_implemented" } // services/inference's routers are all 501 stubs today
+  | { type: "not_implemented" } // LLM and upscale routes still return 501
   | { type: "invalid_request"; details: unknown } // pydantic 422
   | { type: "http_error"; status: number; body: string };
 

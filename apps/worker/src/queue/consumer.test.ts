@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { Destination, Episode, Persona } from "@kelvoy/engine";
+import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
 import {
   close,
   dequeueTask,
@@ -8,6 +8,8 @@ import {
   insertEpisode,
   insertPersona,
   open,
+  patchEpisode,
+  patchShot,
   upsertDestination,
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
@@ -73,6 +75,16 @@ function personaFixture(id: string): Persona {
     default_outfit: "",
     refs: [],
     style: { lut: "lut/warm_film.cube", title_style: "serif-center" },
+  };
+}
+
+function shotFixture(): Shot {
+  return {
+    no: 1, scene: "s1", size: "medium", beat: "经过地标", camera: "push",
+    landmark: "l1", kf_prompt: "角色在地标前", motion_prompt: "角色转身",
+    duration_s: 1.5, candidates: [], kf_selected: null, clip: null,
+    trim_start_s: null, status: "draft", regen_stage: null,
+    bad_shot_reported: false, model: {},
   };
 }
 
@@ -175,4 +187,64 @@ test("buildStageContext reads destination + persona and injects ffmpeg only for 
 
   const composeContext = await buildStageContext("compose", episode);
   expect(composeContext.compose).toBe(ffmpegComposeProvider);
+});
+
+test("assets, one keyframe shot and video reach both review gates", async () => {
+  const ep = fixtureEpisode("e_one_shot");
+  ep.status = "assets";
+  ep.shots = [shotFixture()];
+  await insertEpisode(ep);
+  await insertPersona({ ...personaFixture("c_test"), refs: ["p/front.png", "p/side.png", "p/full.png"] });
+  await upsertDestination({ ...destinationFixture("d_test"), landmarks: [{
+    id: "l1", name: "地标", refs: ["d/a.jpg", "d/b.jpg", "d/c.jpg"], best_time: "上午",
+  }] });
+
+  const assets = await enqueueTask({ episode_id: ep.episode_id, stage: "assets" });
+  await dequeueTask();
+  await handleTask(assets);
+  const keyframeTask = await dequeueTask();
+  expect(keyframeTask?.stage).toBe("keyframe");
+  expect(keyframeTask?.shot_no).toBe(1);
+  await handleTask(keyframeTask!, { keyframe: { async generate(input) {
+    return { key: `kf/01_${input.candidate_no}.png`, model: "Qwen-Image-2.1",
+      version: "v1", seed: input.seed, seconds: 40, ref_hashes: ["h1", "h2"] };
+  } } });
+  const ready = await getEpisode(ep.episode_id);
+  if (!ready.ok) throw new Error("episode disappeared");
+  expect(ready.episode.status).toBe("kf_review");
+  expect(ready.episode.shots[0]?.status).toBe("kf_ready");
+  expect(ready.episode.shots[0]?.candidates).toHaveLength(2);
+
+  const selected = await patchShot(ep.episode_id, 1, ready.row_version, {
+    status: "kf_selected", kf_selected: ready.episode.shots[0]!.candidates[0],
+  });
+  if (!selected.ok) throw new Error(selected.error);
+  const clipping = await patchEpisode(ep.episode_id, selected.row_version, { status: "clipping" });
+  if (!clipping.ok) throw new Error(clipping.error);
+  const videoTask = await enqueueTask({ episode_id: ep.episode_id, stage: "video", shot_no: 1 });
+  await dequeueTask();
+  await handleTask(videoTask, { video: { async generate(input) {
+    expect(input.keyframe).toBe("kf/01_0.png");
+    return { key: "clip/01_new.mp4", model: "MiniMax-H3", version: "v2",
+      seed: input.seed, seconds: 65, ref_hashes: ["frame-hash"] };
+  } } });
+  const finished = await getEpisode(ep.episode_id);
+  expect(finished.ok && finished.episode.status).toBe("clip_review");
+  expect(finished.ok && finished.episode.shots[0]?.clip).toBe("clip/01_new.mp4");
+  expect(finished.ok && finished.episode.shots[0]?.model.video?.ref_hashes).toEqual(["frame-hash"]);
+});
+
+test("a queued video task never regenerates an approved shot", async () => {
+  const ep = fixtureEpisode("e_approved");
+  ep.status = "clip_review";
+  ep.shots = [shotFixture()];
+  ep.shots[0]!.status = "approved";
+  ep.shots[0]!.clip = "clip/01_old.mp4";
+  await insertEpisode(ep);
+  const task = await enqueueTask({ episode_id: ep.episode_id, stage: "video", shot_no: 1 });
+  await dequeueTask();
+  await handleTask(task, { video: { async generate() { throw new Error("should not run"); } } });
+  const actual = await getEpisode(ep.episode_id);
+  expect(actual.ok && actual.episode.shots[0]?.clip).toBe("clip/01_old.mp4");
+  expect(await dequeueTask()).toBeNull();
 });
