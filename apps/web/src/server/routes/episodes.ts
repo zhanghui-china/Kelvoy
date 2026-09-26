@@ -160,7 +160,10 @@ episodes.get("/:id", async (c) => {
   if (!result.ok || result.episode.owner_id !== c.get("ownerId")) {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
-  return c.json({ ok: true, episode: result.episode, row_version: result.row_version });
+  const revision = await getPersonaVersion(result.episode.persona_id, result.episode.persona_version);
+  const persona = revision && (revision.owner_id === null || revision.owner_id === c.get("ownerId"))
+    ? revision : null;
+  return c.json({ ok: true, episode: result.episode, persona, row_version: result.row_version });
 });
 
 episodes.patch("/:id", async (c) => {

@@ -156,7 +156,7 @@ export function listEpisodes() {
 }
 
 export function getEpisode(episodeId: string) {
-  return apiFetch<{ episode: Episode; row_version: number }>(
+  return apiFetch<{ episode: Episode; persona: Persona | null; row_version: number }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
   );
 }

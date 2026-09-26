@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import type { Episode } from "@kelvoy/engine";
-import { getEpisode, listDestinations, listPersonas } from "../api/client";
+import { getEpisode, listDestinations } from "../api/client";
 import { useApiResource, usePolledApiResource } from "../hooks/useApiResource";
 import { EPISODE_STATUS_LABELS } from "../labels";
 import { episodeLabel } from "../episode-view";
@@ -17,15 +17,13 @@ import "../review/review.css";
  * 审片台（M2-9/#31，FR-05）。这一页只负责取数据、3 秒轮询、按 status 分发
  * 视图；三个审核点各自的交互都在 frontend/review/ 下。
  *
- * 目的地/角色走已有的列表接口按 id 找（审片台要地标实景图和角色参考图），
- * 不为此加新的单查接口——列表是登录后就要用的数据，多取几条比多一条路由
- * 便宜。
+ * 目的地从共享列表读取；角色由期详情接口按 persona_version 返回不可变
+ * 快照，避免官方角色更新后审片台显示新版本的参考图。
  */
 export default function EpisodeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { loading, data, error, refresh } = usePolledApiResource(() => getEpisode(id!), [id]);
   const destinations = useApiResource(listDestinations, []);
-  const personas = useApiResource(listPersonas, []);
 
   const mutation = useEpisodeMutation(data?.row_version ?? 0, refresh);
 
@@ -36,7 +34,7 @@ export default function EpisodeDetailPage() {
   const episode: Episode = data.episode;
   const destination =
     destinations.data?.destinations.find((d) => d.destination_id === episode.destination_id) ?? null;
-  const persona = personas.data?.personas.find((p) => p.persona_id === episode.persona_id) ?? null;
+  const persona = data.persona;
 
   return (
     <div>

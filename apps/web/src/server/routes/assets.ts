@@ -1,4 +1,4 @@
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { getPersona } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
@@ -28,9 +28,10 @@ const DESTINATION_PREFIX = "dest/";
 const PERSONA_PREFIX = "persona/";
 
 /**
- * 同 episodes.ts 的 resolveArtifactPath：真实 HTTP 上 ".." 早被 URL 解析
- * 规范化掉了，这道检查是给绕过 URL 解析的调用方（未来的非 HTTP 入口、别的
- * runtime）留的兜底，也因此单独导出给测试直接打。
+ * Authorize only a canonical asset key. URL parsers normalize literal dot
+ * segments, but encoded slashes can reach this route as ".." segments after
+ * Hono decodes the parameter. Checking the original prefix while resolving
+ * a different file would expose another account's persona asset.
  */
 export function resolveAssetPath(relativeKey: string | undefined): string | null {
   if (!relativeKey) return null;
@@ -40,6 +41,7 @@ export function resolveAssetPath(relativeKey: string | undefined): string | null
   const root = resolve(projectsRoot());
   const filePath = resolve(join(root, relativeKey));
   if (!filePath.startsWith(root + sep)) return null;
+  if (relative(root, filePath) !== relativeKey) return null;
   return filePath;
 }
 

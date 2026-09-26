@@ -100,6 +100,27 @@ test("serves an official persona reference image to another account", async () =
   expect(await res.text()).toBe("official-bytes");
 });
 
+test("encoded traversal from an official persona cannot read a private persona asset", async () => {
+  const { cookie } = await login("traversal-reader");
+  await insertPersona({ ...personaFixture("c_official", "u_other"), owner_id: null });
+  await insertPersona(personaFixture("c_private", "u_other"));
+  await writeAsset("persona/c_private/front.png", "private-bytes");
+  const res = await buildApp().request(
+    "/api/assets/persona/c_official/..%2F..%2Fpersona/c_private/front.png", { headers: { cookie } },
+  );
+  expect(res.status).toBe(400);
+});
+
+test("encoded traversal from a destination cannot read a private persona asset", async () => {
+  const { cookie } = await login("dest-traversal-reader");
+  await insertPersona(personaFixture("c_private", "u_other"));
+  await writeAsset("persona/c_private/front.png", "private-bytes");
+  const res = await buildApp().request(
+    "/api/assets/dest/..%2Fpersona/c_private/front.png", { headers: { cookie } },
+  );
+  expect(res.status).toBe(400);
+});
+
 test("404s on a persona id that doesn't exist", async () => {
   const { cookie } = await login("dannei");
   await writeAsset("persona/c_missing/front.png", "persona-bytes");
@@ -131,6 +152,8 @@ test("resolveAssetPath blocks traversal out of the projects root", () => {
   expect(resolveAssetPath("/etc/passwd")).toBeNull();
   expect(resolveAssetPath("../projects/dest/x.jpg")).toBeNull();
   expect(resolveAssetPath(undefined)).toBeNull();
+  expect(resolveAssetPath("dest/../persona/c_private/front.png")).toBeNull();
+  expect(resolveAssetPath("persona/c_official/../../persona/c_private/front.png")).toBeNull();
 });
 
 test("resolveAssetPath keeps a legitimate key under the projects root", () => {

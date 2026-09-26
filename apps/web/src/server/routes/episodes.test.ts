@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dequeueTask, insertEpisode, insertPersona, updatePersona, upsertDestination, upsertTemplate, updateUserSettings } from "@kelvoy/store";
 import { expect, test } from "bun:test";
-import type { Episode } from "@kelvoy/engine";
+import type { Episode, Persona } from "@kelvoy/engine";
 import { estimateCost } from "@kelvoy/engine";
 import { resolveArtifactPath } from "./episodes";
 import { setupEpisodeRouteTests, buildApp, destinationFixture, fixture, login, personaFixture, templateFixture, tmpRoot } from "./episode-test-fixtures";
@@ -351,6 +351,31 @@ test("POST lets a logged-in user select an official persona", async () => {
   });
   expect(res.status).toBe(201);
   expect((await res.json() as { episode: Episode }).episode.persona_version).toBe(1);
+});
+
+test("GET episode returns its frozen official persona for review after a catalog update", async () => {
+  const { cookie, ownerId } = await login("frozen-review");
+  await insertPersona({ ...personaFixture("c_official", "u_other"), owner_id: null });
+  await insertEpisode({ ...fixture("e_frozen", ownerId), persona_id: "c_official", persona_version: 1 });
+  await updatePersona("c_official", {
+    name: "新版角色", refs: ["persona/c_official/new.jpg"], style: { lut: "new", title_style: "new" },
+  });
+  const res = await buildApp().request("/api/episodes/e_frozen", { headers: { cookie } });
+  expect(res.status).toBe(200);
+  const body = await res.json() as { episode: Episode; persona: Persona | null };
+  expect(body.persona?.version).toBe(1);
+  expect(body.persona?.name).toBe(personaFixture("c_official", "u_other").name);
+  expect(body.persona?.refs).toEqual(personaFixture("c_official", "u_other").refs);
+  expect(body.persona?.style).toEqual(personaFixture("c_official", "u_other").style);
+});
+
+test("GET episode does not expose another owner's private persona snapshot", async () => {
+  const { cookie, ownerId } = await login("snapshot-isolation");
+  await insertPersona(personaFixture("c_private", "u_other"));
+  await insertEpisode({ ...fixture("e_imported", ownerId), persona_id: "c_private", persona_version: 1 });
+  const res = await buildApp().request("/api/episodes/e_imported", { headers: { cookie } });
+  expect(res.status).toBe(200);
+  expect((await res.json() as { persona: Persona | null }).persona).toBeNull();
 });
 
 test("POST 404s when persona_id doesn't belong to the caller", async () => {
