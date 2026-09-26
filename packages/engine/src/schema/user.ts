@@ -2,9 +2,8 @@ import type { EpisodeMode } from "./episode";
 
 /**
  * M2-15 设置页的"出片默认值"：新建一期表单打开时的预填值（PRD §6、§16、
- * FR-01"缺字段给默认值"/FR-04"每镜 N 候选"）。三项都可缺省——缺省时回落
- * 到 rules/credits.ts 的常量和表单自己的初值，所以没设置过的账号行为跟
- * M2-15 之前完全一样。存在 users 表的一列 JSON 里（不是 localStorage：
+ * FR-01"缺字段给默认值"/FR-04"每镜 N 候选"）。历史 default_mode 可读，
+ * 但新期只按 per_shot 运行。存于 users 表的一列 JSON 里（不是 localStorage：
  * "账号级设置"要跟着账号走，换台机器演示也在）。
  */
 export interface UserSettings {
@@ -12,7 +11,7 @@ export interface UserSettings {
   default_tone?: string;
   /** 缺省时用 rules/credits.ts 的 DEFAULT_CANDIDATES。 */
   default_candidates?: number;
-  /** 缺省时用 per_shot（PRD §4 写明的默认值）。 */
+  /** 历史 grid 值只读；新设置仅可写 per_shot。 */
   default_mode?: EpisodeMode;
 }
 

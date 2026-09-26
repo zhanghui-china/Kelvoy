@@ -48,6 +48,13 @@ afterEach(() => {
 });
 
 describe("GET/PATCH /api/me/settings", () => {
+  test("rejects grid as a newly saved default mode", async () => {
+    const app = buildApp();
+    await seedUser("grid-default", "hunter2");
+    const cookie = await loginCookie(app, "grid-default", "hunter2");
+    const res = await send(app, "PATCH", "/api/me/settings", { default_mode: "grid" }, cookie);
+    expect(res.status).toBe(400);
+  });
   test("refuses both without a session", async () => {
     const app = buildApp();
     expect((await app.request("/api/me/settings")).status).toBe(401);
@@ -69,12 +76,12 @@ describe("GET/PATCH /api/me/settings", () => {
     await seedUser("dannei", "hunter2");
     const cookie = await loginCookie(app, "dannei", "hunter2");
 
-    await send(app, "PATCH", "/api/me/settings", { default_tone: "松弛", default_mode: "grid" }, cookie);
+    await send(app, "PATCH", "/api/me/settings", { default_tone: "松弛", default_mode: "per_shot" }, cookie);
     const res = await send(app, "PATCH", "/api/me/settings", { default_candidates: 3 }, cookie);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
-      settings: { default_tone: "松弛", default_mode: "grid", default_candidates: 3 },
+      settings: { default_tone: "松弛", default_mode: "per_shot", default_candidates: 3 },
     });
   });
 

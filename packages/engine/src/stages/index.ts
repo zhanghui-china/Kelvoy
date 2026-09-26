@@ -33,5 +33,6 @@ export async function runStage(
   shotNo?: number,
   context?: StageContext,
 ): Promise<Episode> {
+  if (episode.mode === "grid") throw new Error("网格模式尚未完成，不能开始生成");
   return stageRunners[name](episode, shotNo, context);
 }

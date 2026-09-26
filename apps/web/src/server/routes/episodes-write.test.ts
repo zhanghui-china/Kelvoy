@@ -5,6 +5,30 @@ import { setupEpisodeRouteTests, buildApp, destinationFixture, fixture, login, p
 
 setupEpisodeRouteTests();
 
+test("legacy grid review actions cannot enqueue new generation", async () => {
+  const { cookie, ownerId } = await login("legacy-grid-actions");
+  const app = buildApp();
+  for (const [suffix, status, path] of [
+    ["continue", "script_review", "continue"],
+    ["recompose", "done", "recompose"],
+    ["regen", "kf_review", "shots/1/regen"],
+    ["report", "kf_review", "shots/1/report-bad"],
+  ] as const) {
+    const episode = fixture(`e_grid_${suffix}`, ownerId);
+    episode.mode = "grid";
+    episode.status = status;
+    episode.shots = [shotFixture(1, { status: "kf_ready", candidates: ["kf/1.png"] })];
+    await insertEpisode(episode);
+    const response = await app.request(`/api/episodes/${episode.episode_id}/${path}`, {
+      method: "POST", headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ row_version: 1 }),
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("grid_unavailable");
+    expect(await dequeueTask()).toBeNull();
+  }
+});
+
 test("PATCH /:id applies a field patch and bumps row_version", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertEpisode(fixture("e_1", ownerId));

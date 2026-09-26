@@ -323,6 +323,9 @@ function validCreateEpisodeRequest() {
 }
 
 describe("validateCreateEpisodeRequest", () => {
+  test("rejects grid for a newly created episode", () => {
+    expect(validateCreateEpisodeRequest({ ...validCreateEpisodeRequest(), mode: "grid" }).valid).toBe(false);
+  });
   test("validates new creation fields at the request boundary", () => {
     const base = validCreateEpisodeRequest();
     expect(validateCreateEpisodeRequest({ ...base, name: "旅途", requirements: "拍全景",
@@ -379,13 +382,16 @@ describe("validateChangePasswordRequest", () => {
 });
 
 describe("validateUserSettingsPatch", () => {
+  test("rejects grid as a new account default", () => {
+    expect(validateUserSettingsPatch({ default_mode: "grid" }).valid).toBe(false);
+  });
   test("accepts an empty patch and a full one", () => {
     expect(validateUserSettingsPatch({}).valid).toBe(true);
     expect(
       validateUserSettingsPatch({
         default_tone: "松弛",
         default_candidates: 3,
-        default_mode: "grid",
+        default_mode: "per_shot",
       }).valid,
     ).toBe(true);
   });

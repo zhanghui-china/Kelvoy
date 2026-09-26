@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   type ContentViolation,
   DEFAULT_CANDIDATES,
-  type EpisodeMode,
   type EpisodeAspect,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
@@ -48,7 +47,7 @@ export default function NewEpisodePage() {
   const [searchParams] = useSearchParams();
   const destinationParam = searchParams.get("destination");
 
-  // M2-15：账号级出片默认值（语气/候选数/关键帧模式）。没设置过的账号回
+  // M2-15：账号级出片默认值（语气/候选数）。没设置过的账号回
   // 空对象，下面的预填就什么都不做，表单保持 M2-15 之前的初值。
   const settingsRes = useApiResource(getMySettings, []);
   const settings = settingsRes.data?.settings ?? null;
@@ -70,7 +69,6 @@ export default function NewEpisodePage() {
   const [banned, setBanned] = useState<string[]>(DEFAULT_BANNED);
   const [bannedInput, setBannedInput] = useState("");
   const [outfitOverride, setOutfitOverride] = useState("");
-  const [mode, setMode] = useState<EpisodeMode>("per_shot");
   const [candidates, setCandidates] = useState<number>(DEFAULT_CANDIDATES);
   const [name, setName] = useState("");
   const [requirements, setRequirements] = useState("");
@@ -85,7 +83,6 @@ export default function NewEpisodePage() {
   useEffect(() => {
     if (!settings) return;
     if (settings.default_tone !== undefined) setTone(settings.default_tone);
-    if (settings.default_mode !== undefined) setMode(settings.default_mode);
     if (settings.default_candidates !== undefined) setCandidates(settings.default_candidates);
   }, [settings]);
 
@@ -123,10 +120,10 @@ export default function NewEpisodePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDestination?.destination_id, seasonMode]);
 
-  // Mode and saved candidate count share the same estimate inputs.
+  // New episodes use the working per-shot mode; candidate count controls the estimate.
   const { data: estimateData, loading: estimateLoading } = useApiResource(
-    () => getEstimate(mode, candidates),
-    [mode, candidates],
+    () => getEstimate("per_shot", candidates),
+    [candidates],
   );
   const estimate = estimateData?.estimate ?? null;
 
@@ -158,7 +155,6 @@ export default function NewEpisodePage() {
       season: season.trim().length > 0 ? season : undefined,
       tone: tone.trim().length > 0 ? tone : undefined,
       banned,
-      mode,
       outfit_override: outfitOverride.trim().length > 0 ? outfitOverride : undefined,
     });
     setSubmitting(false);
@@ -357,30 +353,6 @@ export default function NewEpisodePage() {
               ))}
             </select>
           </label>
-
-          <fieldset className="k-field k-brief-mode">
-            <legend>关键帧模式</legend>
-            <label className="k-brief-radio">
-              <input
-                type="radio"
-                name="mode"
-                value="per_shot"
-                checked={mode === "per_shot"}
-                onChange={() => setMode("per_shot")}
-              />
-              逐镜生成（默认）—— 质量高、可控，图片调用量 ×2
-            </label>
-            <label className="k-brief-radio">
-              <input
-                type="radio"
-                name="mode"
-                value="grid"
-                checked={mode === "grid"}
-                onChange={() => setMode("grid")}
-              />
-              网格直出 —— 省一步、更便宜，分辨率受限
-            </label>
-          </fieldset>
 
           <div className="k-field">
             画幅

@@ -15,6 +15,32 @@ test("requires login", async () => {
   expect(res.status).toBe(401);
 });
 
+test("POST rejects grid before any foreign-key lookup", async () => {
+  const { cookie } = await login("grid-request");
+  const res = await buildApp().request("/api/episodes", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ persona_id: "missing", destination_id: "missing",
+      template_id: "missing", mode: "grid" }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("legacy grid episode remains readable and its existing artifact downloadable", async () => {
+  const { cookie, ownerId } = await login("legacy-grid");
+  const old = fixture("e_grid", ownerId);
+  old.mode = "grid";
+  await insertEpisode(old);
+  await mkdir(join(tmpRoot, "projects", "e_grid", "final"), { recursive: true });
+  await writeFile(join(tmpRoot, "projects", "e_grid", "final", "e_grid.mp4"), "old-video");
+  const app = buildApp();
+  const loaded = await app.request("/api/episodes/e_grid", { headers: { cookie } });
+  expect(loaded.status).toBe(200);
+  expect((await loaded.json()).episode.mode).toBe("grid");
+  const media = await app.request("/api/episodes/e_grid/files/final/e_grid.mp4", { headers: { cookie } });
+  expect(media.status).toBe(200);
+  expect(await media.text()).toBe("old-video");
+});
+
 test("lists only the logged-in user's own episodes", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertEpisode(fixture("e_mine", ownerId));
@@ -194,7 +220,7 @@ test("POST honors an explicit season/tone/banned/mode over the defaults", async 
       season: "春",
       tone: "松弛",
       banned: ["真人"],
-      mode: "grid",
+      mode: "per_shot",
       outfit_override: "冲锋衣",
     }),
   });
@@ -209,9 +235,8 @@ test("POST honors an explicit season/tone/banned/mode over the defaults", async 
     outfit_override: "冲锋衣",
     banned: ["真人"],
   });
-  expect(body.episode.mode).toBe("grid");
-  // grid 模式关键帧成本打五折，估价应该比默认 per_shot 低。
-  expect(body.episode.estimated_credits).toBe(estimateCost({ mode: "grid" }).estimated_credits);
+  expect(body.episode.mode).toBe("per_shot");
+  expect(body.episode.estimated_credits).toBe(estimateCost({ mode: "per_shot" }).estimated_credits);
 });
 
 test("GET /estimate returns a cost estimate for a given mode without touching the db", async () => {
@@ -223,11 +248,6 @@ test("GET /estimate returns a cost estimate for a given mode without touching th
   const perShotBody = (await perShotRes.json()) as { ok: boolean; estimate: unknown };
   expect(perShotBody.estimate).toEqual(estimateCost({ mode: "per_shot" }));
 
-  const gridRes = await app.request("/api/episodes/estimate?mode=grid", { headers: { cookie } });
-  const gridBody = (await gridRes.json()) as { estimate: { gpu_minutes: number } };
-  expect(gridBody.estimate.gpu_minutes).toBeLessThan(
-    (perShotBody.estimate as { gpu_minutes: number }).gpu_minutes,
-  );
 });
 
 test("GET /estimate takes the candidate count from the query (M2-15 出片默认值)", async () => {
@@ -248,9 +268,9 @@ test("GET /estimate takes the candidate count from the query (M2-15 出片默认
   expect((await noCandidates.json()).estimate).toEqual(estimateCost({ mode: "per_shot" }));
 });
 
-test("saved account candidate count is used for estimate and creation when omitted", async () => {
+test("saved candidate count is used while a legacy grid default is ignored", async () => {
   const { cookie, ownerId } = await login("saved-candidates");
-  await updateUserSettings(ownerId, { default_candidates: 1 });
+  await updateUserSettings(ownerId, { default_candidates: 1, default_mode: "grid" });
   await insertPersona(personaFixture("c_1", ownerId));
   await upsertDestination(destinationFixture("d_1"));
   await upsertTemplate(templateFixture("t_1"));
@@ -261,7 +281,9 @@ test("saved account candidate count is used for estimate and creation when omitt
     method: "POST", headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ persona_id: "c_1", destination_id: "d_1", template_id: "t_1" }),
   });
-  expect((await created.json()).episode.candidate_count).toBe(1);
+  const saved = (await created.json()).episode as Episode;
+  expect(saved.candidate_count).toBe(1);
+  expect(saved.mode).toBe("per_shot");
 });
 
 test("GET /estimate rejects a candidate count outside 1–3", async () => {
@@ -285,6 +307,8 @@ test("GET /estimate rejects a missing or invalid mode", async () => {
 
   const invalid = await app.request("/api/episodes/estimate?mode=widescreen", { headers: { cookie } });
   expect(invalid.status).toBe(400);
+  const grid = await app.request("/api/episodes/estimate?mode=grid", { headers: { cookie } });
+  expect(grid.status).toBe(400);
 });
 
 test("GET /estimate requires login", async () => {

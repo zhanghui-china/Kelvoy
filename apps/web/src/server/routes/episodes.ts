@@ -66,12 +66,12 @@ episodes.post("/", async (c) => {
   if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
   if (!template) return c.json({ ok: false, error: "template_not_found" }, 404);
 
-  // FR-01"缺字段给默认值"：mode 的默认值(per_shot)是 PRD §6 原文写明的；
+  // FR-01"缺字段给默认值"：新期仅开放 per_shot；
   // series_id/season/tone/banned 没有 PRD 原文默认值可抄，这里按合理取舍
   // 补：series_id 缺省时 1 目的地 = 1 系列(PRD 没有定义"系列"怎么分组多个
   // 目的地，等以后真需要跨目的地系列时再改)；season 缺省取目的地的
   // season_best 第一项，没有就空字符串；tone/banned 缺省给空。
-  const mode = req.mode ?? "per_shot";
+  const mode = "per_shot";
   const aspect = req.aspect ?? "9:16";
   const candidateCount = req.candidate_count ?? user?.settings.default_candidates ?? 3;
   const episode: Episode = {
@@ -89,7 +89,7 @@ episodes.post("/", async (c) => {
     candidate_count: candidateCount,
     created_at: new Date().toISOString(),
     // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
-    // 镜数/候选数常量（credits.ts，M0-6 占位），只有 mode 是真实输入。
+    // 镜数常量（credits.ts，M0-6 占位）；候选数取本期保存的值。
     estimated_credits: estimateCost({ mode, candidates: candidateCount }).estimated_credits,
     credits_used: 0,
     share: { enabled: false, slug: "" },
@@ -128,7 +128,7 @@ episodes.post("/", async (c) => {
 // "/:id" 之前，否则 Hono 会把 "estimate" 当成 :id 匹配掉。
 episodes.get("/estimate", async (c) => {
   const mode = c.req.query("mode");
-  if (mode !== "per_shot" && mode !== "grid") {
+  if (mode !== "per_shot") {
     return c.json({ ok: false, error: "invalid_mode" }, 400);
   }
 

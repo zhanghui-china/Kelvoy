@@ -175,6 +175,7 @@ const REVIEW_GATE_ADVANCE: Partial<Record<EpisodeStatus, { stage: StageName; per
 review.post("/:id/continue", async (c) => {
   const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.mode === "grid") return c.json({ ok: false, error: "grid_unavailable" }, 400);
 
   const body = await c.req.json().catch(() => null);
   const rowVersion = parseRowVersion(body);
@@ -218,6 +219,7 @@ review.post("/:id/shots/:no/regen", async (c) => {
   const shotNo = Number(c.req.param("no"));
   const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.mode === "grid") return c.json({ ok: false, error: "grid_unavailable" }, 400);
 
   const shot = loaded.episode.shots.find((s) => s.no === shotNo);
   if (!shot) return c.json({ ok: false, error: "not_found" }, 404);
@@ -270,6 +272,7 @@ review.post("/:id/recompose", async (c) => {
   const episodeId = c.req.param("id");
   const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.mode === "grid") return c.json({ ok: false, error: "grid_unavailable" }, 400);
 
   // patchEpisode 的合法性检查只问"能不能转到 composing"，clip_review 通过
   // /continue 也能到 composing——这里要求必须来自 done，否则会和 /continue
@@ -294,6 +297,7 @@ review.post("/:id/shots/:no/report-bad", async (c) => {
   const shotNo = Number(c.req.param("no"));
   const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.mode === "grid") return c.json({ ok: false, error: "grid_unavailable" }, 400);
 
   const shot = loaded.episode.shots.find((s) => s.no === shotNo);
   if (!shot) return c.json({ ok: false, error: "not_found" }, 404);

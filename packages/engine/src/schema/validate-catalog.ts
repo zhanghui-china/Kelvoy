@@ -1,13 +1,11 @@
 import type { ChangePasswordRequest, CreateEpisodeRequest, CreatePersonaRequest, CreateTemplateRequest, LoginRequest, PersonaPatch } from "./api";
 import type { DestinationType } from "./destination";
-import type { EpisodeMode } from "./episode";
 import type { Persona, PersonaStyle } from "./persona";
 import type { Template } from "./template";
 import { SETTINGS_CANDIDATES_MAX, SETTINGS_CANDIDATES_MIN, type UserSettings } from "./user";
 import type { ValidationResult } from "./validate";
-import { isFiniteNumber, isNonEmptyString, isOneOf, isPlainObject, isStringArray } from "./validation-primitives";
+import { isFiniteNumber, isNonEmptyString, isPlainObject, isStringArray } from "./validation-primitives";
 
-const EPISODE_MODES: EpisodeMode[] = ["per_shot", "grid"];
 const DESTINATION_TYPES: DestinationType[] = ["mountain_summit", "city_night", "theme_town", "scenic_area", "water_town", "island"];
 
 /** Validates a LoginRequest (apps/web's POST /api/auth/login). */
@@ -189,8 +187,8 @@ export function validateCreateEpisodeRequest(input: unknown): ValidationResult<C
   if ("season" in r && !isNonEmptyString(r.season)) errors.push("season: 必须是非空字符串");
   if ("tone" in r && !isNonEmptyString(r.tone)) errors.push("tone: 必须是非空字符串");
   if ("banned" in r && !isStringArray(r.banned)) errors.push("banned: 必须是字符串数组");
-  if ("mode" in r && !EPISODE_MODES.includes(r.mode as EpisodeMode)) {
-    errors.push(`mode: 必须是 ${EPISODE_MODES.join(" / ")} 之一`);
+  if ("mode" in r && r.mode !== "per_shot") {
+    errors.push("mode: 新建期只支持 per_shot");
   }
   if ("outfit_override" in r && !isNonEmptyString(r.outfit_override)) {
     errors.push("outfit_override: 必须是非空字符串");
@@ -246,8 +244,8 @@ export function validateUserSettingsPatch(input: unknown): ValidationResult<User
       `default_candidates: 必须是 ${SETTINGS_CANDIDATES_MIN}–${SETTINGS_CANDIDATES_MAX} 的整数`,
     );
   }
-  if ("default_mode" in s && !isOneOf(s.default_mode, EPISODE_MODES)) {
-    errors.push(`default_mode: 必须是 ${EPISODE_MODES.join(" / ")} 之一`);
+  if ("default_mode" in s && s.default_mode !== "per_shot") {
+    errors.push("default_mode: 只支持 per_shot");
   }
 
   if (errors.length > 0) return { valid: false, errors };
