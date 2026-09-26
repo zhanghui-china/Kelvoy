@@ -13,7 +13,8 @@ me.use("*", requireOwner);
 me.get("/", async (c) => {
   const user = await getUserById(c.get("ownerId"));
   if (!user) return c.json({ ok: false, error: "unauthorized" }, 401);
-  return c.json({ ok: true, user: { user_id: user.user_id, username: user.username } });
+  return c.json({ ok: true, user: { user_id: user.user_id, username: user.username },
+    balance: getCreditBalance(user.user_id) });
 });
 
 me.get("/settings", async (c) => {

@@ -73,14 +73,18 @@ describe("GET/PATCH /api/me/settings", () => {
     const app = buildApp();
     await seedUser("first", "hunter2");
     await seedUser("second", "hunter2");
+    const firstUser = await getUserByUsername("first");
+    grantCredits(firstUser!.user_id, 100_000, "sidebar-first");
     expect((await app.request("/api/me")).status).toBe(401);
     const firstCookie = await loginCookie(app, "first", "hunter2");
     const secondCookie = await loginCookie(app, "second", "hunter2");
-    const first = await (await app.request("/api/me", { headers: { cookie: firstCookie } })).json() as { user: { user_id: string; username: string } };
-    const second = await (await app.request("/api/me", { headers: { cookie: secondCookie } })).json() as { user: { user_id: string; username: string } };
+    const first = await (await app.request("/api/me", { headers: { cookie: firstCookie } })).json() as { user: { user_id: string; username: string }; balance: { available: number; reserved: number } };
+    const second = await (await app.request("/api/me", { headers: { cookie: secondCookie } })).json() as { user: { user_id: string; username: string }; balance: { available: number; reserved: number } };
     expect(first.user.username).toBe("first");
     expect(second.user.username).toBe("second");
     expect(first.user.user_id).not.toBe(second.user.user_id);
+    expect(first.balance).toEqual({ available: 100_000, reserved: 0 });
+    expect(second.balance).toEqual({ available: 0, reserved: 0 });
   });
   test("rejects grid as a newly saved default mode", async () => {
     const app = buildApp();

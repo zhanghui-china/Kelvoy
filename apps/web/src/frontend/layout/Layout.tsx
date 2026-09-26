@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { logout } from "../api/client";
 import { clearDraft } from "../pages/episode-draft";
+import AccountSummary from "./AccountSummary";
 import {
   DestinationIcon,
   HomeIcon,
@@ -29,26 +30,12 @@ const NAV_ITEMS = [
   { to: "/help", label: "帮助", Icon: HelpIcon },
 ];
 
-function readStoredUsername(): string | null {
-  try {
-    return localStorage.getItem("kelvoy_username");
-  } catch {
-    return null;
-  }
-}
-
 export default function Layout() {
-  const [username] = useState(readStoredUsername);
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleLogout() {
     await logout();
     clearDraft();
-    try {
-      localStorage.removeItem("kelvoy_username");
-    } catch {
-      // 同上，隐私模式下清不掉也无所谓——session cookie 才是真正的凭据。
-    }
     window.location.assign("/login");
   }
 
@@ -88,12 +75,7 @@ export default function Layout() {
           ))}
         </div>
         <span className="k-sidebar-spacer" />
-        {username && (
-          <div className="k-sidebar-account">
-            <span className="k-sidebar-account-label">当前账号</span>
-            <span className="k-sidebar-account-name">{username}</span>
-          </div>
-        )}
+        <AccountSummary />
         <button type="button" className="k-btn k-sidebar-logout" onClick={handleLogout}>
           <LogoutIcon size={18} />
           退出登录

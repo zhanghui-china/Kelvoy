@@ -94,7 +94,7 @@ export function logout() {
 }
 
 export function getMe() {
-  return apiFetch<{ user: AuthedUser }>("/api/me");
+  return apiFetch<{ user: AuthedUser; balance: { available: number; reserved: number } }>("/api/me");
 }
 
 // M2-15 (#43) 设置页：当前登录账号自己的出片默认值 + 改密码。路由前缀
