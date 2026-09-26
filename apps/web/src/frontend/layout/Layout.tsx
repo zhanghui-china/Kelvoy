@@ -38,6 +38,7 @@ function readStoredUsername(): string | null {
 
 export default function Layout() {
   const [username] = useState(readStoredUsername);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleLogout() {
     await logout();
@@ -51,22 +52,36 @@ export default function Layout() {
 
   return (
     <div className="k-shell">
-      <nav className="k-sidebar">
-        <div className="k-sidebar-brand">
-          <LogoMark size={24} />
-          Kelvoy
-        </div>
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/episodes"}
-            className={({ isActive }) => `k-sidebar-link${isActive ? " active" : ""}`}
+      <nav className={`k-sidebar${menuOpen ? " k-sidebar-open" : ""}`} aria-label="工作台导航">
+        <div className="k-sidebar-header">
+          <div className="k-sidebar-brand">
+            <LogoMark size={24} />
+            Kelvoy
+          </div>
+          <button
+            type="button"
+            className="k-sidebar-menu"
+            aria-controls="workspace-navigation"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            <item.Icon size={20} />
-            {item.label}
-          </NavLink>
-        ))}
+            {menuOpen ? "收起菜单" : "菜单"}
+          </button>
+        </div>
+        <div className="k-sidebar-links" id="workspace-navigation">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/episodes"}
+              className={({ isActive }) => `k-sidebar-link${isActive ? " active" : ""}`}
+              onClick={() => setMenuOpen(false)}
+            >
+              <item.Icon size={20} />
+              {item.label}
+            </NavLink>
+          ))}
+        </div>
         <span className="k-sidebar-spacer" />
         {username && (
           <div className="k-sidebar-account">
