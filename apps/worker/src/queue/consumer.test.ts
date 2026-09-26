@@ -13,6 +13,8 @@ import {
   upsertDestination,
   updatePersona,
   submitScriptAction,
+  grantCredits,
+  getDb,
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { buildStageContext, consumeLoop, handleTask } from "./consumer";
@@ -112,6 +114,8 @@ test("failed script optimization preserves the original and clears its pending m
   const episode = { ...fixtureEpisode("e_revision"), status: "script_review" as const,
     shots: [shotFixture()] };
   await insertEpisode(episode);
+  getDb().query("insert into users (user_id, username, password_hash) values ('u_test', 'tester', 'hash')").run();
+  grantCredits("u_test", 3, "grant-revision");
   await upsertDestination(destinationFixture("d_test"));
   const submitted = submitScriptAction({ episode_id: episode.episode_id, owner_id: episode.owner_id,
     row_version: 1, operation: "script_optimize", instruction: "突出夜景" });

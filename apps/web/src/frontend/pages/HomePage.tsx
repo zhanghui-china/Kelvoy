@@ -103,7 +103,7 @@ export default function HomePage() {
 
       <section className="k-home-section k-home-week" aria-label="本周实际记录">
         <div className="k-home-section-head"><div><div className="k-eyebrow">数据概览</div><h2>本周记录</h2></div><Link to="/usage" className="k-home-section-more">查看用量 →</Link></div>
-        <div className="k-home-week-grid"><div className="k-card"><div className="k-home-stat-value">{stats.doneEpisodes}</div><div className="k-card-meta">本周完成期数</div></div><div className="k-card"><div className="k-home-stat-value">{stats.gpuMinutes}</div><div className="k-card-meta">本周记录的成本等价值</div></div><div className="k-card"><div className="k-home-stat-value">{stats.approvedShots}</div><div className="k-card-meta">本周通过的镜数</div></div></div>
+        <div className="k-home-week-grid"><div className="k-card"><div className="k-home-stat-value">{stats.doneEpisodes}</div><div className="k-card-meta">本周完成期数</div></div><div className="k-card"><div className="k-home-stat-value">{stats.gpuMinutes}</div><div className="k-card-meta">本周已用积分</div></div><div className="k-card"><div className="k-home-stat-value">{stats.approvedShots}</div><div className="k-card-meta">本周通过的镜数</div></div></div>
       </section>
     </div>
   );

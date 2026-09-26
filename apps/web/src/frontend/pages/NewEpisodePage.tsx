@@ -294,7 +294,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
           </details>
           {violations && violations.length > 0 && <ul className="k-error" role="alert">{violations.map((v) => <li key={`${v.field}-${v.term}`}>以下内容不允许出现：{v.field}: {v.term}</li>)}</ul>}
           {formErrors && <ul className="k-error" role="alert">{formErrors.map((err) => <li key={err}>{err}</li>)}</ul>}
-          <div className="k-create-submit"><span className="k-brief-estimate">{estimateLoading || !estimate ? "预估中…" : <>预估：约 <span className="k-mono">{Math.round(estimate.gpu_minutes)}</span> GPU 分钟（M0 前占位估算）</>}</span><button type="submit" className="k-btn k-btn-primary" disabled={submitting}>{submitting ? "创建中…" : "创建这一期"}</button></div>
+          <div className="k-create-submit"><span className="k-brief-estimate">{estimateLoading || !estimate ? "预估中…" : <>预计完整创作 <span className="k-mono">{estimateData?.credit_quote}</span> 积分 · 约 {Math.round(estimate.gpu_minutes)} GPU 分钟</>}</span><button type="submit" className="k-btn k-btn-primary" disabled={submitting}>{submitting ? "创建中…" : "创建这一期"}</button></div>
         </div>
         <aside className="k-card k-create-personas">
           <div className="k-create-panel-heading"><span className="k-create-step">02</span><div><h2>选择出镜角色</h2><p>角色形象在多期作品中保持一致</p></div></div>

@@ -12,7 +12,7 @@ export function episodeLabel(e: Episode): string {
 export interface WeekStats {
   /** 本周创建、且已经走到 done 的期数。 */
   doneEpisodes: number;
-  /** 本周创建的期的 credits_used 之和（§6：当前阶段填的是成本等价值）。 */
+  /** 本周创建的期的积分消耗之和。 */
   gpuMinutes: number;
   /** 本周创建的期里，status 为 approved 的镜数。 */
   approvedShots: number;

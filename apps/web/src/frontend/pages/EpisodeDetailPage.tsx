@@ -50,8 +50,7 @@ export default function EpisodeDetailPage() {
         <span className="k-card-meta">
           目的地：{destination ? `${destination.city} · ${destination.name}` : episode.destination_id}
         </span>
-        {/* FR-09/FR-11 当前阶段口径：只说"预估 GPU 分钟"，不做积分余额、不做扣减动画。 */}
-        <span className="k-card-meta">预估：约 {episode.estimated_credits} GPU 分钟</span>
+        <span className="k-card-meta">预计完整创作：{episode.estimated_credits} 积分</span>
         <span className="k-card-meta">{episode.shots.length} 镜 · 每 3 秒自动刷新</span>
       </div>
 

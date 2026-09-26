@@ -1,4 +1,4 @@
-import { mkdir, copyFile } from "node:fs/promises";
+import { mkdir, copyFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 /**
@@ -22,7 +22,13 @@ export async function saveArtifact(
 ): Promise<string> {
   const destPath = join(projectsRoot(), episodeId, relativeKey);
   await mkdir(dirname(destPath), { recursive: true });
-  await copyFile(sourcePath, destPath);
+  const tempPath = `${destPath}.tmp-${crypto.randomUUID()}`;
+  try {
+    await copyFile(sourcePath, tempPath);
+    await rename(tempPath, destPath);
+  } finally {
+    await rm(tempPath, { force: true });
+  }
   return destPath;
 }
 

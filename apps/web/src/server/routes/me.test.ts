@@ -1,4 +1,4 @@
-import { close, createUser, getUserByUsername, open } from "@kelvoy/store";
+import { close, createUser, getUserByUsername, grantCredits, open } from "@kelvoy/store";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import auth from "./auth";
@@ -45,6 +45,27 @@ beforeEach(() => {
 
 afterEach(() => {
   close();
+});
+
+test("credit balance and ledger belong only to the signed-in account", async () => {
+  const app = buildApp();
+  await seedUser("first", "hunter2");
+  await seedUser("second", "hunter2");
+  const first = await getUserByUsername("first");
+  grantCredits(first!.user_id, 7, "grant-first");
+  expect((await app.request("/api/me/credits")).status).toBe(401);
+  const secondCookie = await loginCookie(app, "second", "hunter2");
+  const second = await (await app.request("/api/me/credits", { headers: { cookie: secondCookie } })).json() as {
+    balance: { available: number }; ledger: unknown[];
+  };
+  expect(second.balance.available).toBe(0);
+  expect(second.ledger).toHaveLength(0);
+  const firstCookie = await loginCookie(app, "first", "hunter2");
+  const mine = await (await app.request("/api/me/credits", { headers: { cookie: firstCookie } })).json() as {
+    balance: { available: number }; ledger: unknown[];
+  };
+  expect(mine.balance.available).toBe(7);
+  expect(mine.ledger).toHaveLength(1);
 });
 
 describe("GET/PATCH /api/me/settings", () => {

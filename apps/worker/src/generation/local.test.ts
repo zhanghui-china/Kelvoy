@@ -55,6 +55,27 @@ test("image adapter sends a wide request when the episode is wide", async () => 
   expect(size).toBe("16:9");
 });
 
+test("retry reuses a completed candidate and only requests the missing one", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-generate-retry-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  await writeFile(join(root, "inference", "image", "result.png"), "generated image");
+  let calls = 0;
+  const provider = createLocalGenerationProviders(async () => {
+    calls++;
+    if (calls === 2) throw new Error("temporary failure");
+    return { ok: true, response: { paths: ["inference/image/result.png"],
+      model: "Qwen", version: "v1", seed: 42, seconds: 1 } };
+  }).keyframe;
+  const first = { episode_id: "e1", shot_no: 1, candidate_no: 0, prompt: "街景",
+    refs: [], seed: 42, generation_id: "task-retry" };
+  await provider.generate(first);
+  await expect(provider.generate({ ...first, candidate_no: 1 })).rejects.toThrow("temporary failure");
+  await provider.generate(first);
+  await provider.generate({ ...first, candidate_no: 1 });
+  expect(calls).toBe(3);
+});
+
 test("video adapter rejects a keyframe path escaping the episode directory", async () => {
   root = await mkdtemp(join(tmpdir(), "kelvoy-generate-"));
   process.env.KELVOY_PROJECTS_ROOT = root;

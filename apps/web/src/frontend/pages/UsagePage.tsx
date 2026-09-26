@@ -5,6 +5,7 @@ import type { ProviderTally } from "../review/tally";
 import { tally } from "../review/tally";
 import "../review/review.css";
 import "./UsagePage.css";
+import CreditPanel from "./CreditPanel";
 
 // 期的 created_at 是唯一记录在 Episode 上的时间戳（PRD v0.2 §6 没有
 // completed_at/updated_at 字段），所以"按期"表格显示的是创建时间，不是
@@ -57,6 +58,7 @@ export default function UsagePage() {
       <div>
         <div className="k-eyebrow">账号级成本聚合</div>
         <h1>用量</h1>
+        <CreditPanel />
         <p className="k-empty">还没有出片记录。</p>
       </div>
     );
@@ -82,10 +84,12 @@ export default function UsagePage() {
       <div className="k-eyebrow">账号级成本聚合</div>
       <h1>用量</h1>
 
+      <CreditPanel />
+
       <div className="k-usage-totals">
         <div className="k-card">
           <div className="k-usage-total-value k-mono">{totalCredits}</div>
-          <div className="k-card-meta">总 GPU 分钟</div>
+          <div className="k-card-meta">已用积分</div>
         </div>
         <div className="k-card">
           <div className="k-usage-total-value k-mono">{totalCost.toFixed(4)}</div>
@@ -107,7 +111,7 @@ export default function UsagePage() {
                 <th>角色</th>
                 <th>创建时间</th>
                 <th>镜数</th>
-                <th>GPU 分钟</th>
+                <th>已用积分</th>
                 <th>API 费用 (USD)</th>
               </tr>
             </thead>

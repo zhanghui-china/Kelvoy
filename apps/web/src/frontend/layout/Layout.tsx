@@ -16,9 +16,7 @@ import {
   WorksIcon,
 } from "../icons";
 
-// 侧栏 8 项（M2-12, #40 把 5 项扩到 7 项；M2-14, #42 把完整作品列表从首页
-// 拆出来后再加一项"我的作品"）。label 用"用量"而不是"积分与用量"：PRD §14
-// 明确这一版不做积分/余额，导航里出现"积分"会让人以为有充值体系（#44）。
+// 积分由团队发放，与 GPU 用量分开展示；此处没有购买入口。
 const NAV_ITEMS = [
   { to: "/episodes", label: "首页", Icon: HomeIcon },
   { to: "/episodes/new", label: "新建一期", Icon: NewEpisodeIcon },
@@ -26,7 +24,7 @@ const NAV_ITEMS = [
   { to: "/personas", label: "角色", Icon: PersonaIcon },
   { to: "/destinations", label: "目的地库", Icon: DestinationIcon },
   { to: "/templates", label: "模板中心", Icon: TemplateIcon },
-  { to: "/usage", label: "用量", Icon: UsageIcon },
+  { to: "/usage", label: "积分与用量", Icon: UsageIcon },
   { to: "/settings", label: "设置", Icon: SettingsIcon },
   { to: "/help", label: "帮助", Icon: HelpIcon },
 ];

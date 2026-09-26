@@ -84,8 +84,8 @@ export default function DoneView({
       <div className="k-card">
         <div className="k-card-title">成本报告</div>
         <div className="k-card-meta">
-          预估 <span className="k-mono">{episode.estimated_credits}</span> GPU 分钟 · 实际用掉{" "}
-          <span className="k-mono">{episode.credits_used}</span> GPU 分钟
+          预估 <span className="k-mono">{episode.estimated_credits}</span> 积分 · 实际用掉{" "}
+          <span className="k-mono">{episode.credits_used}</span> 积分
         </div>
         {rows.length === 0 ? (
           <p className="k-empty">还没有模型调用记录。</p>

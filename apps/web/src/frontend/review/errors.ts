@@ -14,6 +14,7 @@ const ERROR_LABELS: Record<string, string> = {
   invalid_body: "请求格式不对",
   invalid_instruction: "请填写 500 字以内的优化指令",
   action_pending: "脚本任务正在处理，请等待完成",
+  insufficient_credits: "积分不足，请联系团队发放额度",
   network_error: "网络不通，稍后再试",
   invalid_response: "服务端返回了无法解析的内容",
 };

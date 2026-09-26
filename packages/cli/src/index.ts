@@ -12,6 +12,7 @@
  *   kelvoy set-password <username> <password>
  */
 import type { StageName } from "@kelvoy/engine";
+import { getUserByUsername, grantCredits, setCreditPrice, type CreditKind } from "@kelvoy/store";
 import { createUserAccount } from "./create-user";
 import { importDestination } from "./import-destination";
 import { importEpisode } from "./import-episode";
@@ -31,6 +32,8 @@ function usage(): never {
   console.error("  kelvoy seed-catalog");
   console.error("  kelvoy create-user <username> <password>");
   console.error("  kelvoy set-password <username> <password>");
+  console.error("  kelvoy grant-credits <username> <amount> <grant-id>");
+  console.error("  kelvoy set-credit-price <script|image|video|compose> <price>");
   process.exit(1);
 }
 
@@ -133,6 +136,23 @@ async function runSetPassword(argv: string[]): Promise<void> {
   console.log(`密码已更新：${username}`);
 }
 
+async function runGrantCredits(argv: string[]): Promise<void> {
+  const [username, amountText, grantId] = argv;
+  if (!username || !amountText || !grantId) usage();
+  const user = await getUserByUsername(username);
+  if (!user) throw new Error(`账号不存在：${username}`);
+  const result = grantCredits(user.user_id, Number(amountText), grantId);
+  if (!result.ok) throw new Error(`积分发放失败：${result.error}`);
+  console.log(`${username} 可用积分 ${result.balance.available}，预留 ${result.balance.reserved}${result.repeated ? "（重复请求，未再次发放）" : ""}`);
+}
+
+function runSetCreditPrice(argv: string[]): void {
+  const [kind, priceText] = argv;
+  if (!kind || !priceText || !["script", "image", "video", "compose"].includes(kind)) usage();
+  setCreditPrice(kind as CreditKind, Number(priceText));
+  console.log(`${kind} 单价已更新为 ${priceText} 积分`);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   switch (command) {
@@ -155,6 +175,10 @@ async function main() {
       return runCreateUser(rest);
     case "set-password":
       return runSetPassword(rest);
+    case "grant-credits":
+      return runGrantCredits(rest);
+    case "set-credit-price":
+      return runSetCreditPrice(rest);
     default:
       usage();
   }

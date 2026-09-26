@@ -1,11 +1,41 @@
 import { createHash } from "node:crypto";
-import { readFile, realpath } from "node:fs/promises";
+import { readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { localImageRequest, localVideoRequest, type StageContext } from "@kelvoy/engine";
 import { callInference } from "../inference-client";
-import { saveArtifact } from "../storage/artifacts";
+import { artifactPath, saveArtifact } from "../storage/artifacts";
 
 type InferenceCall = typeof callInference;
+type CachedAsset = { key: string; model: string; version: string;
+  seed: number; seconds: number; ref_hashes: string[] };
+
+function requestHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+async function readCached(episodeId: string, key: string, hash: string): Promise<CachedAsset | null> {
+  try {
+    const meta = JSON.parse(await readFile(`${artifactPath(episodeId, key)}.meta.json`, "utf8")) as
+      CachedAsset & { request_hash: string };
+    const file = await stat(artifactPath(episodeId, key));
+    return meta.request_hash === hash && meta.key === key && file.size > 0 ? meta : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveCached(episodeId: string, key: string, source: string,
+  hash: string, asset: CachedAsset): Promise<void> {
+  await saveArtifact(episodeId, key, source);
+  const path = `${artifactPath(episodeId, key)}.meta.json`;
+  const temporary = `${path}.tmp-${crypto.randomUUID()}`;
+  try {
+    await writeFile(temporary, JSON.stringify({ ...asset, request_hash: hash }));
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
 
 function projectsRoot(): string {
   return resolve(process.env.KELVOY_PROJECTS_ROOT ?? "projects");
@@ -59,11 +89,15 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       safeId(input.generation_id);
       if (!Number.isInteger(input.candidate_no) || input.candidate_no < 0) throw new Error("invalid candidate index");
       const hashes = await Promise.all(input.refs.map(hashKey));
-      const response = await requestOne(call, "/image/", localImageRequest(input));
       const key = `kf/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}_${input.candidate_no}.png`;
-      await saveArtifact(input.episode_id, key, response.source);
-      return { key, model: response.model, version: response.version,
+      const fingerprint = requestHash({ input, hashes });
+      const cached = await readCached(input.episode_id, key, fingerprint);
+      if (cached) return cached;
+      const response = await requestOne(call, "/image/", localImageRequest(input));
+      const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
+      await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+      return asset;
     } },
     video: { async generate(input) {
       safeId(input.episode_id);
@@ -71,14 +105,18 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       if (!input.keyframe.startsWith("kf/")) throw new Error("invalid keyframe path");
       const frameKey = `${input.episode_id}/${input.keyframe}`;
       const hash = await hashKey(frameKey);
+      const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}.mp4`;
+      const fingerprint = requestHash({ input, hash });
+      const cached = await readCached(input.episode_id, key, fingerprint);
+      if (cached) return cached;
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, first_frame: frameKey,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
       }));
-      const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}.mp4`;
-      await saveArtifact(input.episode_id, key, response.source);
-      return { key, model: response.model, version: response.version,
+      const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: [hash] };
+      await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+      return asset;
     } },
   };
 }

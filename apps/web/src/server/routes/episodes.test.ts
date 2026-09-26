@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { dequeueTask, insertEpisode, insertPersona, updatePersona, upsertDestination, upsertTemplate, updateUserSettings } from "@kelvoy/store";
+import { dequeueTask, estimateCreditQuote, getCreditBalance, insertEpisode, insertPersona, updatePersona, upsertDestination, upsertTemplate, updateUserSettings } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode, Persona } from "@kelvoy/engine";
 import { estimateCost } from "@kelvoy/engine";
@@ -150,7 +150,7 @@ test("POST creates a fixed-cut draft with intro/outro off and enqueues a brief t
   expect(episode.mode).toBe("per_shot"); // FR-01: 默认逐镜
   expect(episode.cut_policy).toBe("fixed_1s");
   // FR-01/FR-09 粗估：建期这一刻没有真实镜数，estimateCost 用它的默认常量。
-  expect(episode.estimated_credits).toBe(estimateCost({ mode: "per_shot" }).estimated_credits);
+  expect(episode.estimated_credits).toBe(estimateCreditQuote(3));
   expect(episode.estimated_credits).toBeGreaterThan(0);
   expect(episode.render.intro).toBeNull();
   expect(episode.render.outro).toBeNull();
@@ -160,6 +160,21 @@ test("POST creates a fixed-cut draft with intro/outro off and enqueues a brief t
   const task = await dequeueTask();
   expect(task?.episode_id).toBe(episode.episode_id);
   expect(task?.stage).toBe("brief");
+});
+
+test("POST blocks an unfunded account before creating the project", async () => {
+  const { cookie, ownerId } = await login("no-credits", false);
+  await insertPersona(personaFixture("c_1", ownerId));
+  await upsertDestination(destinationFixture("d_1"));
+  await upsertTemplate(templateFixture("t_1"));
+  const res = await buildApp().request("/api/episodes", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ persona_id: "c_1", destination_id: "d_1", template_id: "t_1" }),
+  });
+  expect(res.status).toBe(402);
+  expect(((await res.json()) as { error: string }).error).toBe("insufficient_credits");
+  expect(getCreditBalance(ownerId)).toEqual({ available: 0, reserved: 0 });
+  expect(await dequeueTask()).toBeNull();
 });
 
 test("POST saves independent name, requirements, aspect and candidate count", async () => {
@@ -179,7 +194,7 @@ test("POST saves independent name, requirements, aspect and candidate count", as
   expect(episode.brief.aspect).toBe("16:9");
   expect(episode.render.res).toBe("1920x1080");
   expect(episode.candidate_count).toBe(1);
-  expect(episode.estimated_credits).toBe(estimateCost({ mode: "per_shot", candidates: 1 }).estimated_credits);
+  expect(episode.estimated_credits).toBe(estimateCreditQuote(1));
 });
 
 test("POST rejects invalid aspect and candidate count", async () => {
@@ -237,7 +252,7 @@ test("POST honors an explicit season/tone/banned/mode over the defaults", async 
     banned: ["真人"],
   });
   expect(body.episode.mode).toBe("per_shot");
-  expect(body.episode.estimated_credits).toBe(estimateCost({ mode: "per_shot" }).estimated_credits);
+  expect(body.episode.estimated_credits).toBe(estimateCreditQuote(3));
 });
 
 test("GET /estimate returns a cost estimate for a given mode without touching the db", async () => {

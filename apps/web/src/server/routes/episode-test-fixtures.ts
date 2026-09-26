@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { close, createSession, createUser, open } from "@kelvoy/store";
+import { close, createSession, createUser, grantCredits, open } from "@kelvoy/store";
 import { afterEach, beforeEach } from "bun:test";
 import type { Destination, Episode, Persona, Shot, ShotSize, Template } from "@kelvoy/engine";
 import { Hono } from "hono";
@@ -119,9 +119,10 @@ export function buildApp() {
   return app;
 }
 
-export async function login(username: string): Promise<{ cookie: string; ownerId: string }> {
+export async function login(username: string, withCredits = true): Promise<{ cookie: string; ownerId: string }> {
   const created = await createUser({ username, password_hash: "hashed" });
   if (!created.ok) throw new Error("unexpected username collision in test");
+  if (withCredits) grantCredits(created.user.user_id, 1000, `test-grant-${created.user.user_id}`);
   const session = await createSession(created.user.user_id);
   return { cookie: `kelvoy_session=${session.session_id}`, ownerId: created.user.user_id };
 }

@@ -1,9 +1,10 @@
 import type { Episode, Task } from "@kelvoy/engine";
 import { getDb } from "./db";
+import { reserveCredits } from "./credits";
 
 export type ScriptActionResult =
   | { ok: true; row_version: number; task: Task }
-  | { ok: false; error: "not_found" | "version_conflict" | "illegal_transition" | "action_pending"; current_row_version?: number };
+  | { ok: false; error: "not_found" | "version_conflict" | "illegal_transition" | "action_pending" | "insufficient_credits"; current_row_version?: number };
 
 /** Version check, pending marker and queue insert commit together. */
 export function submitScriptAction(input: {
@@ -26,6 +27,10 @@ export function submitScriptAction(input: {
     if (episode.status !== "script_review") return { ok: false, error: "illegal_transition" } as const;
     if (episode.script_pending_task_id) return { ok: false, error: "action_pending" } as const;
     const taskId = `tk_${crypto.randomUUID()}`;
+    const reserved = reserveCredits({ action_id: taskId, user_id: input.owner_id,
+      episode_id: input.episode_id, task_id: taskId, kind: "script", units: 1 });
+    if (!reserved.ok) return { ok: false,
+      error: reserved.error === "insufficient_credits" ? "insufficient_credits" : "not_found" } as const;
     const updated = { ...episode, script_pending_task_id: taskId, script_action_error: null };
     db.query("update episodes set doc = ?, row_version = row_version + 1, updated_at = datetime('now') where episode_id = ?")
       .run(JSON.stringify(updated), input.episode_id);

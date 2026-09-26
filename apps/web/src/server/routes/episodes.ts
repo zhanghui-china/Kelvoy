@@ -9,14 +9,14 @@ import {
   validatePatchEpisodeRequest,
 } from "@kelvoy/engine";
 import {
-  enqueueTask,
+  createEpisodeWithScriptTask,
+  estimateCreditQuote,
   getDestination,
   getEpisode,
   getPersona,
   getPersonaVersion,
   getTemplate,
   getUserById,
-  insertEpisode,
   listEpisodes,
   patchEpisode,
   upsertTemplate,
@@ -92,7 +92,7 @@ episodes.post("/", async (c) => {
     created_at: new Date().toISOString(),
     // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
     // 镜数常量（credits.ts，M0-6 占位）；候选数取本期保存的值。
-    estimated_credits: estimateCost({ mode, candidates: candidateCount }).estimated_credits,
+    estimated_credits: estimateCreditQuote(candidateCount),
     credits_used: 0,
     share: { enabled: false, slug: "" },
     brief: {
@@ -123,8 +123,8 @@ episodes.post("/", async (c) => {
     },
   };
 
-  await insertEpisode(episode);
-  await enqueueTask({ episode_id: episode.episode_id, stage: "brief" });
+  const created = createEpisodeWithScriptTask(episode);
+  if (!created.ok) return c.json({ ok: false, error: created.error }, created.error === "insufficient_credits" ? 402 : 404);
   return c.json({ ok: true, episode }, 201);
 });
 
@@ -155,7 +155,8 @@ episodes.get("/estimate", async (c) => {
     const user = await getUserById(c.get("ownerId"));
     candidates = user?.settings.default_candidates;
   }
-  return c.json({ ok: true, estimate: estimateCost({ mode, candidates }) });
+  return c.json({ ok: true, estimate: estimateCost({ mode, candidates }),
+    credit_quote: estimateCreditQuote(candidates ?? 3) });
 });
 
 episodes.get("/:id", async (c) => {

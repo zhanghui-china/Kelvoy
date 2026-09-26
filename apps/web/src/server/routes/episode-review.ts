@@ -1,21 +1,19 @@
-import type { Episode, EpisodeStatus, RegenStage, StageName } from "@kelvoy/engine";
+import type { Episode, EpisodeStatus, RegenStage } from "@kelvoy/engine";
 import {
   checkContent,
   checkScriptRules,
-  isLegalShotStatusChange,
   removeShot,
   reorderShots,
   transitionEpisode,
   validatePatchShotRequest,
 } from "@kelvoy/engine";
-import type { PatchResult } from "@kelvoy/store";
 import {
-  enqueueTask,
   getDestination,
-  patchEpisode,
   patchShot,
   replaceEpisode,
   setShare,
+  submitReviewAdvance,
+  submitShotRegeneration,
   submitScriptAction,
 } from "@kelvoy/store";
 import { Hono } from "hono";
@@ -53,6 +51,7 @@ review.post("/:id/script/:action", async (c) => {
   });
   if (!result.ok) {
     if (result.error === "not_found") return c.json({ ok: false, error: "not_found" }, 404);
+    if (result.error === "insufficient_credits") return c.json({ ok: false, error: "insufficient_credits" }, 402);
     if (result.error === "version_conflict") return c.json(result, 409);
     return c.json(result, 400);
   }
@@ -74,41 +73,6 @@ function parseRegenBody(body: unknown): { rowVersion: number; regenStage?: Regen
 // they want the clip redone with the keyframe kept.
 function inferRegenStage(shotStatus: string): RegenStage {
   return shotStatus === "kf_ready" ? "keyframe" : "video";
-}
-
-async function regenShotAndEnqueue(
-  episode: Episode,
-  shotNo: number,
-  rowVersion: number,
-  regenStage: RegenStage,
-  bad_shot_reported?: true,
-): Promise<PatchResult> {
-  const shot = episode.shots.find((item) => item.no === shotNo);
-  if (!shot || !isLegalShotStatusChange(shot.status, "rejected")) {
-    return { ok: false, error: "illegal_transition" };
-  }
-  const nextStatus = regenStage === "keyframe" ? "kf_review" : "clip_review";
-  if (episode.status !== nextStatus &&
-      !(episode.status === "done" || (episode.status === "clip_review" && nextStatus === "kf_review"))) {
-    return { ok: false, error: "illegal_transition" };
-  }
-  if (regenStage === "video" && (!shot.kf_selected || !shot.candidates.includes(shot.kf_selected))) {
-    return { ok: false, error: "illegal_transition" };
-  }
-  const updatedShot = { ...shot,
-    status: "rejected",
-    regen_stage: regenStage,
-    ...(bad_shot_reported ? { bad_shot_reported } : {}),
-  } as const;
-  const result = await replaceEpisode(episode.episode_id, rowVersion, {
-    ...episode,
-    status: nextStatus,
-    shots: episode.shots.map((item) => item.no === shotNo ? updatedShot : item),
-  });
-  if (result.ok) {
-    await enqueueTask({ episode_id: episode.episode_id, stage: regenStage, shot_no: shotNo });
-  }
-  return result;
 }
 
 review.patch("/:id/shots/:no", async (c) => {
@@ -203,12 +167,7 @@ review.post("/:id/shots/reorder", async (c) => {
 // 的下一个合法状态是 assets，不知道那对应哪个 StageName）。assets/compose
 // 是整期一个任务；kf_review -> clipping 每镜各生成一次视频，所以要给
 // 已经选定关键帧(kf_selected)的镜各发一条带 shot_no 的任务。
-const REVIEW_GATE_ADVANCE: Partial<Record<EpisodeStatus, { stage: StageName; perShot: boolean }>> = {
-  script_review: { stage: "assets", perShot: false },
-  kf_review: { stage: "video", perShot: true },
-  clip_review: { stage: "compose", perShot: false },
-  compose_ready: { stage: "compose", perShot: false },
-};
+const REVIEW_GATE_ADVANCE: EpisodeStatus[] = ["script_review", "kf_review", "clip_review", "compose_ready"];
 
 review.post("/:id/continue", async (c) => {
   const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
@@ -220,8 +179,7 @@ review.post("/:id/continue", async (c) => {
   const rowVersion = parseRowVersion(body);
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
 
-  const gate = REVIEW_GATE_ADVANCE[loaded.episode.status];
-  if (!gate) return c.json({ ok: false, error: "illegal_transition" }, 400);
+  if (!REVIEW_GATE_ADVANCE.includes(loaded.episode.status)) return c.json({ ok: false, error: "illegal_transition" }, 400);
   if (loaded.episode.status === "kf_review" &&
       (!loaded.episode.shots.some((shot) => shot.status === "kf_selected") ||
        loaded.episode.shots.some((shot) =>
@@ -238,25 +196,15 @@ review.post("/:id/continue", async (c) => {
     ? transitionEpisode(loaded.episode.status, { type: "prepare_compose" })
     : transitionEpisode(loaded.episode.status, { type: "advance" });
 
-  const patchResult = await patchEpisode(loaded.episode.episode_id, rowVersion, { status: nextStatus });
-  if (!patchResult.ok) return patchErrorResponse(c, patchResult);
-
-  if (nextStatus === "compose_ready") {
-    return c.json({ ok: true, row_version: patchResult.row_version });
+  const advanced = submitReviewAdvance({ episode_id: loaded.episode.episode_id,
+    owner_id: c.get("ownerId"), row_version: rowVersion, next_status: nextStatus });
+  if (!advanced.ok) {
+    if (advanced.error === "insufficient_credits") return c.json({ ok: false, error: advanced.error }, 402);
+    if (advanced.error === "version_conflict") return c.json(advanced, 409);
+    if (advanced.error === "not_found") return c.json(advanced, 404);
+    return c.json(advanced, 400);
   }
-
-  if (gate.perShot) {
-    const readyShots = loaded.episode.shots.filter((s) => s.status === "kf_selected");
-    await Promise.all(
-      readyShots.map((s) =>
-        enqueueTask({ episode_id: loaded.episode.episode_id, stage: gate.stage, shot_no: s.no }),
-      ),
-    );
-  } else {
-    await enqueueTask({ episode_id: loaded.episode.episode_id, stage: gate.stage });
-  }
-
-  return c.json({ ok: true, row_version: patchResult.row_version });
+  return c.json({ ok: true, row_version: advanced.row_version });
 });
 
 review.post("/:id/shots/:no/regen", async (c) => {
@@ -274,8 +222,13 @@ review.post("/:id/shots/:no/regen", async (c) => {
   if (!parsed) return c.json({ ok: false, error: "invalid_body" }, 400);
 
   const regenStage = parsed.regenStage ?? inferRegenStage(shot.status);
-  const result = await regenShotAndEnqueue(loaded.episode, shotNo, parsed.rowVersion, regenStage);
-  if (!result.ok) return patchErrorResponse(c, result);
+  const result = submitShotRegeneration({ episode_id: episodeId, owner_id: c.get("ownerId"),
+    row_version: parsed.rowVersion, shot_no: shotNo, stage: regenStage, report_bad: false });
+  if (!result.ok) {
+    if (result.error === "insufficient_credits") return c.json(result, 402);
+    if (result.error === "version_conflict") return c.json(result, 409);
+    return c.json(result, result.error === "not_found" ? 404 : 400);
+  }
   return c.json({ ok: true, row_version: result.row_version });
 });
 
@@ -320,9 +273,7 @@ review.post("/:id/recompose", async (c) => {
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
   if (loaded.episode.mode === "grid") return c.json({ ok: false, error: "grid_unavailable" }, 400);
 
-  // patchEpisode 的合法性检查只问"能不能转到 composing"，clip_review 通过
-  // /continue 也能到 composing——这里要求必须来自 done，否则会和 /continue
-  // 的正常推进撞在一起。
+  // 重新合成仅从已完成作品发起，和正常审核推进分开。
   if (loaded.episode.status !== "done") {
     return c.json({ ok: false, error: "illegal_transition" }, 400);
   }
@@ -331,10 +282,13 @@ review.post("/:id/recompose", async (c) => {
   const rowVersion = parseRowVersion(body);
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
 
-  const result = await patchEpisode(episodeId, rowVersion, { status: "composing" });
-  if (!result.ok) return patchErrorResponse(c, result);
-
-  await enqueueTask({ episode_id: episodeId, stage: "compose" });
+  const result = submitReviewAdvance({ episode_id: episodeId, owner_id: c.get("ownerId"),
+    row_version: rowVersion, next_status: "composing" });
+  if (!result.ok) {
+    if (result.error === "insufficient_credits") return c.json(result, 402);
+    if (result.error === "version_conflict") return c.json(result, 409);
+    return c.json(result, result.error === "not_found" ? 404 : 400);
+  }
   return c.json({ ok: true, row_version: result.row_version });
 });
 
@@ -355,8 +309,13 @@ review.post("/:id/shots/:no/report-bad", async (c) => {
   // FR-06: 免费重生成一次——不涉及积分扣减/次数上限，那是 M0-6 定价公式
   // 落地之后的事，这里只负责把镜标记为坏镜并触发一次重生成。
   const regenStage = parsed.regenStage ?? inferRegenStage(shot.status);
-  const result = await regenShotAndEnqueue(loaded.episode, shotNo, parsed.rowVersion, regenStage, true);
-  if (!result.ok) return patchErrorResponse(c, result);
+  const result = submitShotRegeneration({ episode_id: episodeId, owner_id: c.get("ownerId"),
+    row_version: parsed.rowVersion, shot_no: shotNo, stage: regenStage, report_bad: true });
+  if (!result.ok) {
+    if (result.error === "insufficient_credits") return c.json(result, 402);
+    if (result.error === "version_conflict") return c.json(result, 409);
+    return c.json(result, result.error === "not_found" ? 404 : 400);
+  }
   return c.json({ ok: true, row_version: result.row_version });
 });
 

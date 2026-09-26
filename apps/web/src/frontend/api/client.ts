@@ -104,6 +104,13 @@ export function getMySettings() {
   return apiFetch<{ settings: UserSettings }>("/api/me/settings");
 }
 
+export function getMyCredits() {
+  return apiFetch<{ balance: { available: number; reserved: number }; ledger: {
+    entry_id: string; action_id: string; kind: string;
+    available_delta: number; reserved_delta: number; created_at: string;
+  }[] }>("/api/me/credits");
+}
+
 /** 合并式更新：只传要改的项，没传的保持原值（服务端 json_patch）。 */
 export function updateMySettings(patch: UserSettings) {
   return apiFetch<{ settings: UserSettings }>("/api/me/settings", {
@@ -216,7 +223,7 @@ export function createEpisode(body: CreateEpisodeRequest) {
 }
 
 export function getEstimate(mode: EpisodeMode, candidates: number) {
-  return apiFetch<{ estimate: EstimateCostResult }>(
+  return apiFetch<{ estimate: EstimateCostResult; credit_quote: number }>(
     `/api/episodes/estimate?mode=${encodeURIComponent(mode)}&candidates=${encodeURIComponent(candidates)}`,
   );
 }

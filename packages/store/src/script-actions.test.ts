@@ -2,9 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { close, getDb, open } from "./db";
 import { dequeueTask } from "./tasks";
 import { submitScriptAction } from "./script-actions";
+import { grantCredits, getCreditBalance } from "./credits";
 
 beforeEach(() => {
   open(":memory:");
+  getDb().query("insert into users (user_id, username, password_hash) values ('u_1', 'tester', 'hash')").run();
+  grantCredits("u_1", 3, "grant-script-tests");
   getDb().query("insert into episodes (episode_id, owner_id, doc) values (?, ?, ?)")
     .run("e_1", "u_1", JSON.stringify({ episode_id: "e_1", owner_id: "u_1", status: "script_review", shots: [{ beat: "原稿" }] }));
 });
@@ -20,6 +23,7 @@ test("script action atomically marks the draft and queues exactly one operation"
   expect(JSON.parse(row!.doc).script_pending_task_id).toBe(result.task.task_id);
   expect((await dequeueTask())?.instruction).toBe("突出夜景");
   expect(await dequeueTask()).toBeNull();
+  expect(getCreditBalance("u_1")).toEqual({ available: 2, reserved: 1 });
 });
 
 test("script action blocks stale versions, another owner and duplicate pending requests", () => {

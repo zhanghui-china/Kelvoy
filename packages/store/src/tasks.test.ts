@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { close, open } from "./db";
-import { completeTask, dequeueTask, enqueueTask, failTask } from "./tasks";
+import { close, getDb, open } from "./db";
+import { completeTask, dequeueTask, enqueueTask, failTask, renewTaskLease } from "./tasks";
 
 beforeEach(() => {
   open(":memory:");
@@ -70,4 +70,20 @@ test("shot_no is carried through enqueue/dequeue when present", async () => {
   await enqueueTask({ episode_id: "e_1", stage: "keyframe", shot_no: 7 });
   const dequeued = await dequeueTask();
   expect(dequeued?.shot_no).toBe(7);
+});
+
+test("expired processing tasks are recovered with the same identity and a new lease", async () => {
+  const queued = await enqueueTask({ episode_id: "e_1", stage: "video", shot_no: 3 });
+  const first = await dequeueTask();
+  expect(first?.lease_token).toBeTruthy();
+  getDb().query("update tasks set lease_until = 1 where task_id = ?").run(queued.task_id);
+  const recovered = await dequeueTask();
+  expect(recovered?.task_id).toBe(first?.task_id);
+  expect(recovered?.attempt).toBe(2);
+  expect(recovered?.lease_token).not.toBe(first?.lease_token);
+  expect(await renewTaskLease(queued.task_id, first!.lease_token!)).toBe(false);
+  await completeTask(queued.task_id, first?.lease_token);
+  expect(await renewTaskLease(queued.task_id, recovered!.lease_token!)).toBe(true);
+  await completeTask(queued.task_id, recovered?.lease_token);
+  expect(await dequeueTask()).toBeNull();
 });
