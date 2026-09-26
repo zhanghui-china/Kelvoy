@@ -17,11 +17,11 @@ function shot(overrides: Partial<Shot> = {}): Shot {
 
 function episode(overrides: Partial<Episode> = {}): Episode {
   return {
-    episode_id: "e1", owner_id: "u1", persona_id: "p1", persona_version: 1,
+    name: "测试期", episode_id: "e1", owner_id: "u1", persona_id: "p1", persona_version: 1,
     destination_id: "d1", destination_version: 1, series_id: "s1", template_id: "t1",
-    status: "assets", mode: "per_shot", created_at: "2026-09-25T00:00:00Z",
+    status: "assets", mode: "per_shot", candidate_count: 2, created_at: "2026-09-25T00:00:00Z",
     estimated_credits: 0, credits_used: 0, share: { enabled: false, slug: "" },
-    brief: { season: "秋", aspect: "9:16", duration_s: 30, tone: "", outfit_override: null, banned: [] },
+    brief: { season: "秋", aspect: "9:16", requirements: "", duration_s: 30, tone: "", outfit_override: null, banned: [] },
     grid_refs: [], scenes: [], shots: [shot()], removed_shots: [],
     music: { file: "", bpm: 0, license: "" },
     render: { res: "1080x1920", fps: 30, title: "", intro: null, outro: null, ai_label: true },
@@ -67,6 +67,25 @@ test("one shot produces two distinct candidates and enters keyframe review", asy
   expect(next.shots[0]?.model.image?.ref_hashes).toEqual(["persona-hash", "landmark-hash"]);
   expect((calls[0] as { refs: string[] }).refs).toEqual(["persona/front.png", "dest/a.jpg"]);
   expect((calls[0] as { seed: number }).seed).not.toBe((calls[1] as { seed: number }).seed);
+});
+
+test("saved candidate count and aspect determine keyframe generation", async () => {
+  const calls: Array<{ candidate_no: number; aspect?: string }> = [];
+  const context: StageContext = {
+    persona, destination, generation_id: "task-wide",
+    keyframe: { async generate(input) {
+      calls.push(input);
+      return { key: `kf/${input.candidate_no}.png`, model: "Qwen", version: "1",
+        seed: input.seed, seconds: 1, ref_hashes: [] };
+    } },
+  };
+  const next = await runKeyframe(episode({
+    candidate_count: 3, brief: { ...episode().brief, aspect: "16:9" },
+    status: "keyframing", shots: [shot({ status: "generating_kf" })],
+  }), 1, context);
+  expect(calls.map((call) => call.candidate_no)).toEqual([0, 1, 2]);
+  expect(calls.map((call) => call.aspect)).toEqual(["16:9", "16:9", "16:9"]);
+  expect(next.shots[0]?.candidates).toHaveLength(3);
 });
 
 test("video uses selected keyframe and enters clip review", async () => {

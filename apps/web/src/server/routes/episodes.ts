@@ -14,6 +14,7 @@ import {
   getEpisode,
   getPersona,
   getTemplate,
+  getUserById,
   insertEpisode,
   listEpisodes,
   patchEpisode,
@@ -40,9 +41,11 @@ episodes.post("/", async (c) => {
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
   const req = result.value;
 
-  // MVP 内容审核（PRD §8/§11，#29）：建期时用户能填的自由文本只有这三项，
+  // MVP 内容审核（PRD §8/§11，#29）：建期时的自由文本，
   // 命中直接拦截，不浪费后面的外键查询和写库。
   const contentViolations = checkContent([
+    ...(req.name !== undefined ? [{ field: "name", text: req.name }] : []),
+    ...(req.requirements !== undefined ? [{ field: "requirements", text: req.requirements }] : []),
     ...(req.season !== undefined ? [{ field: "season", text: req.season }] : []),
     ...(req.tone !== undefined ? [{ field: "tone", text: req.tone }] : []),
     ...(req.banned ?? []).map((term, i) => ({ field: `banned[${i}]`, text: term })),
@@ -51,10 +54,11 @@ episodes.post("/", async (c) => {
     return c.json({ ok: false, error: "content_blocked", violations: contentViolations }, 400);
   }
 
-  const [persona, destination, template] = await Promise.all([
+  const [persona, destination, template, user] = await Promise.all([
     getPersona(req.persona_id),
     getDestination(req.destination_id),
     getTemplate(req.template_id),
+    getUserById(c.get("ownerId")),
   ]);
   if (!persona || persona.owner_id !== c.get("ownerId")) {
     return c.json({ ok: false, error: "persona_not_found" }, 404);
@@ -68,8 +72,11 @@ episodes.post("/", async (c) => {
   // 目的地，等以后真需要跨目的地系列时再改)；season 缺省取目的地的
   // season_best 第一项，没有就空字符串；tone/banned 缺省给空。
   const mode = req.mode ?? "per_shot";
+  const aspect = req.aspect ?? "9:16";
+  const candidateCount = req.candidate_count ?? user?.settings.default_candidates ?? 3;
   const episode: Episode = {
     episode_id: `e_${crypto.randomUUID()}`,
+    name: req.name ?? `${destination.city} · ${destination.name}`,
     owner_id: c.get("ownerId"),
     persona_id: persona.persona_id,
     persona_version: persona.version,
@@ -79,15 +86,17 @@ episodes.post("/", async (c) => {
     template_id: template.template_id,
     status: "draft",
     mode,
+    candidate_count: candidateCount,
     created_at: new Date().toISOString(),
     // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
     // 镜数/候选数常量（credits.ts，M0-6 占位），只有 mode 是真实输入。
-    estimated_credits: estimateCost({ mode }).estimated_credits,
+    estimated_credits: estimateCost({ mode, candidates: candidateCount }).estimated_credits,
     credits_used: 0,
     share: { enabled: false, slug: "" },
     brief: {
       season: req.season ?? destination.season_best[0] ?? "",
-      aspect: "9:16",
+      aspect,
+      requirements: req.requirements ?? "",
       duration_s: 30,
       tone: req.tone ?? "",
       outfit_override: req.outfit_override ?? null,
@@ -101,7 +110,7 @@ episodes.post("/", async (c) => {
     // 不是建期这一步该做的事)，这里只给空占位，由后续阶段真正填入。
     music: { file: "", bpm: 0, license: "" },
     render: {
-      res: "1080x1920",
+      res: aspect === "9:16" ? "1080x1920" : "1920x1080",
       fps: 30,
       title: `${destination.city} · ${destination.name}`,
       intro: template.intro,
@@ -117,14 +126,14 @@ episodes.post("/", async (c) => {
 
 // FR-01/FR-09: 建期表单提交前的粗估价，不落库、不查外键，纯计算——挂在
 // "/:id" 之前，否则 Hono 会把 "estimate" 当成 :id 匹配掉。
-episodes.get("/estimate", (c) => {
+episodes.get("/estimate", async (c) => {
   const mode = c.req.query("mode");
   if (mode !== "per_shot" && mode !== "grid") {
     return c.json({ ok: false, error: "invalid_mode" }, 400);
   }
 
   // M2-15：候选数由表单传上来（来自账号的出片默认值，用户可当场改），
-  // 不传就沿用 credits.ts 的 DEFAULT_CANDIDATES。范围跟设置页同一套常量。
+  // 不传时取账号默认候选数，否则用新期默认 3。范围跟设置页同一套常量。
   const rawCandidates = c.req.query("candidates");
   let candidates: number | undefined;
   if (rawCandidates !== undefined) {
@@ -138,6 +147,10 @@ episodes.get("/estimate", (c) => {
     }
   }
 
+  if (candidates === undefined) {
+    const user = await getUserById(c.get("ownerId"));
+    candidates = user?.settings.default_candidates;
+  }
   return c.json({ ok: true, estimate: estimateCost({ mode, candidates }) });
 });
 

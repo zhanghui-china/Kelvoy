@@ -1,5 +1,5 @@
 import type { ComposeProvider } from "../providers/types";
-import type { Destination, Persona } from "../schema";
+import type { Destination, EpisodeAspect, Persona } from "../schema";
 
 /**
  * Extra read-only context a stage needs beyond the Episode itself.
@@ -19,6 +19,7 @@ export interface StageContext {
       episode_id: string;
       shot_no: number;
       candidate_no: number;
+      aspect?: EpisodeAspect;
       prompt: string;
       refs: string[];
       seed: number;
@@ -30,6 +31,7 @@ export interface StageContext {
       episode_id: string;
       shot_no: number;
       keyframe: string;
+      aspect?: EpisodeAspect;
       prompt: string;
       duration_s: number;
       seed: number;

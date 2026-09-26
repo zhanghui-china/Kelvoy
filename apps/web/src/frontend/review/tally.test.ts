@@ -41,7 +41,7 @@ function fixtureShot(no: number, overrides: Partial<Shot> = {}): Shot {
 
 function fixtureEpisode(shots: Shot[]): Episode {
   return {
-    episode_id: "e_test",
+    name: "测试期", episode_id: "e_test",
     owner_id: "u_test",
     persona_id: "c_test",
     persona_version: 1,
@@ -50,7 +50,7 @@ function fixtureEpisode(shots: Shot[]): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status: "done",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-23T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 12,
@@ -58,6 +58,7 @@ function fixtureEpisode(shots: Shot[]): Episode {
     brief: {
       season: "秋",
       aspect: "9:16",
+      requirements: "",
       duration_s: 30,
       tone: "松弛",
       outfit_override: null,

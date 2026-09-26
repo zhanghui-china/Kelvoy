@@ -66,6 +66,14 @@ def test_single_reference_image_workflow_does_not_use_landmark():
     assert workflow["491"]["inputs"]["aspect_ratio"] == "9:16 (Portrait Widescreen)"
 
 
+def test_image_workflow_supports_wide_aspect_without_mutating_template():
+    template = json.loads((BRIDGE / "1_1_SingleRef2IMG_QwenImage2_1_api.json").read_text())
+    original = template["491"]["inputs"]["aspect_ratio"]
+    workflow = build_image_workflow(template, ["role.png"], "wide view", 31, "16:9")
+    assert workflow["491"]["inputs"]["aspect_ratio"] == "16:9 (Landscape Widescreen)"
+    assert template["491"]["inputs"]["aspect_ratio"] == original
+
+
 def test_video_workflow_uses_selected_first_frame_and_measured_preset():
     template = json.loads((BRIDGE / "2_0_Image2Video_MinimaxH3_api.json").read_text())
 
@@ -75,6 +83,7 @@ def test_video_workflow_uses_selected_first_frame_and_measured_preset():
     assert workflow["74"]["inputs"]["prompt"] == "slow pan"
     assert workflow["71"]["inputs"]["value"] == 5
     assert workflow["9"]["inputs"]["scale_to_length"] == 480
+    assert workflow["9"]["inputs"]["aspect_ratio"] == "original"
     assert workflow["49"]["inputs"]["seed"] == 31
 
 

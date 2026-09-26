@@ -39,6 +39,8 @@ function buildPrompt(input: {
   food: string[];
   season: string;
   tone: string;
+  requirements: string;
+  aspect: string;
   banned: string[];
   feedback?: string;
 }): string {
@@ -54,6 +56,8 @@ function buildPrompt(input: {
 地标（landmark 字段必须填这里的 id，原样引用，不许编造新地标）：${landmarkList || "无"}
 地方饮食：${input.food.join("、") || "无"}
 季节：${input.season}　语气：${input.tone}
+画幅：${input.aspect}
+创作要求：${input.requirements || "无"}
 禁止出现：${input.banned.join("、") || "无"}
 
 叙事骨架（段落顺序参考，不用照抄段落名，用于把握节奏）：${skeleton.segments.join(" → ")}
@@ -206,6 +210,8 @@ export const stepfunScriptProvider: ScriptProvider = {
         food: destination.food,
         season: brief.season,
         tone: brief.tone,
+        requirements: brief.requirements ?? "",
+        aspect: brief.aspect,
         banned: brief.banned,
         feedback,
       });

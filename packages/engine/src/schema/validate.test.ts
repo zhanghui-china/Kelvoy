@@ -50,7 +50,7 @@ function validShot(no = 1): Shot {
 
 function validEpisode(): Episode {
   return {
-    episode_id: "e_test",
+    name: "测试期", episode_id: "e_test",
     owner_id: "u_test",
     persona_id: "c_test",
     persona_version: 1,
@@ -59,7 +59,7 @@ function validEpisode(): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status: "draft",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-23T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
@@ -67,6 +67,7 @@ function validEpisode(): Episode {
     brief: {
       season: "秋",
       aspect: "9:16",
+      requirements: "",
       duration_s: 30,
       tone: "松弛",
       outfit_override: null,
@@ -322,6 +323,15 @@ function validCreateEpisodeRequest() {
 }
 
 describe("validateCreateEpisodeRequest", () => {
+  test("validates new creation fields at the request boundary", () => {
+    const base = validCreateEpisodeRequest();
+    expect(validateCreateEpisodeRequest({ ...base, name: "旅途", requirements: "拍全景",
+      aspect: "16:9", candidate_count: 3 }).valid).toBe(true);
+    for (const patch of [{ name: "  " }, { requirements: null }, { aspect: "1:1" },
+      { candidate_count: 0 }, { candidate_count: 2.5 }, { candidate_count: 4 }]) {
+      expect(validateCreateEpisodeRequest({ ...base, ...patch }).valid).toBe(false);
+    }
+  });
   test("accepts the three required foreign keys with nothing else", () => {
     expect(validateCreateEpisodeRequest(validCreateEpisodeRequest()).valid).toBe(true);
   });

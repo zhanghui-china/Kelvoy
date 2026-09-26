@@ -39,6 +39,22 @@ test("image adapter sends ordered references, hashes them and archives the retur
   expect(await readFile(join(root, "e1", result.key), "utf8")).toBe("generated image");
 });
 
+test("image adapter sends a wide request when the episode is wide", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-generate-wide-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  await writeFile(join(root, "inference", "image", "result.png"), "wide image");
+  let size: string | undefined;
+  const providers = createLocalGenerationProviders(async (_route, body) => {
+    size = body.size;
+    return { ok: true, response: { paths: ["inference/image/result.png"], model: "Qwen",
+      version: "wide", seed: 42, seconds: 1 } };
+  });
+  await providers.keyframe.generate({ episode_id: "e1", shot_no: 1, candidate_no: 0,
+    aspect: "16:9", prompt: "wide view", refs: [], seed: 42, generation_id: "task-wide" });
+  expect(size).toBe("16:9");
+});
+
 test("video adapter rejects a keyframe path escaping the episode directory", async () => {
   root = await mkdtemp(join(tmpdir(), "kelvoy-generate-"));
   process.env.KELVOY_PROJECTS_ROOT = root;

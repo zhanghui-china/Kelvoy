@@ -43,7 +43,7 @@ function personaFixture(): Persona {
 
 function episodeFixture(overrides: Partial<Episode> = {}): Episode {
   return {
-    episode_id: "e_1",
+    name: "测试期", episode_id: "e_1",
     owner_id: "u_1",
     persona_id: "c_1",
     persona_version: 3,
@@ -52,12 +52,12 @@ function episodeFixture(overrides: Partial<Episode> = {}): Episode {
     series_id: "s_1",
     template_id: "t_1",
     status: "composing",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-24T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
     share: { enabled: false, slug: "" },
-    brief: { season: "秋", aspect: "9:16", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
+    brief: { season: "秋", aspect: "9:16", requirements: "", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
     grid_refs: [],
     scenes: [],
     shots: [shotFixture(1), shotFixture(2)],

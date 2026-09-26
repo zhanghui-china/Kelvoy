@@ -40,7 +40,9 @@ def resolve_reference(projects_root: Path, key: str) -> Path:
     return candidate
 
 
-def build_image_workflow(template: dict, uploaded_refs: list[str], prompt: str, seed: int) -> dict:
+def build_image_workflow(
+    template: dict, uploaded_refs: list[str], prompt: str, seed: int, aspect: str = "9:16"
+) -> dict:
     if len(uploaded_refs) not in (1, 2):
         raise ValueError("image workflow needs persona and optional landmark image")
     workflow = deepcopy(template)
@@ -49,7 +51,13 @@ def build_image_workflow(template: dict, uploaded_refs: list[str], prompt: str, 
         workflow["491"]["inputs"]["image"] = uploaded_refs[1]
     workflow["469"]["inputs"]["prompt"] = prompt
     resolution_node = "493" if len(uploaded_refs) == 2 else "491"
-    workflow[resolution_node]["inputs"]["aspect_ratio"] = "9:16 (Portrait Widescreen)"
+    aspect_options = {
+        "9:16": "9:16 (Portrait Widescreen)",
+        "16:9": "16:9 (Landscape Widescreen)",
+    }
+    if aspect not in aspect_options:
+        raise ValueError("unsupported image aspect")
+    workflow[resolution_node]["inputs"]["aspect_ratio"] = aspect_options[aspect]
     workflow[resolution_node]["inputs"]["megapixels"] = 1.0
     workflow["474"]["inputs"]["seed"] = seed
     workflow["474"]["inputs"]["control_after_generate"] = "fixed"
@@ -82,6 +90,7 @@ async def generate(
     duration_s: int = 5,
     timeout_s: float = 240,
     client: httpx.AsyncClient | None = None,
+    aspect: str = "9:16",
 ) -> InferenceResponse:
     if kind not in ("image", "video"):
         raise ValueError("unsupported workflow")
@@ -91,6 +100,8 @@ async def generate(
         raise ValueError("prompt is required")
     if kind == "video" and duration_s not in (3, 4, 5):
         raise ValueError("video duration must be 3 to 5 seconds")
+    if aspect not in ("9:16", "16:9"):
+        raise ValueError("unsupported aspect")
     inputs = [resolve_reference(projects_root, key) for key in refs]
     template_kind = "image_single" if kind == "image" and len(refs) == 1 else kind
     filename, output_node, output_key, extension = TEMPLATES[template_kind]
@@ -118,7 +129,7 @@ async def generate(
                 f"{item['subfolder']}/{item['name']}" if item.get("subfolder") else item["name"]
             )
         workflow = (
-            build_image_workflow(template, uploaded, prompt, chosen_seed)
+            build_image_workflow(template, uploaded, prompt, chosen_seed, aspect)
             if kind == "image"
             else build_video_workflow(template, uploaded[0], prompt, duration_s, chosen_seed)
         )

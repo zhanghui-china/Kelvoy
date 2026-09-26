@@ -14,8 +14,8 @@ import type { Episode, EpisodeMode } from "../schema/episode";
 // M0-6(#6) 占位，实测后回填：默认镜数，取 PRD"24–30 镜"的中值。
 export const DEFAULT_SHOT_COUNT = 28;
 
-// M0-6(#6) 占位，实测后回填：默认候选数，FR-04 原文"每镜 N 候选（默认 2）"。
-export const DEFAULT_CANDIDATES = 2;
+// M0-6(#6) 占位，实测后回填：新期默认 3；旧期缺字段由 store 按 2 解析。
+export const DEFAULT_CANDIDATES = 3;
 
 // M0-6(#6) 占位，实测后回填：逐镜模式下单个候选出一次关键帧的 GPU 分钟数。
 export const KEYFRAME_GPU_MINUTES_PER_CANDIDATE = 1.5;
@@ -83,7 +83,7 @@ export function estimateCost(input: EstimateCostInput): EstimateCostResult {
  * POST /api/episodes 建期时用：这一刻 episode.shots 还是空数组（脚本要到
  * brief 任务跑完才有），所以镜数落回默认值，只有 mode 是真实输入。
  */
-export function estimateCredits(episode: Pick<Episode, "shots" | "mode">): number {
+export function estimateCredits(episode: Pick<Episode, "shots" | "mode"> & Partial<Pick<Episode, "candidate_count">>): number {
   const shotCount = episode.shots.length > 0 ? episode.shots.length : undefined;
-  return estimateCost({ shot_count: shotCount, mode: episode.mode }).estimated_credits;
+  return estimateCost({ shot_count: shotCount, mode: episode.mode, candidates: episode.candidate_count }).estimated_credits;
 }

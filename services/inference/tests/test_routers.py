@@ -4,8 +4,26 @@ import pytest
 from fastapi.testclient import TestClient
 
 from inference.app import app
+from inference.schemas import InferenceResponse
 
 client = TestClient(app)
+
+
+@pytest.mark.parametrize("endpoint", ["/image/", "/video/"])
+def test_wide_generation_passes_aspect_to_comfyui(monkeypatch, endpoint):
+    seen = []
+
+    async def fake_generate(*args, **kwargs):
+        seen.append(kwargs["aspect"])
+        return InferenceResponse(paths=["result"], model="test", version="1", seed=1, seconds=1)
+
+    module = "inference.routers.image" if endpoint == "/image/" else "inference.routers.video"
+    monkeypatch.setattr(f"{module}.generate_comfyui", fake_generate)
+    response = client.post(
+        endpoint, json={"prompt": "scene", "refs": ["frame.png"], "size": "16:9"}
+    )
+    assert response.status_code == 200
+    assert seen == ["16:9"]
 
 ENDPOINTS = ["/llm/", "/image/", "/video/", "/upscale/"]
 

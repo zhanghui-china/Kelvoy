@@ -14,8 +14,8 @@ router = APIRouter()
 async def generate(request: InferenceRequest) -> InferenceResponse:
     if request.count not in (None, 1):
         raise HTTPException(status_code=422, detail="video generates one clip per request")
-    if request.size not in (None, "9:16", "480x864"):
-        raise HTTPException(status_code=422, detail="video supports the 480 vertical preset only")
+    if request.size not in (None, "9:16", "16:9", "480x864", "864x480"):
+        raise HTTPException(status_code=422, detail="video supports 9:16 and 16:9 presets only")
     settings = Settings()
     try:
         return await generate_comfyui(
@@ -26,6 +26,7 @@ async def generate(request: InferenceRequest) -> InferenceResponse:
             settings.comfyui_base_url,
             seed=request.seed,
             duration_s=request.params.get("duration_s", 5),
+            aspect="16:9" if request.size in ("16:9", "864x480") else "9:16",
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

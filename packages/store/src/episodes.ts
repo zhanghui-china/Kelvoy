@@ -20,6 +20,18 @@ interface EpisodeRow {
   row_version: number;
 }
 
+/** Old JSON rows predate these fields. Resolve them at the storage boundary. */
+function decodeEpisode(doc: string): Episode {
+  const episode = JSON.parse(doc) as Episode;
+  return {
+    ...episode,
+    name: episode.name ?? (episode.render.title || episode.destination_id),
+    candidate_count: episode.candidate_count ?? 2,
+    brief: { ...episode.brief, aspect: episode.brief.aspect ?? "9:16",
+      requirements: episode.brief.requirements ?? "" },
+  };
+}
+
 export type GetEpisodeResult =
   | { ok: true; episode: Episode; row_version: number }
   | { ok: false; error: "not_found" };
@@ -47,7 +59,7 @@ export async function insertEpisode(episode: Episode): Promise<void> {
 export async function getEpisode(episodeId: string): Promise<GetEpisodeResult> {
   const row = readRow(episodeId);
   if (!row) return { ok: false, error: "not_found" };
-  return { ok: true, episode: JSON.parse(row.doc) as Episode, row_version: row.row_version };
+  return { ok: true, episode: decodeEpisode(row.doc), row_version: row.row_version };
 }
 
 export async function listEpisodes(ownerId: string): Promise<Episode[]> {
@@ -56,7 +68,7 @@ export async function listEpisodes(ownerId: string): Promise<Episode[]> {
       "select doc from episodes where owner_id = ? order by episode_id",
     )
     .all(ownerId);
-  return rows.map((row) => JSON.parse(row.doc) as Episode);
+  return rows.map((row) => decodeEpisode(row.doc));
 }
 
 /**
@@ -70,7 +82,7 @@ export async function getEpisodeBySlug(slug: string): Promise<Episode | null> {
       "select doc from episodes where json_extract(doc, '$.share.slug') = ?",
     )
     .get(slug);
-  return row ? (JSON.parse(row.doc) as Episode) : null;
+  return row ? decodeEpisode(row.doc) : null;
 }
 
 export type SetShareResult = Extract<PatchResult, { ok: false }> | { ok: true; row_version: number; slug: string };
@@ -91,7 +103,7 @@ export async function setShare(
     return { ok: false, error: "version_conflict", current_row_version: row.row_version };
   }
 
-  const episode = JSON.parse(row.doc) as Episode;
+  const episode = decodeEpisode(row.doc);
   const slug = episode.share.slug || crypto.randomUUID().slice(0, 8);
   const result = commit(episodeId, clientRowVersion, { ...episode, share: { enabled, slug } }, row.row_version);
   if (!result.ok) return result;
@@ -110,7 +122,7 @@ export async function patchEpisode(
     return { ok: false, error: "version_conflict", current_row_version: row.row_version };
   }
 
-  const episode = JSON.parse(row.doc) as Episode;
+  const episode = decodeEpisode(row.doc);
   if (patch.status && !isLegalEpisodeStatusChange(episode.status, patch.status)) {
     return { ok: false, error: "illegal_transition" };
   }
@@ -128,7 +140,7 @@ export async function patchShot(
   const row = readRow(episodeId);
   if (!row) return { ok: false, error: "not_found" };
 
-  const episode = JSON.parse(row.doc) as Episode;
+  const episode = decodeEpisode(row.doc);
   const shotIndex = episode.shots.findIndex((s) => s.no === shotNo);
   if (shotIndex === -1) return { ok: false, error: "not_found" };
 
@@ -166,7 +178,7 @@ export async function replaceEpisode(
     return { ok: false, error: "version_conflict", current_row_version: row.row_version };
   }
 
-  const before = JSON.parse(row.doc) as Episode;
+  const before = decodeEpisode(row.doc);
   if (episode.status !== before.status && !isLegalEpisodeStatusChange(before.status, episode.status)) {
     return { ok: false, error: "illegal_transition" };
   }

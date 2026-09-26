@@ -1,4 +1,4 @@
-import type { Episode, EpisodeMode, Shot } from "./episode";
+import type { Episode, EpisodeAspect, EpisodeMode, Shot } from "./episode";
 import type { Persona, PersonaStyle } from "./persona";
 import type { StageName } from "../stages";
 import type { Template } from "./template";
@@ -107,6 +107,10 @@ export type PersonaPatch = Partial<Pick<Persona, "name" | "desc" | "locked" | "d
 // 提交那一刻从 persona/destination/template 当前状态算出来的快照,不是
 // 客户端能直接指定的。
 export interface CreateEpisodeRequest {
+  name?: string;
+  requirements?: string;
+  aspect?: EpisodeAspect;
+  candidate_count?: number;
   persona_id: string;
   destination_id: string;
   template_id: string;

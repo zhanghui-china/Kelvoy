@@ -2,6 +2,7 @@ export type ShotSize = "wide" | "medium" | "close" | "detail" | "pov";
 export type ShotCamera = "static" | "pan" | "push" | "follow";
 export type SceneTime = "morning" | "noon" | "afternoon" | "evening" | "night";
 export type EpisodeMode = "per_shot" | "grid";
+export type EpisodeAspect = "9:16" | "16:9";
 
 // PRD v0.2 §6 期级状态机. Review states advance to the next generating state on user action.
 export type EpisodeStatus =
@@ -79,7 +80,8 @@ export interface Shot {
 
 export interface EpisodeBrief {
   season: string;
-  aspect: string; // "9:16"
+  aspect: EpisodeAspect;
+  requirements: string;
   duration_s: number;
   tone: string;
   outfit_override: string | null;
@@ -108,6 +110,7 @@ export interface EpisodeRender {
 
 export interface Episode {
   episode_id: string;
+  name: string;
   owner_id: string;
   persona_id: string;
   persona_version: number;
@@ -117,6 +120,7 @@ export interface Episode {
   template_id: string;
   status: EpisodeStatus;
   mode: EpisodeMode;
+  candidate_count: number;
   created_at: string; // ISO 8601
   estimated_credits: number;
   credits_used: number;

@@ -1,10 +1,9 @@
-import { DEFAULT_CANDIDATES } from "../rules/credits";
 import type { Episode } from "../schema";
 import { transitionEpisode, transitionShot } from "../state";
 import { generationSeed } from "./generation-seed";
 import type { GeneratedAsset, StageContext } from "./types";
 
-/** Generate two 9:16 candidates for one shot; worker owns inference and files. */
+/** Generate the episode's saved candidate count for one shot. */
 export async function runKeyframe(episode: Episode, shotNo?: number, context?: StageContext): Promise<Episode> {
   if (shotNo === undefined) throw new Error("keyframe 需要 shot_no");
   if (!context?.persona || !context.destination || !context.keyframe || !context.generation_id) {
@@ -21,9 +20,10 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   }
   const seed = generationSeed(context.generation_id, shotNo, "image");
   const generated: GeneratedAsset[] = [];
-  for (let candidateNo = 0; candidateNo < DEFAULT_CANDIDATES; candidateNo++) {
+  for (let candidateNo = 0; candidateNo < (episode.candidate_count ?? 2); candidateNo++) {
     generated.push(await context.keyframe.generate({
       episode_id: episode.episode_id, shot_no: shotNo, candidate_no: candidateNo,
+      aspect: episode.brief.aspect,
       prompt: shot.kf_prompt, refs, seed: (seed + candidateNo) >>> 0,
       generation_id: context.generation_id,
     }));

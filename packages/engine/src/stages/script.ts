@@ -25,6 +25,7 @@ export async function runScript(episode: Episode, _shotNo?: number, context?: St
   // 直接拦截，不浪费一次 LLM 调用。生成后的拦截在 provider 里（对 LLM 产出
   // 的分镜文案做同样检查）。
   const preGenViolations = checkContent([
+    { field: "brief.requirements", text: episode.brief.requirements ?? "" },
     { field: "brief.tone", text: episode.brief.tone },
     ...episode.brief.banned.map((term, i) => ({ field: `brief.banned[${i}]`, text: term })),
     ...(episode.brief.outfit_override !== null

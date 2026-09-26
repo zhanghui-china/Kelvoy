@@ -4,6 +4,7 @@ import {
   type ContentViolation,
   DEFAULT_CANDIDATES,
   type EpisodeMode,
+  type EpisodeAspect,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
 } from "@kelvoy/engine";
@@ -71,6 +72,9 @@ export default function NewEpisodePage() {
   const [outfitOverride, setOutfitOverride] = useState("");
   const [mode, setMode] = useState<EpisodeMode>("per_shot");
   const [candidates, setCandidates] = useState<number>(DEFAULT_CANDIDATES);
+  const [name, setName] = useState("");
+  const [requirements, setRequirements] = useState("");
+  const [aspect, setAspect] = useState<EpisodeAspect>("9:16");
 
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<string[] | null>(null);
@@ -119,9 +123,7 @@ export default function NewEpisodePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDestination?.destination_id, seasonMode]);
 
-  // FR-01/FR-09：mode / 候选数一变就重新粗估，展示在提交按钮旁，只展示不
-  // 拦截。候选数目前只进估价，不随建期请求落库——Episode 里还没有这个字段
-  // （PRD §6），要让流水线真按 N 出候选是 M1 接真实图像模型时的事。
+  // Mode and saved candidate count share the same estimate inputs.
   const { data: estimateData, loading: estimateLoading } = useApiResource(
     () => getEstimate(mode, candidates),
     [mode, candidates],
@@ -147,6 +149,10 @@ export default function NewEpisodePage() {
 
     const result = await createEpisode({
       persona_id: personaId,
+      name: name.trim() || undefined,
+      requirements,
+      aspect,
+      candidate_count: candidates,
       destination_id: destinationId,
       template_id: templateId,
       season: season.trim().length > 0 ? season : undefined,
@@ -210,6 +216,11 @@ export default function NewEpisodePage() {
 
       <form onSubmit={handleSubmit} className="k-brief-form">
         <div className="k-brief-grid">
+          <label className="k-field">
+            本期名称
+            <input value={name} onChange={(e) => setName(e.target.value)}
+              placeholder={selectedDestination ? `${selectedDestination.city} · ${selectedDestination.name}` : "输入名称"} />
+          </label>
           <label className="k-field">
             角色
             <select value={personaId} onChange={(e) => setPersonaId(e.target.value)}>
@@ -283,6 +294,11 @@ export default function NewEpisodePage() {
           <label className="k-field">
             语气
             <input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="例如：松弛" />
+          </label>
+          <label className="k-field">
+            创作要求
+            <textarea value={requirements} onChange={(e) => setRequirements(e.target.value)}
+              placeholder="描述这一期想呈现的重点" />
           </label>
           <div className="k-brief-chips k-brief-tone-chips">
             {TONE_CHIPS.map((chip) => (
@@ -368,7 +384,11 @@ export default function NewEpisodePage() {
 
           <div className="k-field">
             画幅
-            <div className="k-brief-aspect">9:16 竖屏 · 约 30 秒</div>
+            <select value={aspect} onChange={(e) => setAspect(e.target.value as EpisodeAspect)}>
+              <option value="9:16">9:16 竖屏</option>
+              <option value="16:9">16:9 横屏</option>
+            </select>
+            <div className="k-brief-aspect">约 30 秒 · 30 fps</div>
           </div>
         </div>
 

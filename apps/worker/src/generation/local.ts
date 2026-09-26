@@ -73,7 +73,7 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const hash = await hashKey(frameKey);
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, first_frame: frameKey,
-        duration_s: input.duration_s, seed: input.seed,
+        duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
       }));
       const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}.mp4`;
       await saveArtifact(input.episode_id, key, response.source);
