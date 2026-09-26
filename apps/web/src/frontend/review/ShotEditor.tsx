@@ -30,6 +30,7 @@ export default function ShotEditor({
   onCancel: () => void;
 }) {
   const [beat, setBeat] = useState(shot.beat);
+  const [caption, setCaption] = useState(shot.caption ?? "");
   const [size, setSize] = useState<ShotSize>(shot.size);
   const [camera, setCamera] = useState<ShotCamera>(shot.camera);
   const [landmark, setLandmark] = useState<string>(shot.landmark ?? "");
@@ -42,6 +43,7 @@ export default function ShotEditor({
     setError(null);
     const patch: ShotPatch = {
       beat,
+      caption,
       size,
       camera,
       landmark: landmark === "" ? null : landmark,
@@ -98,6 +100,10 @@ export default function ShotEditor({
           </select>
         </label>
       </div>
+      <label className="k-field">
+        成片字幕
+        <input value={caption} maxLength={120} onChange={(e) => setCaption(e.target.value)} />
+      </label>
       <label className="k-field">
         关键帧 prompt
         <textarea value={kfPrompt} onChange={(e) => setKfPrompt(e.target.value)} />

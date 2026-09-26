@@ -14,6 +14,8 @@ interface TaskRow {
   stage: StageName;
   shot_no: number | null;
   attempt: number;
+  operation: "script_regenerate" | "script_optimize" | null;
+  instruction: string | null;
 }
 
 function toTask(row: TaskRow): Task {
@@ -24,6 +26,8 @@ function toTask(row: TaskRow): Task {
     attempt: row.attempt,
   };
   if (row.shot_no !== null) task.shot_no = row.shot_no;
+  if (row.operation) task.operation = row.operation;
+  if (row.instruction) task.instruction = row.instruction;
   return task;
 }
 
@@ -31,14 +35,19 @@ export async function enqueueTask(input: {
   episode_id: string;
   stage: StageName;
   shot_no?: number;
+  operation?: "script_regenerate" | "script_optimize";
+  instruction?: string;
 }): Promise<Task> {
   const taskId = `tk_${crypto.randomUUID()}`;
   getDb()
     .query(
-      "insert into tasks (task_id, episode_id, stage, shot_no, attempt, status) values (?, ?, ?, ?, 1, 'pending')",
+      "insert into tasks (task_id, episode_id, stage, shot_no, operation, instruction, attempt, status) values (?, ?, ?, ?, ?, ?, 1, 'pending')",
     )
-    .run(taskId, input.episode_id, input.stage, input.shot_no ?? null);
-  return { task_id: taskId, episode_id: input.episode_id, stage: input.stage, shot_no: input.shot_no, attempt: 1 };
+    .run(taskId, input.episode_id, input.stage, input.shot_no ?? null, input.operation ?? null, input.instruction ?? null);
+  return { task_id: taskId, episode_id: input.episode_id, stage: input.stage, attempt: 1,
+    ...(input.shot_no !== undefined ? { shot_no: input.shot_no } : {}),
+    ...(input.operation ? { operation: input.operation } : {}),
+    ...(input.instruction ? { instruction: input.instruction } : {}) };
 }
 
 export async function dequeueTask(): Promise<Task | null> {
@@ -49,7 +58,7 @@ export async function dequeueTask(): Promise<Task | null> {
        where task_id = (
          select task_id from tasks where status = 'pending' order by created_at asc limit 1
        )
-       returning task_id, episode_id, stage, shot_no, attempt`,
+       returning task_id, episode_id, stage, shot_no, attempt, operation, instruction`,
     )
     .get();
   return row ? toTask(row) : null;

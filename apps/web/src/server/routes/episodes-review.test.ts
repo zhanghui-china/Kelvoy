@@ -5,6 +5,58 @@ import { setupEpisodeRouteTests, buildApp, compliantShots, destinationFixture, f
 
 setupEpisodeRouteTests();
 
+test("script optimization queues once, blocks edits during processing, and preserves the current draft", async () => {
+  const { cookie, ownerId } = await login("script-action");
+  const episode = fixture("e_script", ownerId);
+  episode.status = "script_review";
+  episode.shots = [shotFixture(1)];
+  await insertEpisode(episode);
+  const app = buildApp();
+  const headers = { cookie, "content-type": "application/json" };
+  const sent = await app.request("/api/episodes/e_script/script/optimize", {
+    method: "POST", headers,
+    body: JSON.stringify({ row_version: 1, instruction: "突出傍晚的旅行氛围" }),
+  });
+  expect(sent.status).toBe(200);
+  const task = await dequeueTask();
+  expect(task?.operation).toBe("script_optimize");
+  expect(task?.instruction).toBe("突出傍晚的旅行氛围");
+  const duplicate = await app.request("/api/episodes/e_script/script/regenerate", {
+    method: "POST", headers, body: JSON.stringify({ row_version: 2 }),
+  });
+  expect(duplicate.status).toBe(400);
+  expect(((await duplicate.json()) as { error: string }).error).toBe("action_pending");
+  const continueRequest = await app.request("/api/episodes/e_script/continue", {
+    method: "POST", headers, body: JSON.stringify({ row_version: 2 }),
+  });
+  expect(continueRequest.status).toBe(400);
+  const got = await app.request("/api/episodes/e_script", { headers: { cookie } });
+  const updated = (await got.json()) as { episode: Episode };
+  expect(updated.episode.shots[0]?.beat).toBe(episode.shots[0]?.beat);
+  expect(updated.episode.script_pending_task_id).toBe(task?.task_id);
+});
+
+test("script action rejects missing optimize instruction and non-review stages", async () => {
+  const { cookie, ownerId } = await login("script-invalid");
+  const episode = fixture("e_script", ownerId);
+  episode.status = "script_review";
+  await insertEpisode(episode);
+  const app = buildApp();
+  const headers = { cookie, "content-type": "application/json" };
+  const missing = await app.request("/api/episodes/e_script/script/optimize", {
+    method: "POST", headers, body: JSON.stringify({ row_version: 1, instruction: " " }),
+  });
+  expect(missing.status).toBe(400);
+  expect(((await missing.json()) as { error: string }).error).toBe("invalid_instruction");
+  const draft = fixture("e_draft", ownerId);
+  await insertEpisode(draft);
+  const wrongStage = await app.request("/api/episodes/e_draft/script/regenerate", {
+    method: "POST", headers, body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(wrongStage.status).toBe(400);
+  expect(((await wrongStage.json()) as { error: string }).error).toBe("illegal_transition");
+});
+
 test("POST /:id/shots/:no/remove deletes the shot and re-validates FR-02 on what's left", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));

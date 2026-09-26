@@ -12,6 +12,8 @@ const ERROR_LABELS: Record<string, string> = {
   destination_not_found: "目的地记录不存在",
   invalid_row_version: "请求缺少版本号，刷新后重试",
   invalid_body: "请求格式不对",
+  invalid_instruction: "请填写 500 字以内的优化指令",
+  action_pending: "脚本任务正在处理，请等待完成",
   network_error: "网络不通，稍后再试",
   invalid_response: "服务端返回了无法解析的内容",
 };

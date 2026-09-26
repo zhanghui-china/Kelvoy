@@ -12,6 +12,7 @@ import {
   patchShot,
   upsertDestination,
   updatePersona,
+  submitScriptAction,
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { buildStageContext, consumeLoop, handleTask } from "./consumer";
@@ -105,6 +106,37 @@ test("handleTask fails permanently when the episode doesn't exist", async () => 
 
   // requeue: false -> not pending again
   expect(await dequeueTask()).toBeNull();
+});
+
+test("failed script optimization preserves the original and clears its pending marker", async () => {
+  const episode = { ...fixtureEpisode("e_revision"), status: "script_review" as const,
+    shots: [shotFixture()] };
+  await insertEpisode(episode);
+  await upsertDestination(destinationFixture("d_test"));
+  const submitted = submitScriptAction({ episode_id: episode.episode_id, owner_id: episode.owner_id,
+    row_version: 1, operation: "script_optimize", instruction: "突出夜景" });
+  expect(submitted.ok).toBe(true);
+  const first = await dequeueTask();
+  expect(first).not.toBeNull();
+  const priorKey = process.env.STEPFUN_API_KEY;
+  delete process.env.STEPFUN_API_KEY;
+  try {
+    await handleTask(first!);
+    const second = await dequeueTask();
+    expect(second?.attempt).toBe(2);
+    await handleTask(second!);
+    const updated = await getEpisode(episode.episode_id);
+    expect(updated.ok).toBe(true);
+    if (updated.ok) {
+      expect(updated.episode.shots[0]?.beat).toBe("经过地标");
+      expect(updated.episode.script_pending_task_id).toBeNull();
+      expect(updated.episode.script_action_error).toContain("原稿已保留");
+    }
+    expect(await dequeueTask()).toBeNull();
+  } finally {
+    if (priorKey === undefined) delete process.env.STEPFUN_API_KEY;
+    else process.env.STEPFUN_API_KEY = priorKey;
+  }
 });
 
 test("handleTask auto-enqueues script once brief lands the episode in scripting (#39)", async () => {

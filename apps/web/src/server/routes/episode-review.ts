@@ -16,6 +16,7 @@ import {
   patchShot,
   replaceEpisode,
   setShare,
+  submitScriptAction,
 } from "@kelvoy/store";
 import { Hono } from "hono";
 import { loadOwnedEpisode, parseRowVersion, patchErrorResponse } from "./episode-common";
@@ -27,6 +28,36 @@ import { loadOwnedEpisode, parseRowVersion, patchErrorResponse } from "./episode
  * 只是因为 episodes.ts 加完 #31 的两条路由就超了 500 行上限。
  */
 const review = new Hono();
+
+review.post("/:id/script/:action", async (c) => {
+  const action = c.req.param("action");
+  if (action !== "regenerate" && action !== "optimize") {
+    return c.json({ ok: false, error: "invalid_action" }, 400);
+  }
+  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
+  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.mode === "grid") return c.json({ ok: false, error: "grid_unavailable" }, 400);
+  const body = await c.req.json().catch(() => null);
+  const rowVersion = parseRowVersion(body);
+  if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
+  const instruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
+  if (action === "optimize" && (instruction.length === 0 || instruction.length > 500)) {
+    return c.json({ ok: false, error: "invalid_instruction" }, 400);
+  }
+  const violations = checkContent([{ field: "instruction", text: instruction }]);
+  if (violations.length > 0) return c.json({ ok: false, error: "content_blocked", violations }, 400);
+  const result = submitScriptAction({
+    episode_id: loaded.episode.episode_id, owner_id: c.get("ownerId"), row_version: rowVersion,
+    operation: action === "optimize" ? "script_optimize" : "script_regenerate",
+    ...(action === "optimize" ? { instruction } : {}),
+  });
+  if (!result.ok) {
+    if (result.error === "not_found") return c.json({ ok: false, error: "not_found" }, 404);
+    if (result.error === "version_conflict") return c.json(result, 409);
+    return c.json(result, 400);
+  }
+  return c.json({ ok: true, row_version: result.row_version, task_id: result.task.task_id });
+});
 
 function parseRegenBody(body: unknown): { rowVersion: number; regenStage?: RegenStage } | null {
   const rowVersion = parseRowVersion(body);
@@ -83,6 +114,7 @@ async function regenShotAndEnqueue(
 review.patch("/:id/shots/:no", async (c) => {
   const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.script_pending_task_id) return c.json({ ok: false, error: "action_pending" }, 400);
 
   const body = await c.req.json().catch(() => null);
   const result = validatePatchShotRequest(body);
@@ -135,6 +167,7 @@ review.post("/:id/shots/reorder", async (c) => {
   const episodeId = c.req.param("id");
   const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.script_pending_task_id) return c.json({ ok: false, error: "action_pending" }, 400);
 
   const body = await c.req.json().catch(() => null);
   const rowVersion = parseRowVersion(body);
@@ -181,6 +214,7 @@ review.post("/:id/continue", async (c) => {
   const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
   if (loaded.episode.mode === "grid") return c.json({ ok: false, error: "grid_unavailable" }, 400);
+  if (loaded.episode.script_pending_task_id) return c.json({ ok: false, error: "action_pending" }, 400);
 
   const body = await c.req.json().catch(() => null);
   const rowVersion = parseRowVersion(body);
@@ -250,6 +284,7 @@ review.post("/:id/shots/:no/remove", async (c) => {
   const shotNo = Number(c.req.param("no"));
   const loaded = await loadOwnedEpisode(c.get("ownerId"), episodeId);
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  if (loaded.episode.script_pending_task_id) return c.json({ ok: false, error: "action_pending" }, 400);
 
   const shot = loaded.episode.shots.find((s) => s.no === shotNo);
   if (!shot) return c.json({ ok: false, error: "not_found" }, 404);

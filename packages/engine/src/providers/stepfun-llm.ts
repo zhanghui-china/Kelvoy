@@ -44,6 +44,8 @@ function buildPrompt(input: {
   aspect: string;
   banned: string[];
   feedback?: string;
+  instruction?: string;
+  previousShots?: Shot[];
 }): string {
   const skeleton = SKELETONS[input.destinationType];
   const landmarkList = input.landmarks
@@ -59,6 +61,8 @@ function buildPrompt(input: {
 季节：${input.season}　语气：${input.tone}
 画幅：${input.aspect}
 创作要求：${input.requirements || "无"}
+${input.previousShots ? `这是本期现有分镜，保留目的地与角色设定，重新创作一份符合硬规则的完整分镜：${JSON.stringify(input.previousShots.map((shot) => ({ no: shot.no, beat: shot.beat, caption: shot.caption, landmark: shot.landmark })))}` : ""}
+${input.instruction ? `本次优化指令：${input.instruction}` : ""}
 禁止出现：${input.banned.join("、") || "无"}
 
 叙事骨架（段落顺序参考，不用照抄段落名，用于把握节奏）：${skeleton.segments.join(" → ")}
@@ -202,7 +206,7 @@ async function callChatCompletion(prompt: string): Promise<string> {
 }
 
 export const stepfunScriptProvider: ScriptProvider = {
-  async generateShots({ brief, destination }) {
+  async generateShots({ brief, destination, instruction, previousShots }) {
     let feedback: string | undefined;
     let contentViolations: ReturnType<typeof checkShotsContent> = [];
 
@@ -219,6 +223,8 @@ export const stepfunScriptProvider: ScriptProvider = {
         aspect: brief.aspect,
         banned: brief.banned,
         feedback,
+        instruction,
+        previousShots,
       });
 
       const content = await callChatCompletion(prompt);

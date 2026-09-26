@@ -60,6 +60,8 @@ create table if not exists tasks (
   stage text not null,
   shot_no integer,
   attempt integer not null default 1,
+  operation text,
+  instruction text,
   status text not null default 'pending',
   created_at text not null default (datetime('now')),
   updated_at text not null default (datetime('now'))
@@ -73,6 +75,8 @@ create table if not exists tasks (
  * 无副作用（每次 open() 都会跑一遍）。
  */
 export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
+  { table: "tasks", column: "operation", ddl: "alter table tasks add column operation text" },
+  { table: "tasks", column: "instruction", ddl: "alter table tasks add column instruction text" },
   {
     table: "users",
     column: "settings",

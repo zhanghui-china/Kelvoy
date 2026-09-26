@@ -126,6 +126,8 @@ export interface Episode {
   mode: EpisodeMode;
   cut_policy?: "fixed_1s" | "beat_aligned";
   candidate_count: number;
+  script_pending_task_id?: string | null;
+  script_action_error?: string | null;
   created_at: string; // ISO 8601
   estimated_credits: number;
   credits_used: number;

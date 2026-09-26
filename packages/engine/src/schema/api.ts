@@ -14,6 +14,8 @@ export interface Task {
   stage: StageName;
   shot_no?: number;
   attempt: number;
+  operation?: "script_regenerate" | "script_optimize";
+  instruction?: string;
 }
 
 /**

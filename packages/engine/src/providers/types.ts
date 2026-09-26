@@ -5,6 +5,8 @@ export interface ScriptProvider {
   generateShots(input: {
     brief: EpisodeBrief;
     destination: Destination;
+    instruction?: string;
+    previousShots?: Shot[];
   }): Promise<{ shots: Shot[]; scenes: Scene[] }>;
 }
 

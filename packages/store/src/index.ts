@@ -6,3 +6,4 @@ export * from "./templates";
 export * from "./tasks";
 export * from "./users";
 export * from "./sessions";
+export * from "./script-actions";

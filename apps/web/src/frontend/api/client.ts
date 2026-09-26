@@ -256,6 +256,14 @@ export function continueEpisode(episodeId: string, rowVersion: number) {
   return post(episodePath(episodeId, "/continue"), { row_version: rowVersion });
 }
 
+export function regenerateScript(episodeId: string, rowVersion: number) {
+  return post(episodePath(episodeId, "/script/regenerate"), { row_version: rowVersion });
+}
+
+export function optimizeScript(episodeId: string, rowVersion: number, instruction: string) {
+  return post(episodePath(episodeId, "/script/optimize"), { row_version: rowVersion, instruction });
+}
+
 export function recompose(episodeId: string, rowVersion: number) {
   return post(episodePath(episodeId, "/recompose"), { row_version: rowVersion });
 }

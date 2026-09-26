@@ -48,3 +48,25 @@ export async function runScript(episode: Episode, _shotNo?: number, context?: St
     scenes,
   };
 }
+
+/** Revision stays in script_review. Failed provider calls never mutate the original. */
+export async function runScriptRevision(episode: Episode, instruction: string, context?: StageContext): Promise<Episode> {
+  if (episode.status !== "script_review" || !context?.destination) {
+    throw new Error("脚本重生成只允许在脚本审核阶段，且需要目的地资料");
+  }
+  const violations = checkContent([{ field: "instruction", text: instruction }]);
+  if (violations.length > 0) throw new ContentBlockedError(violations);
+  const { shots, scenes } = await stepfunScriptProvider.generateShots({
+    brief: episode.brief,
+    destination: context.destination,
+    instruction,
+    previousShots: episode.shots,
+  });
+  return {
+    ...episode,
+    shots: episode.cut_policy === "fixed_1s" ? shots.map((shot) => ({ ...shot, duration_s: 1 })) : shots,
+    scenes,
+    script_pending_task_id: null,
+    script_action_error: null,
+  };
+}

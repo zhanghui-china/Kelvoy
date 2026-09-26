@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Destination, Episode, Shot } from "@kelvoy/engine";
-import { continueEpisode, removeShot, reorderShots } from "../api/client";
+import { continueEpisode, optimizeScript, regenerateScript, removeShot, reorderShots } from "../api/client";
 import { SCENE_TIME_LABELS, SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS } from "../labels";
 import ShotEditor from "./ShotEditor";
 import { MutationError } from "./ShotHeader";
@@ -40,8 +40,11 @@ export default function ScriptReview({
 }) {
   const [view, setView] = useState<ViewMode>("script");
   const [editing, setEditing] = useState<number | null>(null);
+  const [instruction, setInstruction] = useState("");
 
   const shots = episode.shots;
+  const scriptBusy = Boolean(episode.script_pending_task_id);
+  const actionDisabled = mutation.pending || scriptBusy;
 
   async function move(shotNo: number, delta: number) {
     const order = shots.map((s) => s.no);
@@ -66,7 +69,7 @@ export default function ScriptReview({
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
           aria-label={`第 ${shot.no} 镜上移`}
-          disabled={index === 0 || mutation.pending}
+          disabled={index === 0 || actionDisabled}
           onClick={() => move(shot.no, -1)}
         >
           上移
@@ -75,7 +78,7 @@ export default function ScriptReview({
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
           aria-label={`第 ${shot.no} 镜下移`}
-          disabled={index === shots.length - 1 || mutation.pending}
+          disabled={index === shots.length - 1 || actionDisabled}
           onClick={() => move(shot.no, 1)}
         >
           下移
@@ -83,6 +86,7 @@ export default function ScriptReview({
         <button
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
+          disabled={actionDisabled}
           onClick={() => setEditing(editing === shot.no ? null : shot.no)}
         >
           {editing === shot.no ? "收起" : "编辑"}
@@ -90,7 +94,7 @@ export default function ScriptReview({
         <button
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
-          disabled={shots.length <= MIN_SHOTS || mutation.pending}
+          disabled={shots.length <= MIN_SHOTS || actionDisabled}
           onClick={() => handleRemove(shot.no)}
         >
           删除
@@ -139,6 +143,28 @@ export default function ScriptReview({
       <p className="k-card-meta">
         当前 {shots.length} 镜，下限 {MIN_SHOTS} 镜。审核 1 只能改、删，不能新增镜（PRD §4）。
       </p>
+      <div className="k-card k-desk-script-assistant">
+        <div className="k-card-title">脚本助手</div>
+        <p className="k-card-meta">已生成 {shots.length} 镜；可重新生成整份脚本，或描述想调整的叙事重点。处理失败会保留当前脚本。</p>
+        <label className="k-field">
+          优化指令
+          <textarea value={instruction} maxLength={500} disabled={actionDisabled}
+            placeholder="例如：增加夜景镜头，让美食段落更有生活感"
+            onChange={(event) => setInstruction(event.target.value)} />
+        </label>
+        <div className="k-desk-actions">
+          <button type="button" className="k-btn k-btn-secondary" disabled={actionDisabled}
+            onClick={() => mutation.run((rowVersion) => regenerateScript(episode.episode_id, rowVersion))}>
+            重新生成
+          </button>
+          <button type="button" className="k-btn k-btn-secondary" disabled={actionDisabled || !instruction.trim()}
+            onClick={() => mutation.run((rowVersion) => optimizeScript(episode.episode_id, rowVersion, instruction.trim()))}>
+            按指令优化
+          </button>
+        </div>
+        {scriptBusy && <p role="status">脚本正在处理中，请稍候…</p>}
+        {episode.script_action_error && <p role="alert">{episode.script_action_error}</p>}
+      </div>
       <MutationError error={mutation.error} />
 
       {view === "script" ? (
@@ -151,6 +177,7 @@ export default function ScriptReview({
                 <th>时段</th>
                 <th>景别</th>
                 <th>动作 beat</th>
+                <th>字幕</th>
                 <th>机位</th>
                 <th>地标</th>
                 <th>关键帧 prompt</th>
@@ -167,6 +194,7 @@ export default function ScriptReview({
                     <td>{scene.time}</td>
                     <td>{SHOT_SIZE_LABELS[shot.size]}</td>
                     <td>{shot.beat}</td>
+                    <td>{shot.caption || "—"}</td>
                     <td>{SHOT_CAMERA_LABELS[shot.camera]}</td>
                     <td>{landmarkLabel(destination, shot)}</td>
                     <td className="k-desk-prompt-cell">{shot.kf_prompt || "—"}</td>
@@ -174,7 +202,7 @@ export default function ScriptReview({
                   </tr>,
                   editing === shot.no ? (
                     <tr key={`${shot.no}-editor`}>
-                      <td colSpan={9}>{editor(shot)}</td>
+                      <td colSpan={10}>{editor(shot)}</td>
                     </tr>
                   ) : null,
                 ];
@@ -196,6 +224,7 @@ export default function ScriptReview({
                   {landmarkLabel(destination, shot)}
                 </div>
                 <p>{shot.beat}</p>
+                <p className="k-card-meta">字幕：{shot.caption || "—"}</p>
                 <div className="k-card-meta k-desk-prompt-cell">{shot.kf_prompt || "还没有 prompt"}</div>
                 {shotActions(shot, index)}
                 {editing === shot.no && editor(shot)}
@@ -209,7 +238,7 @@ export default function ScriptReview({
         <button
           type="button"
           className="k-btn k-btn-primary"
-          disabled={mutation.pending}
+          disabled={actionDisabled}
           onClick={() => mutation.run((rowVersion) => continueEpisode(episode.episode_id, rowVersion))}
         >
           继续 → 生成素材与关键帧

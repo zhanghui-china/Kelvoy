@@ -7,6 +7,7 @@ import {
   type StageName,
   type Task,
   runStage,
+  runScriptRevision,
 } from "@kelvoy/engine";
 import {
   completeTask,
@@ -110,6 +111,10 @@ async function prepareShot(task: Task, rowVersion: number, episode: Episode): Pr
 }
 
 export async function handleTask(task: Task, overrides: Partial<StageContext> = {}): Promise<void> {
+  if (task.operation === "script_regenerate" || task.operation === "script_optimize") {
+    await handleScriptActionTask(task, overrides);
+    return;
+  }
   const result = await getEpisode(task.episode_id);
   if (!result.ok) {
     // Episode vanished (shouldn't happen under normal operation) — no
@@ -179,5 +184,48 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
         }
       }
     }
+  }
+}
+
+async function handleScriptActionTask(task: Task, overrides: Partial<StageContext>): Promise<void> {
+  const current = await getEpisode(task.episode_id);
+  if (!current.ok) {
+    await failTask(task.task_id, { requeue: false });
+    return;
+  }
+  if (current.episode.status !== "script_review" || current.episode.script_pending_task_id !== task.task_id) {
+    await completeTask(task.task_id); // already applied or cancelled
+    return;
+  }
+  try {
+    const context = { ...await buildStageContext("script", current.episode, task), ...overrides };
+    const updated = await runScriptRevision(current.episode, task.instruction ?? "", context);
+    const written = await replaceEpisode(task.episode_id, current.row_version, updated);
+    if (!written.ok) {
+      const retry = task.attempt < MAX_LOCAL_ATTEMPTS;
+      if (!retry) await clearFailedScriptAction(task);
+      await failTask(task.task_id, { requeue: retry });
+      return;
+    }
+    await completeTask(task.task_id);
+  } catch (error) {
+    const retry = !(error instanceof ContentBlockedError) && task.attempt < MAX_LOCAL_ATTEMPTS;
+    if (retry) {
+      await failTask(task.task_id, { requeue: true });
+      return;
+    }
+    await clearFailedScriptAction(task);
+    await failTask(task.task_id, { requeue: false });
+  }
+}
+
+async function clearFailedScriptAction(task: Task): Promise<void> {
+  const fresh = await getEpisode(task.episode_id);
+  if (fresh.ok && fresh.episode.script_pending_task_id === task.task_id) {
+    await replaceEpisode(task.episode_id, fresh.row_version, {
+      ...fresh.episode,
+      script_pending_task_id: null,
+      script_action_error: "脚本处理失败，原稿已保留，请重试。",
+    });
   }
 }
