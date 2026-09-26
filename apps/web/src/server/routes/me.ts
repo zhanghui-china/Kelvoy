@@ -10,6 +10,12 @@ const me = new Hono();
 
 me.use("*", requireOwner);
 
+me.get("/", async (c) => {
+  const user = await getUserById(c.get("ownerId"));
+  if (!user) return c.json({ ok: false, error: "unauthorized" }, 401);
+  return c.json({ ok: true, user: { user_id: user.user_id, username: user.username } });
+});
+
 me.get("/settings", async (c) => {
   const user = await getUserById(c.get("ownerId"));
   // session 有效但账号没了（被删号）——当成未登录，让前端回登录页。

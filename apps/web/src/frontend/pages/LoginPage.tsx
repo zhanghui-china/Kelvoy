@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../api/client";
 import { LogoMark } from "../icons";
+import { clearDraft, readDraft } from "./episode-draft";
 import "./LoginPage.css";
 
 export default function LoginPage() {
@@ -21,6 +22,7 @@ export default function LoginPage() {
       setError(result.error === "invalid_credentials" ? "用户名或密码不对" : (result.error ?? "登录失败"));
       return;
     }
+    if (!readDraft(result.user.user_id)) clearDraft();
     // 仅用于侧栏展示当前账号，不是鉴权凭据——鉴权靠 httpOnly session cookie。
     try {
       localStorage.setItem("kelvoy_username", result.user.username);

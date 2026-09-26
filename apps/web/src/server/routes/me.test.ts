@@ -48,6 +48,19 @@ afterEach(() => {
 });
 
 describe("GET/PATCH /api/me/settings", () => {
+  test("returns only the authenticated account identity for draft isolation", async () => {
+    const app = buildApp();
+    await seedUser("first", "hunter2");
+    await seedUser("second", "hunter2");
+    expect((await app.request("/api/me")).status).toBe(401);
+    const firstCookie = await loginCookie(app, "first", "hunter2");
+    const secondCookie = await loginCookie(app, "second", "hunter2");
+    const first = await (await app.request("/api/me", { headers: { cookie: firstCookie } })).json() as { user: { user_id: string; username: string } };
+    const second = await (await app.request("/api/me", { headers: { cookie: secondCookie } })).json() as { user: { user_id: string; username: string } };
+    expect(first.user.username).toBe("first");
+    expect(second.user.username).toBe("second");
+    expect(first.user.user_id).not.toBe(second.user.user_id);
+  });
   test("rejects grid as a newly saved default mode", async () => {
     const app = buildApp();
     await seedUser("grid-default", "hunter2");

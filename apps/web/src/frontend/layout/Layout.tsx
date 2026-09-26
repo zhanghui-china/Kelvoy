@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { logout } from "../api/client";
+import { clearDraft } from "../pages/episode-draft";
 import {
   DestinationIcon,
   HomeIcon,
@@ -44,6 +45,7 @@ export default function Layout() {
 
   async function handleLogout() {
     await logout();
+    clearDraft();
     try {
       localStorage.removeItem("kelvoy_username");
     } catch {

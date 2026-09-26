@@ -23,6 +23,10 @@ export function draftForDestinationParam(draft: EpisodeDraft | null, destination
   return { ...draft, destinationId, templateId: "", seasonMode: "preset", season: "" };
 }
 
+export function seasonAfterDestinationChange(mode: EpisodeDraft["seasonMode"], current: string, best: string[]): string {
+  return mode === "custom" ? current : (best[0] ?? "");
+}
+
 function isDraft(value: unknown): value is EpisodeDraft {
   if (!value || typeof value !== "object") return false;
   const draft = value as Record<string, unknown>;
@@ -33,25 +37,27 @@ function isDraft(value: unknown): value is EpisodeDraft {
     && Array.isArray(draft.banned) && draft.banned.every((term: unknown) => typeof term === "string");
 }
 
-export function readDraft(): EpisodeDraft | null {
+export function readDraft(ownerId: string): EpisodeDraft | null {
   try {
     const raw = sessionStorage.getItem(EPISODE_DRAFT_KEY);
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
-    return isDraft(value) ? value : null;
+    if (!value || typeof value !== "object") return null;
+    const envelope = value as { owner_id?: unknown; draft?: unknown };
+    return envelope.owner_id === ownerId && isDraft(envelope.draft) ? envelope.draft : null;
   } catch {
     return null;
   }
 }
 
-export function saveDraft(draft: EpisodeDraft): void {
-  try { sessionStorage.setItem(EPISODE_DRAFT_KEY, JSON.stringify(draft)); }
+export function saveDraft(draft: EpisodeDraft, ownerId: string): void {
+  try { sessionStorage.setItem(EPISODE_DRAFT_KEY, JSON.stringify({ owner_id: ownerId, draft })); }
   catch { /* Browser storage can be unavailable. */ }
 }
 
-export function selectDraftPersona(personaId: string): void {
-  const draft = readDraft();
-  if (draft) saveDraft({ ...draft, personaId });
+export function selectDraftPersona(personaId: string, ownerId: string): void {
+  const draft = readDraft(ownerId);
+  if (draft) saveDraft({ ...draft, personaId }, ownerId);
 }
 
 export function clearDraft(): void {

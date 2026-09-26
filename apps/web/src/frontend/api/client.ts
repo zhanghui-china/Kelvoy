@@ -93,6 +93,10 @@ export function logout() {
   return apiFetch<Record<string, never>>("/api/auth/logout", { method: "POST" });
 }
 
+export function getMe() {
+  return apiFetch<{ user: AuthedUser }>("/api/me");
+}
+
 // M2-15 (#43) 设置页：当前登录账号自己的出片默认值 + 改密码。路由前缀
 // /api/me/* 都在 requireOwner 后面，改的永远是 cookie 对应的那个账号。
 

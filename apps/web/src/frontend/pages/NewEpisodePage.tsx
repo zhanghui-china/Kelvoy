@@ -10,6 +10,7 @@ import {
 } from "@kelvoy/engine";
 import {
   createEpisode,
+  getMe,
   getEstimate,
   getMySettings,
   isContentViolation,
@@ -20,7 +21,7 @@ import {
 import { useApiResource } from "../hooks/useApiResource";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import "./NewEpisodePage.css";
-import { clearDraft, draftForDestinationParam, readDraft, saveDraft, type EpisodeDraft } from "./episode-draft";
+import { clearDraft, draftForDestinationParam, readDraft, saveDraft, seasonAfterDestinationChange, type EpisodeDraft } from "./episode-draft";
 
 // FR-01 语气快捷 chip，点一下直接填入(替换，不追加)。
 const TONE_CHIPS = ["松弛", "治愈", "活力", "文艺"];
@@ -44,11 +45,18 @@ function splitBannedInput(raw: string): string[] {
 }
 
 export default function NewEpisodePage() {
+  const meRes = useApiResource(getMe, []);
+  if (meRes.loading) return <p className="k-empty">加载中…</p>;
+  if (meRes.error || !meRes.data?.user) return <p className="k-error">无法确认当前账号，请重新登录。</p>;
+  return <NewEpisodeForm ownerId={meRes.data.user.user_id} />;
+}
+
+function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   const navigate = useNavigate();
   // 首页"灵感目的地"卡片点进来时带 ?destination=<id>（#42）。
   const [searchParams] = useSearchParams();
   const destinationParam = searchParams.get("destination");
-  const restoredDraft = useRef(readDraft());
+  const restoredDraft = useRef(readDraft(ownerId));
   const initialDraft = useRef(draftForDestinationParam(restoredDraft.current, destinationParam));
   const handledDestinationParam = useRef(destinationParam);
 
@@ -86,8 +94,8 @@ export default function NewEpisodePage() {
 
   useEffect(() => {
     const draft: EpisodeDraft = { personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect };
-    saveDraft(draft);
-  }, [personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect]);
+    saveDraft(draft, ownerId);
+  }, [ownerId, personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect]);
 
   // 出片默认值到位后预填一次。settings 的引用只在这次请求结束时变，所以
   // 不会覆盖用户之后的手动修改（同下面那几个"各选一次默认项"的 effect）。
@@ -249,7 +257,7 @@ export default function NewEpisodePage() {
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder={selectedDestination ? `${selectedDestination.city} · ${selectedDestination.name}` : "输入名称"} />
             </label>
             <label className="k-field">目的地
-              <select value={destinationId} onChange={(e) => { const next = destinations.find((d) => d.destination_id === e.target.value); setDestinationId(e.target.value); setSeason(next?.season_best[0] ?? ""); const match = templates.find((t) => t.skeleton === next?.type); if (match) setTemplateId(match.template_id); }}>
+              <select value={destinationId} onChange={(e) => { const next = destinations.find((d) => d.destination_id === e.target.value); setDestinationId(e.target.value); setSeason(seasonAfterDestinationChange(seasonMode, season, next?.season_best ?? [])); const match = templates.find((t) => t.skeleton === next?.type); if (match) setTemplateId(match.template_id); }}>
                 {destinations.map((d) => <option key={d.destination_id} value={d.destination_id}>{d.city} · {d.name}（{DESTINATION_TYPE_LABELS[d.type]}）</option>)}
               </select>
             </label>

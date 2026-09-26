@@ -5,6 +5,7 @@ import { AssetImage } from "../AssetImage";
 import {
   assetUrl,
   createPersona,
+  getMe,
   listPersonas,
   listTemplates,
   patchPersona,
@@ -43,6 +44,7 @@ export default function PersonaEditPage() {
 
   const personasRes = useApiResource(listPersonas, []);
   const templatesRes = useApiResource(listTemplates, []);
+  const meRes = useApiResource(getMe, []);
 
   const [savedPersona, setSavedPersona] = useState<Persona | null>(null);
   const listedPersona = isEdit
@@ -217,12 +219,14 @@ export default function PersonaEditPage() {
       setSubmitting(false);
     }
 
-    if (returnTo === "/episodes/new") selectDraftPersona(targetId);
+    if (returnTo === "/episodes/new" && meRes.data?.user) {
+      selectDraftPersona(targetId, meRes.data.user.user_id);
+    }
     navigate(returnTo);
   }
 
-  if (personasRes.loading) return <p className="k-empty">加载中…</p>;
-  if (personasRes.error) return <p className="k-error">加载失败：{personasRes.error}</p>;
+  if (personasRes.loading || meRes.loading) return <p className="k-empty">加载中…</p>;
+  if (personasRes.error || meRes.error || !meRes.data?.user) return <p className="k-error">加载失败：{personasRes.error ?? meRes.error ?? "无法确认当前账号"}</p>;
   if (isEdit && !current) return <p className="k-error">找不到这个角色。</p>;
   if (isEdit && current && !canEditPersona(current)) {
     return (
