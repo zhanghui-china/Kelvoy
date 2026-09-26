@@ -31,7 +31,7 @@ export default function LandingDestinations({ loading, error, destinations }: Pr
             const refCount = d.landmarks.reduce((sum, l) => sum + l.refs.length, 0);
             return (
               <div className="k-card k-lp-dest-card" key={d.destination_id}>
-                <div className="k-lp-dest-image">{d.landmarks[0]?.refs[0] ? <AssetImage src={`/api/assets/${d.landmarks[0].refs[0]}`} alt={`${d.name}实景`} /> : <div className="k-media-missing">暂无实景参考图</div>}</div>
+                <div className="k-lp-dest-image">{d.landmarks[0]?.refs[0] ? <AssetImage src={`/api/destinations/${encodeURIComponent(d.destination_id)}/assets/${d.landmarks[0].refs[0]}`} alt={`${d.name}实景`} /> : <div className="k-media-missing">暂无实景参考图</div>}</div>
                 <div className="k-card-title">
                   {d.city} · {d.name}
                 </div>

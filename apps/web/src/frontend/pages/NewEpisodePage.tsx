@@ -20,7 +20,7 @@ import {
 import { useApiResource } from "../hooks/useApiResource";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import "./NewEpisodePage.css";
-import { clearDraft, readDraft, saveDraft, type EpisodeDraft } from "./episode-draft";
+import { clearDraft, draftForDestinationParam, readDraft, saveDraft, type EpisodeDraft } from "./episode-draft";
 
 // FR-01 语气快捷 chip，点一下直接填入(替换，不追加)。
 const TONE_CHIPS = ["松弛", "治愈", "活力", "文艺"];
@@ -45,10 +45,12 @@ function splitBannedInput(raw: string): string[] {
 
 export default function NewEpisodePage() {
   const navigate = useNavigate();
-  const restoredDraft = useRef(readDraft());
   // 首页"灵感目的地"卡片点进来时带 ?destination=<id>（#42）。
   const [searchParams] = useSearchParams();
   const destinationParam = searchParams.get("destination");
+  const restoredDraft = useRef(readDraft());
+  const initialDraft = useRef(draftForDestinationParam(restoredDraft.current, destinationParam));
+  const handledDestinationParam = useRef(destinationParam);
 
   // M2-15：账号级出片默认值（语气/候选数）。没设置过的账号回
   // 空对象，下面的预填就什么都不做，表单保持 M2-15 之前的初值。
@@ -63,20 +65,20 @@ export default function NewEpisodePage() {
   const destinations = destinationsRes.data?.destinations ?? [];
   const templates = templatesRes.data?.templates ?? [];
 
-  const [personaId, setPersonaId] = useState(() => readDraft()?.personaId ?? "");
+  const [personaId, setPersonaId] = useState(() => initialDraft.current?.personaId ?? "");
   const [personaTab, setPersonaTab] = useState<"mine" | "official">("mine");
-  const [destinationId, setDestinationId] = useState(readDraft()?.destinationId ?? "");
-  const [templateId, setTemplateId] = useState(readDraft()?.templateId ?? "");
-  const [seasonMode, setSeasonMode] = useState<"preset" | "custom">(readDraft()?.seasonMode ?? "preset");
-  const [season, setSeason] = useState(readDraft()?.season ?? "");
-  const [tone, setTone] = useState(readDraft()?.tone ?? "");
-  const [banned, setBanned] = useState<string[]>(readDraft()?.banned ?? DEFAULT_BANNED);
+  const [destinationId, setDestinationId] = useState(destinationParam ?? initialDraft.current?.destinationId ?? "");
+  const [templateId, setTemplateId] = useState(initialDraft.current?.templateId ?? "");
+  const [seasonMode, setSeasonMode] = useState<"preset" | "custom">(initialDraft.current?.seasonMode ?? "preset");
+  const [season, setSeason] = useState(initialDraft.current?.season ?? "");
+  const [tone, setTone] = useState(initialDraft.current?.tone ?? "");
+  const [banned, setBanned] = useState<string[]>(initialDraft.current?.banned ?? DEFAULT_BANNED);
   const [bannedInput, setBannedInput] = useState("");
-  const [outfitOverride, setOutfitOverride] = useState(readDraft()?.outfitOverride ?? "");
-  const [candidates, setCandidates] = useState<number>(readDraft()?.candidates ?? DEFAULT_CANDIDATES);
-  const [name, setName] = useState(readDraft()?.name ?? "");
-  const [requirements, setRequirements] = useState(readDraft()?.requirements ?? "");
-  const [aspect, setAspect] = useState<EpisodeAspect>(readDraft()?.aspect ?? "9:16");
+  const [outfitOverride, setOutfitOverride] = useState(initialDraft.current?.outfitOverride ?? "");
+  const [candidates, setCandidates] = useState<number>(initialDraft.current?.candidates ?? DEFAULT_CANDIDATES);
+  const [name, setName] = useState(initialDraft.current?.name ?? "");
+  const [requirements, setRequirements] = useState(initialDraft.current?.requirements ?? "");
+  const [aspect, setAspect] = useState<EpisodeAspect>(initialDraft.current?.aspect ?? "9:16");
 
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<string[] | null>(null);
@@ -103,10 +105,21 @@ export default function NewEpisodePage() {
   // 目的地的默认项优先用 ?destination=<id> 预选；id 不在库里（或者库变了）
   // 就回落到第一个，不报错——这个入口只是省一次下拉选择。
   useEffect(() => {
-    if (destinations.length === 0 || destinationId !== "") return;
+    if (destinations.length === 0 || destinations.some((d) => d.destination_id === destinationId)) return;
     const preselected = destinations.find((d) => d.destination_id === destinationParam);
     setDestinationId(preselected?.destination_id ?? destinations[0].destination_id);
   }, [destinations, destinationId, destinationParam]);
+
+  useEffect(() => {
+    if (!destinationParam || destinationParam === handledDestinationParam.current || destinations.length === 0) return;
+    handledDestinationParam.current = destinationParam;
+    const destination = destinations.find((d) => d.destination_id === destinationParam);
+    if (!destination) return;
+    setDestinationId(destination.destination_id);
+    setSeasonMode("preset");
+    setSeason(destination.season_best[0] ?? "");
+    setTemplateId(templates.find((t) => t.skeleton === destination.type)?.template_id ?? "");
+  }, [destinationParam, destinations, templates]);
 
   const selectedPersona = personas.find((p) => p.persona_id === personaId) ?? null;
   const visiblePersonas = personas.filter((p) => personaTab === "official" ? p.owner_id === null : p.owner_id !== null);
@@ -124,7 +137,7 @@ export default function NewEpisodePage() {
   // 换成第一个匹配的模板；用户手动选了别的骨架的模板会保留到下次目的地变化。
   useEffect(() => {
     if (!selectedDestination) return;
-    if (selectedTemplate && (selectedTemplate.skeleton === selectedDestination.type || restoredDraft.current)) return;
+    if (selectedTemplate && (selectedTemplate.skeleton === selectedDestination.type || initialDraft.current?.templateId)) return;
     const match = templates.find((t) => t.skeleton === selectedDestination.type);
     if (match) setTemplateId(match.template_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,7 +146,7 @@ export default function NewEpisodePage() {
   // 季节默认取目的地的 season_best[0]，跟着目的地切换；"自定义"下不跟随。
   useEffect(() => {
     if (seasonMode !== "preset" || !selectedDestination) return;
-    if (!restoredDraft.current?.season) setSeason(selectedDestination.season_best[0] ?? "");
+    if (!initialDraft.current?.season) setSeason(selectedDestination.season_best[0] ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDestination?.destination_id, seasonMode]);
 

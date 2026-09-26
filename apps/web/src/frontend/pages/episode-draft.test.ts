@@ -1,5 +1,5 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
-import { clearDraft, readDraft, saveDraft, selectDraftPersona, type EpisodeDraft } from "./episode-draft";
+import { clearDraft, draftForDestinationParam, readDraft, saveDraft, selectDraftPersona, type EpisodeDraft } from "./episode-draft";
 
 const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
 const values = new Map<string, string>();
@@ -30,6 +30,17 @@ test("new episode draft survives a persona creation trip with every creation par
 test("invalid stored draft is ignored", () => {
   values.set("kelvoy_new_episode_draft", '{"name":"incomplete"}');
   expect(readDraft()).toBeNull();
+});
+
+test("explicit destination link overrides a restored place but keeps the independent brief", () => {
+  expect(draftForDestinationParam(draft, "d_mountain")).toEqual({
+    ...draft,
+    destinationId: "d_mountain",
+    templateId: "",
+    seasonMode: "preset",
+    season: "",
+  });
+  expect(draftForDestinationParam(draft, null)).toEqual(draft);
 });
 
 afterAll(() => {

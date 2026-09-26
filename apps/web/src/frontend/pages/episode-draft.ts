@@ -16,6 +16,13 @@ export type EpisodeDraft = {
   aspect: EpisodeAspect;
 };
 
+/** An explicit destination link starts a new location choice while retaining the
+ * writer's independent brief fields. Template and season belong to the old place. */
+export function draftForDestinationParam(draft: EpisodeDraft | null, destinationId: string | null): EpisodeDraft | null {
+  if (!draft || !destinationId || draft.destinationId === destinationId) return draft;
+  return { ...draft, destinationId, templateId: "", seasonMode: "preset", season: "" };
+}
+
 function isDraft(value: unknown): value is EpisodeDraft {
   if (!value || typeof value !== "object") return false;
   const draft = value as Record<string, unknown>;
