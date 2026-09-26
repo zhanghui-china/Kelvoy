@@ -11,6 +11,7 @@ import {
   uploadPersonaRefs,
 } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
+import { canEditPersona } from "../persona-access";
 import { describeWriteError } from "../review/errors";
 import "./PersonaEditPage.css";
 
@@ -216,10 +217,20 @@ export default function PersonaEditPage() {
     navigate("/personas");
   }
 
-  if (personasRes.loading || templatesRes.loading) return <p className="k-empty">加载中…</p>;
+  if (personasRes.loading) return <p className="k-empty">加载中…</p>;
   if (personasRes.error) return <p className="k-error">加载失败：{personasRes.error}</p>;
-  if (templatesRes.error) return <p className="k-error">加载失败：{templatesRes.error}</p>;
   if (isEdit && !current) return <p className="k-error">找不到这个角色。</p>;
+  if (isEdit && current && !canEditPersona(current)) {
+    return (
+      <div>
+        <h1>{current.name}</h1>
+        <p className="k-card-meta">官方角色由平台维护，可在新建期时选用。</p>
+        <Link to="/personas">← 返回角色列表</Link>
+      </div>
+    );
+  }
+  if (templatesRes.loading) return <p className="k-empty">加载中…</p>;
+  if (templatesRes.error) return <p className="k-error">加载失败：{templatesRes.error}</p>;
 
   return (
     <div>
