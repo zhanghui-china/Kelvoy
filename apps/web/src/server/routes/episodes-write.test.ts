@@ -47,6 +47,21 @@ test("PATCH /:id applies a field patch and bumps row_version", async () => {
   expect(body.episode.credits_used).toBe(3);
 });
 
+test("PATCH /:id rejects forged candidate count without changing the episode", async () => {
+  const { cookie, ownerId } = await login("candidate-patch");
+  await insertEpisode(fixture("e_count", ownerId));
+  const app = buildApp();
+  const response = await app.request("/api/episodes/e_count", {
+    method: "PATCH", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1, patch: { candidate_count: 1_000_000 } }),
+  });
+  expect(response.status).toBe(400);
+  const loaded = await app.request("/api/episodes/e_count", { headers: { cookie } });
+  const body = await loaded.json() as { episode: Episode; row_version: number };
+  expect(body.episode.candidate_count).toBe(2);
+  expect(body.row_version).toBe(1);
+});
+
 test("PATCH /:id 409s on a stale row_version", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertEpisode(fixture("e_1", ownerId));

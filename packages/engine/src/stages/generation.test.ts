@@ -88,6 +88,22 @@ test("saved candidate count and aspect determine keyframe generation", async () 
   expect(next.shots[0]?.candidates).toHaveLength(3);
 });
 
+test("keyframe generation rejects invalid persisted candidate counts before inference", async () => {
+  let calls = 0;
+  const context: StageContext = {
+    persona, destination, generation_id: "bad-count",
+    keyframe: { async generate() {
+      calls++;
+      throw new Error("inference should not run");
+    } },
+  };
+  for (const candidate_count of [0, 4, 1.5, 1_000_000]) {
+    await expect(runKeyframe(episode({ candidate_count, status: "keyframing",
+      shots: [shot({ status: "generating_kf" })] }), 1, context)).rejects.toThrow("candidate_count");
+  }
+  expect(calls).toBe(0);
+});
+
 test("video uses selected keyframe and enters clip review", async () => {
   let inputSeen: unknown;
   const context: StageContext = {

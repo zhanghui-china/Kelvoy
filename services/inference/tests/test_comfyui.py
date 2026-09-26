@@ -68,9 +68,12 @@ def test_single_reference_image_workflow_does_not_use_landmark():
 
 def test_image_workflow_supports_wide_aspect_without_mutating_template():
     template = json.loads((BRIDGE / "1_1_SingleRef2IMG_QwenImage2_1_api.json").read_text())
+    checked_in_wide = json.loads((BRIDGE / "1_9_NonaRef2IMG_QwenImage2_1_api.json").read_text())
     original = template["491"]["inputs"]["aspect_ratio"]
     workflow = build_image_workflow(template, ["role.png"], "wide view", 31, "16:9")
-    assert workflow["491"]["inputs"]["aspect_ratio"] == "16:9 (Landscape Widescreen)"
+    assert workflow["491"]["inputs"]["aspect_ratio"] == checked_in_wide["501"]["inputs"][
+        "aspect_ratio"
+    ]
     assert template["491"]["inputs"]["aspect_ratio"] == original
 
 

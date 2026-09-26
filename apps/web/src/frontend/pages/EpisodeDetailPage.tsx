@@ -3,6 +3,7 @@ import type { Episode } from "@kelvoy/engine";
 import { getEpisode, listDestinations, listPersonas } from "../api/client";
 import { useApiResource, usePolledApiResource } from "../hooks/useApiResource";
 import { EPISODE_STATUS_LABELS } from "../labels";
+import { episodeLabel } from "../episode-view";
 import ClipReview from "../review/ClipReview";
 import DoneView from "../review/DoneView";
 import KeyframeReview from "../review/KeyframeReview";
@@ -41,7 +42,7 @@ export default function EpisodeDetailPage() {
     <div>
       <div className="k-eyebrow">审片台</div>
       <h1>
-        {episode.render.title || episode.episode_id}{" "}
+        {episodeLabel(episode)}{" "}
         <span className="k-pill k-pill-accent">{EPISODE_STATUS_LABELS[episode.status]}</span>
       </h1>
       <div className="k-desk-head">

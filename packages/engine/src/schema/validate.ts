@@ -300,6 +300,10 @@ export function validatePatchEpisodeRequest(input: unknown): ValidationResult<Pa
     return { valid: false, errors };
   }
   const patch = input.patch;
+  const allowedFields = new Set(["status", "credits_used", "grid_refs", "render", "music"]);
+  for (const field of Object.keys(patch)) {
+    if (!allowedFields.has(field)) errors.push(`patch.${field}: 不支持修改`);
+  }
 
   if ("status" in patch && !isOneOf(patch.status, EPISODE_STATUSES)) {
     errors.push(`patch.status: 必须是 ${EPISODE_STATUSES.join(" / ")} 之一`);

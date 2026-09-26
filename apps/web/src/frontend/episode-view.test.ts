@@ -31,9 +31,10 @@ function fixture(p: {
   credits_used?: number;
   shots?: Shot[];
   title?: string;
+  name?: string;
 }): Episode {
   return {
-    name: "测试期", episode_id: p.id,
+    name: p.name ?? "测试期", episode_id: p.id,
     owner_id: "u_owner",
     persona_id: "c_test",
     persona_version: 1,
@@ -57,11 +58,14 @@ function fixture(p: {
   };
 }
 
-test("episodeLabel falls back to the episode id when there is no title", () => {
-  expect(episodeLabel(fixture({ id: "e_1", created_at: "2026-09-23T10:00:00", title: "无锡三日" }))).toBe(
-    "无锡三日",
-  );
-  expect(episodeLabel(fixture({ id: "e_1", created_at: "2026-09-23T10:00:00" }))).toBe("e_1");
+test("episodeLabel uses the episode name independently of the film title", () => {
+  expect(episodeLabel(fixture({ id: "e_1", created_at: "2026-09-23T10:00:00",
+    name: "我的旅行", title: "无锡三日" }))).toBe("我的旅行");
+  const legacy = fixture({ id: "e_2", created_at: "2026-09-23T10:00:00", title: "旧标题" });
+  delete (legacy as Partial<Episode>).name;
+  expect(episodeLabel(legacy)).toBe("旧标题");
+  legacy.render.title = "";
+  expect(episodeLabel(legacy)).toBe("e_2");
 });
 
 test("weekRange starts on the local Monday and ends on the next Monday", () => {

@@ -144,6 +144,12 @@ describe("validateEpisode", () => {
 });
 
 describe("validatePatchEpisodeRequest", () => {
+  test("rejects fields outside the Episode patch contract", () => {
+    for (const patch of [{ candidate_count: 1_000_000 }, { name: "forged" }, { brief: {} }]) {
+      const result = validatePatchEpisodeRequest({ row_version: 1, patch });
+      expect(result.valid).toBe(false);
+    }
+  });
   test("accepts an empty patch (all fields optional)", () => {
     const result = validatePatchEpisodeRequest({ row_version: 3, patch: {} });
     expect(result.valid).toBe(true);

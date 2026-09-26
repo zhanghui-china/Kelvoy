@@ -4,9 +4,9 @@ import type { Episode } from "@kelvoy/engine";
 // 网络也不碰 DOM——"本周统计"的数字要能对着 SQLite 里的期 JSON 手算核对
 // （#42 验收项），所以周界算法单独可测。
 
-/** 期还没起标题时回落到 id，别显示空白。 */
+/** 旧期没有独立名称时回落到成片标题或 id。 */
 export function episodeLabel(e: Episode): string {
-  return e.render.title || e.episode_id;
+  return e.name || e.render.title || e.episode_id;
 }
 
 export interface WeekStats {

@@ -1,4 +1,5 @@
 import type { Episode } from "../schema";
+import { SETTINGS_CANDIDATES_MAX, SETTINGS_CANDIDATES_MIN } from "../schema/user";
 import { transitionEpisode, transitionShot } from "../state";
 import { generationSeed } from "./generation-seed";
 import type { GeneratedAsset, StageContext } from "./types";
@@ -8,6 +9,10 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   if (shotNo === undefined) throw new Error("keyframe 需要 shot_no");
   if (!context?.persona || !context.destination || !context.keyframe || !context.generation_id) {
     throw new Error("keyframe 需要角色、目的地和 Worker 推理能力");
+  }
+  const candidateCount = episode.candidate_count ?? 2;
+  if (!Number.isInteger(candidateCount) || candidateCount < SETTINGS_CANDIDATES_MIN || candidateCount > SETTINGS_CANDIDATES_MAX) {
+    throw new Error(`candidate_count 必须是 ${SETTINGS_CANDIDATES_MIN}–${SETTINGS_CANDIDATES_MAX} 的整数`);
   }
   const shot = episode.shots.find((item) => item.no === shotNo);
   if (!shot || shot.status !== "generating_kf") throw new Error(`第 ${shotNo} 镜未处于关键帧生成中`);
@@ -20,7 +25,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   }
   const seed = generationSeed(context.generation_id, shotNo, "image");
   const generated: GeneratedAsset[] = [];
-  for (let candidateNo = 0; candidateNo < (episode.candidate_count ?? 2); candidateNo++) {
+  for (let candidateNo = 0; candidateNo < candidateCount; candidateNo++) {
     generated.push(await context.keyframe.generate({
       episode_id: episode.episode_id, shot_no: shotNo, candidate_no: candidateNo,
       aspect: episode.brief.aspect,

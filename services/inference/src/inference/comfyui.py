@@ -53,7 +53,7 @@ def build_image_workflow(
     resolution_node = "493" if len(uploaded_refs) == 2 else "491"
     aspect_options = {
         "9:16": "9:16 (Portrait Widescreen)",
-        "16:9": "16:9 (Landscape Widescreen)",
+        "16:9": "16:9 (Widescreen)",
     }
     if aspect not in aspect_options:
         raise ValueError("unsupported image aspect")
