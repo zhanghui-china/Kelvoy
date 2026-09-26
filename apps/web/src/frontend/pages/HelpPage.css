@@ -1,0 +1,30 @@
+.k-help-page { max-width: 1080px; margin: 0 auto; }
+.k-help-quick { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(240px, .8fr); gap: 1.5rem; padding: 1.7rem; border-radius: 20px; background: #eaf1fb; margin: 1.5rem 0; }
+.k-help-quick h2 { margin: .4rem 0; }
+.k-help-quick p, .k-help-stage p, .k-help-extra p, .k-help-reopen p { color: var(--color-muted); line-height: 1.7; }
+.k-help-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; padding: 0; list-style: none; margin: 0; }
+.k-help-map a { display: flex; align-items: center; gap: .5rem; height: 100%; padding: .7rem; border-radius: 10px; background: #fff; text-decoration: none; }
+.k-help-map span, .k-help-step { color: var(--color-accent); font: 700 .88rem var(--font-mono); }
+.k-help-prep { display: flex; flex-wrap: wrap; gap: .55rem 1rem; margin: 1.3rem 0 2rem; }
+.k-help-stages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.k-help-stage { scroll-margin-top: 2rem; display: flex; flex-direction: column; align-items: start; }
+.k-help-stage-heading { display: flex; gap: .8rem; align-items: baseline; }
+.k-help-stage h2 { margin: 0; }
+.k-help-stage-heading p { margin: .3rem 0 0; }
+.k-help-stage ol { padding-left: 1.4rem; line-height: 1.8; flex: 1; }
+.k-help-stage li + li { margin-top: .55rem; }
+.k-help-review { padding: .8rem; background: #f5f8fe; border-radius: 8px; }
+.k-help-extra, .k-help-reopen { margin-top: 1rem; }
+.k-help-extra dl { line-height: 1.7; }
+.k-help-extra dt { font-weight: 700; margin-top: .8rem; }
+.k-help-extra dd { margin: .2rem 0 0; color: var(--color-muted); }
+.k-help-reopen { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.k-help-reopen h2 { margin: 0; }
+.k-help-reopen-actions { display: grid; gap: .5rem; justify-items: start; }
+@media (max-width: 720px) { .k-help-quick, .k-help-stages { grid-template-columns: 1fr; } .k-help-reopen { display: block; } }
+
+.k-help-resources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1.5rem 0 2rem; }
+.k-help-resources h2 { margin: 0; font-size: 1.08rem; }
+.k-help-resources p { color: var(--color-muted); line-height: 1.7; margin-bottom: 0; }
+.k-help-stage:focus, .k-help-extra:focus, .k-help-resources [tabindex]:focus { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+@media (max-width: 720px) { .k-help-resources { grid-template-columns: 1fr; } }

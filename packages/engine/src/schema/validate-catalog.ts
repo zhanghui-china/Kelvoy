@@ -256,6 +256,10 @@ export function validateUserSettingsPatch(input: unknown): ValidationResult<User
   if ("default_mode" in s && s.default_mode !== "per_shot") {
     errors.push("default_mode: 只支持 per_shot");
   }
+  if ("onboarding_dismissed_version" in s &&
+    s.onboarding_dismissed_version !== 0 && s.onboarding_dismissed_version !== 1) {
+    errors.push("onboarding_dismissed_version: 只支持 0 或 1");
+  }
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: s };

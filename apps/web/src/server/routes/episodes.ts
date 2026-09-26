@@ -14,6 +14,7 @@ import {
   estimateCreditQuote,
   getDestination,
   getEpisode,
+  getLatestFailedTask,
   getPersona,
   getPersonaVersion,
   getTemplate,
@@ -168,7 +169,9 @@ episodes.get("/:id", async (c) => {
   const revision = await getPersonaVersion(result.episode.persona_id, result.episode.persona_version);
   const persona = revision && (revision.owner_id === null || revision.owner_id === c.get("ownerId"))
     ? revision : null;
-  return c.json({ ok: true, episode: result.episode, persona, row_version: result.row_version });
+  // Ownership is established above before reading any task from the queue.
+  const failed_task = await getLatestFailedTask(result.episode);
+  return c.json({ ok: true, episode: result.episode, persona, row_version: result.row_version, failed_task });
 });
 
 episodes.patch("/:id", async (c) => {

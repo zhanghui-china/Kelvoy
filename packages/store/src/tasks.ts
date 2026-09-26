@@ -1,4 +1,4 @@
-import type { StageName, Task } from "@kelvoy/engine";
+import type { Episode, StageName, Task } from "@kelvoy/engine";
 import { getDb } from "./db";
 
 /**
@@ -21,6 +21,37 @@ interface TaskRow {
 }
 
 export const TASK_LEASE_SECONDS = 90;
+
+export type RetryableFailure = {
+  task_id: string; stage: StageName; shot_no: number | null; generation_id: string | null;
+};
+
+/** The same eligibility rule powers the retry mutation and the detail summary. */
+export function findRetryableFailedTask(episode: Episode): RetryableFailure | null {
+  const failures = getDb().query<RetryableFailure, [string]>(
+    `select task_id, stage, shot_no, generation_id from tasks where episode_id = ?
+     and status = 'failed' and operation is null order by updated_at desc, rowid desc`,
+  ).all(episode.episode_id);
+  return failures.find((item) => {
+    const active = getDb().query<{ count: number }, [string, string, number | null]>(
+      `select count(*) as count from tasks where episode_id = ? and stage = ?
+       and shot_no is ? and status in ('pending', 'processing', 'held')`,
+    ).get(episode.episode_id, item.stage, item.shot_no);
+    if ((active?.count ?? 0) > 0) return false;
+    if (item.stage === "keyframe" || item.stage === "video") {
+      const shot = episode.shots.find((candidate) => candidate.no === item.shot_no);
+      return !!shot && (shot.status === "failed" ||
+        (episode.status === "failed" && shot.status ===
+          (item.stage === "keyframe" ? "generating_kf" : "generating_clip")));
+    }
+    return episode.status === "failed";
+  }) ?? null;
+}
+
+export async function getLatestFailedTask(episode: Episode): Promise<Pick<RetryableFailure, "stage" | "shot_no"> | null> {
+  const failure = findRetryableFailedTask(episode);
+  return failure ? { stage: failure.stage, shot_no: failure.shot_no } : null;
+}
 
 function toTask(row: TaskRow): Task {
   const task: Task = {

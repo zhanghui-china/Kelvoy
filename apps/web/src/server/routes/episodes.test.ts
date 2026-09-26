@@ -1,11 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { dequeueTask, estimateCreditQuote, getCreditBalance, insertEpisode, insertPersona, updatePersona, upsertDestination, upsertTemplate, updateUserSettings } from "@kelvoy/store";
+import { dequeueTask, enqueueTask, failTask, submitFailedTaskRetry, estimateCreditQuote, getCreditBalance, insertEpisode, insertPersona, updatePersona, upsertDestination, upsertTemplate, updateUserSettings } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode, Persona } from "@kelvoy/engine";
 import { estimateCost } from "@kelvoy/engine";
 import { resolveArtifactPath } from "./episodes";
-import { setupEpisodeRouteTests, buildApp, destinationFixture, fixture, login, personaFixture, templateFixture, tmpRoot } from "./episode-test-fixtures";
+import { setupEpisodeRouteTests, buildApp, destinationFixture, fixture, login, personaFixture, shotFixture, templateFixture, tmpRoot } from "./episode-test-fixtures";
 
 setupEpisodeRouteTests();
 
@@ -63,6 +63,52 @@ test("gets one episode by id with its row_version, for owner", async () => {
   const body = (await res.json()) as { episode: Episode; row_version: number };
   expect(body.episode.episode_id).toBe("e_1");
   expect(body.row_version).toBe(1);
+});
+
+test("detail includes failed stage for owner but hides it from another account", async () => {
+  const owner = await login("failed-owner");
+  const visitor = await login("failed-visitor");
+  await insertEpisode({ ...fixture("e_failure", owner.ownerId), status: "failed",
+    shots: [shotFixture(12, { status: "failed" })] });
+  const task = await enqueueTask({ episode_id: "e_failure", stage: "keyframe", shot_no: 12 });
+  await failTask(task.task_id, { requeue: false });
+  const app = buildApp();
+  const own = await app.request("/api/episodes/e_failure", { headers: { cookie: owner.cookie } });
+  expect((await own.json()).failed_task).toEqual({ stage: "keyframe", shot_no: 12 });
+  const stranger = await app.request("/api/episodes/e_failure", { headers: { cookie: visitor.cookie } });
+  expect(stranger.status).toBe(404);
+  expect(await stranger.json()).toEqual({ ok: false, error: "not_found" });
+});
+
+test("detail has no failed task summary when no task failed", async () => {
+  const { cookie, ownerId } = await login("failure-empty");
+  await insertEpisode({ ...fixture("e_empty_failure", ownerId), status: "failed" });
+  const response = await buildApp().request("/api/episodes/e_empty_failure", { headers: { cookie } });
+  expect((await response.json()).failed_task).toBeNull();
+});
+
+test("detail reports a failed shot task while its episode is still generating", async () => {
+  const { cookie, ownerId } = await login("shot-failure");
+  await insertEpisode({ ...fixture("e_shot_failure", ownerId), status: "keyframing",
+    shots: [shotFixture(4, { status: "failed" })] });
+  const task = await enqueueTask({ episode_id: "e_shot_failure", stage: "keyframe", shot_no: 4 });
+  await failTask(task.task_id, { requeue: false });
+  const response = await buildApp().request("/api/episodes/e_shot_failure", { headers: { cookie } });
+  expect((await response.json()).failed_task).toEqual({ stage: "keyframe", shot_no: 4 });
+});
+
+test("detail no longer reports a failed task after retry queues replacement", async () => {
+  const { cookie, ownerId } = await login("retried-failure");
+  await insertEpisode({ ...fixture("e_retried", ownerId), status: "keyframing",
+    shots: [shotFixture(4, { status: "failed" })] });
+  const task = await enqueueTask({ episode_id: "e_retried", stage: "keyframe", shot_no: 4 });
+  await failTask(task.task_id, { requeue: false });
+  const app = buildApp();
+  const before = await app.request("/api/episodes/e_retried", { headers: { cookie } });
+  expect((await before.json()).failed_task).toEqual({ stage: "keyframe", shot_no: 4 });
+  expect(submitFailedTaskRetry({ episode_id: "e_retried", owner_id: ownerId, row_version: 1 }).ok).toBe(true);
+  const after = await app.request("/api/episodes/e_retried", { headers: { cookie } });
+  expect((await after.json()).failed_task).toBeNull();
 });
 
 test("404s on someone else's episode instead of leaking that it exists", async () => {

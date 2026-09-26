@@ -2,8 +2,8 @@ import type { Episode, StageName } from "@kelvoy/engine";
 import { isLegalEpisodeStatusChange } from "@kelvoy/engine";
 import { getCreditBalance, getCreditPrice, reserveCredits } from "./credits";
 import { getDb } from "./db";
+import { findRetryableFailedTask } from "./tasks";
 
-type Failure = { task_id: string; stage: StageName; shot_no: number | null; generation_id: string | null };
 type RetryError = "not_found" | "version_conflict" | "illegal_transition" |
   "insufficient_credits" | "no_failed_task";
 
@@ -22,23 +22,7 @@ export function submitFailedTaskRetry(input: {
       error: "version_conflict", current_row_version: row.row_version } as const;
     const episode = JSON.parse(row.doc) as Episode;
     if (episode.mode === "grid") return { ok: false, error: "illegal_transition" } as const;
-    const failures = getDb().query<Failure, [string]>(
-      `select task_id, stage, shot_no, generation_id from tasks where episode_id = ?
-       and status = 'failed' and operation is null order by updated_at desc, rowid desc`,
-    ).all(input.episode_id);
-    const failed = failures.find((item) => {
-      const active = getDb().query<{ count: number }, [string, string, number | null]>(
-        `select count(*) as count from tasks where episode_id = ? and stage = ?
-         and shot_no is ? and status in ('pending', 'processing', 'held')`,
-      ).get(input.episode_id, item.stage, item.shot_no);
-      if ((active?.count ?? 0) > 0) return false;
-      if (item.stage === "keyframe" || item.stage === "video") {
-        const shot = episode.shots.find((candidate) => candidate.no === item.shot_no);
-        return !!shot && (shot.status === "failed" ||
-          (episode.status === "failed" && shot.status === (item.stage === "keyframe" ? "generating_kf" : "generating_clip")));
-      }
-      return episode.status === "failed";
-    });
+    const failed = findRetryableFailedTask(episode);
     if (!failed) return { ok: false, error: "no_failed_task" } as const;
     const target = failed.stage === "brief" || failed.stage === "script" ? "scripting"
       : failed.stage === "assets" ? "assets"
@@ -84,6 +68,11 @@ export function submitFailedTaskRetry(input: {
         values (?, ?, ?, ?, ?, 1, ?)`).run(task.id, input.episode_id, task.stage,
           task.shot_no, task.generation_id, task.held ? "held" : "pending");
     }
+    // Keep the failed row for history, but retire it in the same transaction
+    // as the replacement. A later failure on this shot must not revive it.
+    const retired = getDb().query(`update tasks set status = 'retried', updated_at = datetime('now')
+      where task_id = ? and status = 'failed'`).run(failed.task_id);
+    if (retired.changes !== 1) throw new Error("failed task changed during retry");
     getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
       updated_at = datetime('now') where episode_id = ?`)
       .run(JSON.stringify({ ...episode, status: target, failure_reason: null }), input.episode_id);

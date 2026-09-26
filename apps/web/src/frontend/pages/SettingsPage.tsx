@@ -6,6 +6,7 @@ import {
 } from "@kelvoy/engine";
 import { changePassword, getMySettings, updateMySettings } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
+import { GuideTip } from "../GuideTip";
 import "./SettingsPage.css";
 
 /*
@@ -111,6 +112,7 @@ export default function SettingsPage() {
         <section className="k-card">
           <h2>出片默认值</h2>
           <p className="k-card-meta">新建一期时预填这几项，每一期都还能当场改。</p>
+          <GuideTip section="settings">默认值仅影响之后新建的作品。每镜可选 1–3 张候选图；选得越多，通常用量越高，提交时请看预估积分，实际用量可在用量页查看。</GuideTip>
 
           <form className="k-settings-form" onSubmit={handleSaveDefaults}>
             <label className="k-field">

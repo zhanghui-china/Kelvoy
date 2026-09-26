@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Destination, Episode, Shot } from "@kelvoy/engine";
 import { continueEpisode, optimizeScript, regenerateScript, removeShot, reorderShots } from "../api/client";
 import { SCENE_TIME_LABELS, SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS } from "../labels";
+import { GuideTip } from "../GuideTip";
 import ShotEditor from "./ShotEditor";
 import { MutationError } from "./ShotHeader";
 import type { EpisodeMutation } from "./useEpisodeMutation";
@@ -140,12 +141,14 @@ export default function ScriptReview({
         </div>
       </div>
 
+      <GuideTip section="script">逐镜检查动作、地标与字幕。小改动可直接编辑；调整叙事可按指令优化，想重写整份再重新生成。</GuideTip>
       <p className="k-card-meta">
         当前 {shots.length} 镜，下限 {MIN_SHOTS} 镜。审核 1 只能改、删，不能新增镜（PRD §4）。
       </p>
       <div className="k-card k-desk-script-assistant">
         <div className="k-card-title">脚本助手</div>
         <p className="k-card-meta">已生成 {shots.length} 镜；可重新生成整份脚本，或描述想调整的叙事重点。处理失败会保留当前脚本。</p>
+        <p className="k-card-meta">优化与重新生成可能消耗积分；这里不会显示每次操作的单独报价。</p>
         <label className="k-field">
           优化指令
           <textarea value={instruction} maxLength={500} disabled={actionDisabled}

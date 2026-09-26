@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
-import type { Episode } from "@kelvoy/engine";
+import type { Destination, Episode, Persona } from "@kelvoy/engine";
 import { getEpisode, listDestinations } from "../api/client";
+import type { FailedTaskSummary } from "../api/client";
 import { useApiResource, usePolledApiResource } from "../hooks/useApiResource";
 import { EPISODE_STATUS_LABELS } from "../labels";
 import { episodeLabel } from "../episode-view";
@@ -13,6 +14,7 @@ import SaveAsTemplateForm from "../review/SaveAsTemplateForm";
 import StageSteps from "../review/StageSteps";
 import ScriptReview from "../review/ScriptReview";
 import { useEpisodeMutation } from "../review/useEpisodeMutation";
+import type { EpisodeMutation } from "../review/useEpisodeMutation";
 import "../review/review.css";
 
 /**
@@ -36,7 +38,17 @@ export default function EpisodeDetailPage() {
   const episode: Episode = data.episode;
   const destination =
     destinations.data?.destinations.find((d) => d.destination_id === episode.destination_id) ?? null;
-  const persona = data.persona;
+  return <EpisodeDetailContent episode={episode} destination={destination} persona={data.persona}
+    failedTask={data.failed_task} mutation={mutation} />;
+}
+
+export function EpisodeDetailContent({ episode, destination, persona, failedTask, mutation }: {
+  episode: Episode;
+  destination: Destination | null;
+  persona: Persona | null;
+  failedTask?: FailedTaskSummary | null;
+  mutation: EpisodeMutation;
+}) {
 
   return (
     <div>
@@ -54,7 +66,7 @@ export default function EpisodeDetailPage() {
         <span className="k-card-meta">预计完整创作：{episode.estimated_credits} 积分</span>
         <span className="k-card-meta">{episode.shots.length} 镜 · 每 3 秒自动刷新</span>
       </div>
-      <StageSteps status={episode.status} />
+      <StageSteps status={episode.status} failedTask={failedTask} />
 
       {episode.status === "script_review" && (
         <ScriptReview episode={episode} destination={destination} mutation={mutation} />
@@ -77,10 +89,10 @@ export default function EpisodeDetailPage() {
       {(episode.status === "draft" ||
         episode.status === "scripting" ||
         episode.status === "assets" ||
-        episode.status === "failed") && <ProgressView episode={episode} mutation={mutation} />}
+        episode.status === "failed") && <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
       {(episode.status === "keyframing" || episode.status === "clipping") &&
         episode.shots.some((shot) => shot.status === "failed") &&
-        <ProgressView episode={episode} mutation={mutation} />}
+        <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
 
       <SaveAsTemplateForm episodeId={episode.episode_id} />
     </div>

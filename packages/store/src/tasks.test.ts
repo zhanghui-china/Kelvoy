@@ -1,6 +1,21 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import type { Episode } from "@kelvoy/engine";
 import { close, getDb, open } from "./db";
-import { completeTask, dequeueTask, enqueueTask, failTask, renewTaskLease } from "./tasks";
+import { completeTask, dequeueTask, enqueueTask, failTask, getLatestFailedTask, renewTaskLease } from "./tasks";
+
+test("latest failed task is scoped to its episode and includes its shot", async () => {
+  const episode = { episode_id: "e_1", status: "failed",
+    shots: [{ no: 7, status: "failed" }] } as Episode;
+  expect(await getLatestFailedTask(episode)).toBeNull();
+  const first = await enqueueTask({ episode_id: "e_1", stage: "script" });
+  await failTask(first.task_id, { requeue: false });
+  const other = await enqueueTask({ episode_id: "e_2", stage: "compose" });
+  await failTask(other.task_id, { requeue: false });
+  const latest = await enqueueTask({ episode_id: "e_1", stage: "video", shot_no: 7 });
+  await failTask(latest.task_id, { requeue: false });
+  await enqueueTask({ episode_id: "e_1", stage: "keyframe", shot_no: 8 });
+  expect(await getLatestFailedTask(episode)).toEqual({ stage: "video", shot_no: 7 });
+});
 
 beforeEach(() => {
   open(":memory:");

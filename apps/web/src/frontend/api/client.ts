@@ -11,6 +11,7 @@ import type {
   PersonaPatch,
   RegenStage,
   ScriptRuleViolation,
+  StageName,
   ShotPatch,
   Template,
   UserSettings,
@@ -23,6 +24,7 @@ import type {
 // M2-13 (#41) adds the persona create/patch/refs-upload functions below.
 
 export type ApiOk<T> = { ok: true } & T;
+export type FailedTaskSummary = { stage: StageName; shot_no: number | null };
 
 // content_blocked(#29) 带的是关键词违规，script_rule_violation(FR-02) 带的
 // 是结构规则违规，两个后端路由用的都是 `violations` 这个键名，所以这里是个
@@ -167,7 +169,7 @@ export function listEpisodes() {
 }
 
 export function getEpisode(episodeId: string) {
-  return apiFetch<{ episode: Episode; persona: Persona | null; row_version: number }>(
+  return apiFetch<{ episode: Episode; persona: Persona | null; row_version: number; failed_task?: FailedTaskSummary | null }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
   );
 }

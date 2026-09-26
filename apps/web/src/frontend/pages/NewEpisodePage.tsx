@@ -19,6 +19,7 @@ import {
   listTemplates,
 } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
+import { GuideTip } from "../GuideTip";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import "./NewEpisodePage.css";
 import { clearDraft, draftForDestinationParam, readDraft, saveDraft, seasonAfterDestinationChange, type EpisodeDraft } from "./episode-draft";
@@ -249,12 +250,14 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
       <div className="k-eyebrow">创作工作台 / 新建一期</div>
       <h1>创建新的旅行故事</h1>
       <p className="k-page-intro">选择角色与目的地，再写下这趟旅程希望呈现的内容。</p>
+      <GuideTip section="create">先选出镜角色与目的地，再设定本期方向；创建前确认下方随候选数更新的积分预估。</GuideTip>
       <form onSubmit={handleSubmit} className="k-create-layout">
         <div className="k-card k-create-form-panel">
           <div className="k-create-panel-heading"><span className="k-create-step">01</span><div><h2>本期内容</h2><p>为这期作品设定目的地与创作方向</p></div></div>
           <div className="k-create-fields">
             <label className="k-field">本期名称
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder={selectedDestination ? `${selectedDestination.city} · ${selectedDestination.name}` : "输入名称"} />
+              <span className="k-card-meta">用于在工作台识别这一期；成片标题在合成设置中单独填写。</span>
             </label>
             <label className="k-field">目的地
               <select value={destinationId} onChange={(e) => { const next = destinations.find((d) => d.destination_id === e.target.value); setDestinationId(e.target.value); setSeason(seasonAfterDestinationChange(seasonMode, season, next?.season_best ?? [])); const match = templates.find((t) => t.skeleton === next?.type); if (match) setTemplateId(match.template_id); }}>
@@ -263,6 +266,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
             </label>
             <div className="k-create-row">
               <div className="k-field">季节 / 时段
+                <span className="k-card-meta">先选当前目的地推荐的季节，也可自定义。</span>
                 <div className="k-create-choices">{(selectedDestination?.season_best ?? []).map((item) =>
                   <button type="button" key={item} className={seasonMode === "preset" && season === item ? "active" : ""}
                     aria-pressed={seasonMode === "preset" && season === item}
@@ -273,6 +277,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
                 {seasonMode === "custom" && <input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="例如：早春" />}
               </div>
               <div className="k-field">画幅比例
+                <span className="k-card-meta">默认 9:16 适合手机竖屏；16:9 适合横屏播放。</span>
                 <div className="k-create-choices">{(["9:16", "16:9"] as const).map((item) =>
                   <button type="button" key={item} className={aspect === item ? "active" : ""}
                     aria-pressed={aspect === item} onClick={() => setAspect(item)}>{item} {item === "9:16" ? "竖屏" : "横屏"}</button>)}</div>
@@ -282,6 +287,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
               <input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="例如：松弛治愈" />
             </label>
             <div className="k-brief-chips">{TONE_CHIPS.map((chip) => <button type="button" key={chip} className="k-chip" onClick={() => setTone(chip)}>{chip}</button>)}</div>
+            <p className="k-card-meta">语气决定整体氛围；创作要求可写希望出现的情节、地标或画面重点。</p>
             <label className="k-field">创作要求
               <textarea value={requirements} onChange={(e) => setRequirements(e.target.value)} placeholder="描述这一期想呈现的重点、画面或故事" />
             </label>
@@ -294,6 +300,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
                   {templates.map((t) => <option key={t.template_id} value={t.template_id}>{t.name}{selectedDestination && t.skeleton !== selectedDestination.type ? "（骨架与目的地类型不同）" : ""}</option>)}
                 </select>
               </label>
+              <p className="k-card-meta">模板决定镜头骨架，LUT 决定画面调色风格；可按目的地类型选择匹配模板。</p>
               {selectedTemplate && <p className="k-card-meta">LUT：{selectedTemplate.lut} · 片头：{selectedTemplate.intro ?? "无"} · 片尾：{selectedTemplate.outro ?? "无"} · 标题样式：{selectedTemplate.title_style}</p>}
               <label className="k-field">穿搭覆盖（可选）<input value={outfitOverride} onChange={(e) => setOutfitOverride(e.target.value)} placeholder={selectedPersona?.default_outfit ?? ""} /></label>
               <label className="k-field">禁止项
@@ -301,6 +308,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
               </label>
               <div className="k-brief-chips">{banned.map((term) => <span className="k-chip k-chip-removable" key={term}>{term}<button type="button" aria-label={`删除禁止项 ${term}`} onClick={() => removeBanned(term)}>×</button></span>)}</div>
               <label className="k-field">每镜候选数<select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>{CANDIDATE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+              <p className="k-card-meta">可选 1–3 张：3 张更方便挑选，1 张通常用量更低；下方预估会随选择更新。</p>
             </div>
           </details>
           {violations && violations.length > 0 && <ul className="k-error" role="alert">{violations.map((v) => <li key={`${v.field}-${v.term}`}>以下内容不允许出现：{v.field}: {v.term}</li>)}</ul>}
@@ -309,6 +317,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
         </div>
         <aside className="k-card k-create-personas">
           <div className="k-create-panel-heading"><span className="k-create-step">02</span><div><h2>选择出镜角色</h2><p>角色形象在多期作品中保持一致</p></div></div>
+          <p className="k-card-meta">可直接选官方角色开始；想使用自己的形象时再新建角色。</p>
           <div className="k-create-tabs" role="group" aria-label="角色来源"><button type="button" aria-pressed={personaTab === "mine"} className={personaTab === "mine" ? "active" : ""} onClick={() => setPersonaTab("mine")}>我的角色</button><button type="button" aria-pressed={personaTab === "official"} className={personaTab === "official" ? "active" : ""} onClick={() => setPersonaTab("official")}>官方角色</button></div>
           <div className="k-create-persona-list">{visiblePersonas.length === 0 ? <p className="k-empty">这里还没有角色。</p> : visiblePersonas.map((p: Persona) => <button type="button" className={`k-create-persona-card${personaId === p.persona_id ? " active" : ""}`} key={p.persona_id} onClick={() => setPersonaId(p.persona_id)} aria-pressed={personaId === p.persona_id}><span className="k-create-persona-avatar">{p.refs[0] ? <img src={`/api/assets/${p.refs[0]}`} alt="" /> : p.name.slice(0, 1)}</span><span><strong>{p.name}</strong><small>v{p.version} · {p.desc || p.default_outfit || "旅行角色"}</small></span><span className="k-create-persona-check" aria-hidden="true">✓</span></button>)}</div>
           <Link to="/personas/new?returnTo=/episodes/new" className="k-create-persona-add">＋ 新建角色</Link>

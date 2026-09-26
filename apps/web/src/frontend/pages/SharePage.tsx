@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getShare, shareFinalVideoUrl, type SharedEpisode } from "../api/client";
 
+export function ShareVideo({ slug, episode }: { slug: string; episode: SharedEpisode }) {
+  const { width, height } = episode.final ?? {};
+  const aspectRatio = width && height && width > 0 && height > 0 ? `${width}/${height}` : "9/16";
+  return <video className="k-media k-share-video" style={{ aspectRatio }} src={shareFinalVideoUrl(slug)} controls aria-label={episode.render.title || episode.episode_id} />;
+}
+
 /**
  * FR-12 分享页：不登录也能看，不用 Layout 的侧栏壳（那是登录后的工作台）。
  * 找不到 / 没开分享，服务端统一返回 404，这里不区分展示成同一句话——不
@@ -35,15 +41,11 @@ export default function SharePage() {
   return (
     <div className="k-share-page">
       <div className="k-nav-brand">Kelvoy</div>
-      <video
-        className="k-media k-share-video"
-        src={shareFinalVideoUrl(slug)}
-        controls
-        aria-label={episode.render.title || episode.episode_id}
-      />
+      <ShareVideo slug={slug} episode={episode} />
       <h1>{episode.render.title || episode.episode_id}</h1>
       <p className="k-card-meta">{episode.shots.length} 镜 · AI 生成 · 虚构角色 · 真实目的地</p>
       {episode.final && <p className="k-card-meta">{episode.final.duration_s.toFixed(1)} 秒 · {episode.final.width}×{episode.final.height}</p>}
+      <p className="k-card-meta">持有此链接的人可观看并下载视频；作品拥有者可随时关闭分享。</p>
       <a className="k-btn k-btn-primary" href={shareFinalVideoUrl(slug)} download>下载视频</a>
     </div>
   );

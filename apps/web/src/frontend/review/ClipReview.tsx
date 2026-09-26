@@ -10,6 +10,7 @@ import {
   reportBadShot,
 } from "../api/client";
 import { describeWriteError } from "./errors";
+import { GuideTip } from "../GuideTip";
 import ReviewQueue from "./ReviewQueue";
 import { MutationError, ShotHeader } from "./ShotHeader";
 import { canRegen, regenHint } from "./shot-rules";
@@ -221,6 +222,9 @@ export default function ClipReview({
         <div className="k-desk-toolbar">
           <div className="k-card-title">审核 3 · 片段</div>
         </div>
+        <GuideTip section="clips">{episode.cut_policy === "fixed_1s"
+          ? "每镜严格截取 1 秒，起点按 30 fps 帧格调整；看完动作并确认五项质量红线后再通过。坏镜可报告并免费重生成一次。"
+          : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 1 秒剪辑时，先转换并重新确认。"}</GuideTip>
         <MutationError error={mutation.error} />
         {episode.cut_policy !== "fixed_1s" && episode.shots.every((shot) => !!shot.clip) &&
           <div className="k-card">

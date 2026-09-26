@@ -2,7 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Destination, DestinationType, Episode } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
-import { listDestinations, listEpisodes, listPersonas } from "../api/client";
+import { getMySettings, listDestinations, listEpisodes, listPersonas, updateMySettings } from "../api/client";
+import { OnboardingChecklist } from "../OnboardingChecklist";
+import { GuideTip } from "../GuideTip";
+import { deriveOnboarding } from "../onboarding";
 import { countRefs, hasEnoughRefs } from "../destination-refs";
 import { episodeLabel, weekStats } from "../episode-view";
 import { useApiResource } from "../hooks/useApiResource";
@@ -21,6 +24,12 @@ export default function HomePage() {
   const episodesRes = useApiResource(listEpisodes, []);
   const personasRes = useApiResource(listPersonas, []);
   const destinationsRes = useApiResource(listDestinations, []);
+  const [settingsRetry, setSettingsRetry] = useState(0);
+  const settingsRes = useApiResource(getMySettings, [settingsRetry]);
+  const [dismissedOverride, setDismissedOverride] = useState<0 | 1 | null>(null);
+  const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
+  const [dismissPending, setDismissPending] = useState(false);
+  const [dismissError, setDismissError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<DestinationType | "all">("all");
 
   if (episodesRes.loading) return <p className="k-empty">加载中…</p>;
@@ -37,6 +46,18 @@ export default function HomePage() {
   const recent = byNewest.slice(0, RECENT_LIMIT);
   const types = [...new Set(destinations.map((d) => d.type))];
   const shownDestinations = typeFilter === "all" ? destinations : destinations.filter((d) => d.type === typeFilter);
+  const onboarding = deriveOnboarding(episodes);
+  const dismissal = dismissedOverride ?? settingsRes.data?.settings.onboarding_dismissed_version;
+  const collapsed = collapsedOverride ?? (onboarding.completed[4] && dismissal !== 0);
+
+  async function dismissOnboarding() {
+    setDismissPending(true);
+    setDismissError(null);
+    const result = await updateMySettings({ onboarding_dismissed_version: 1 });
+    setDismissPending(false);
+    if (result.ok) setDismissedOverride(1);
+    else setDismissError("引导状态保存失败，请重试。");
+  }
 
   function episodeMeta(e: Episode): string {
     const persona = personaById.get(e.persona_id)?.name ?? e.persona_id;
@@ -52,9 +73,18 @@ export default function HomePage() {
           <h1>开启下一段旅程</h1>
           <p>选一个角色，去一个真实的地方，创作属于你的旅行故事。</p>
           <Link to="/episodes/new" className="k-btn k-btn-primary">新建一期 <span aria-hidden="true">↗</span></Link>
+          <GuideTip section="create">可直接选官方角色和目的地开始，无需先上传参考图或创建模板。</GuideTip>
         </div>
         <div className="k-home-welcome-art" aria-hidden="true"><span>Kelvoy</span><strong>让故事<br />走向远方。</strong></div>
       </div>
+
+      {settingsRes.loading ? <p className="k-empty">正在加载创作指引…</p> : settingsRes.error ? (
+        <div className="k-card k-onboarding"><p className="k-error">创作指引加载失败。</p><button type="button" className="k-btn k-btn-secondary" onClick={() => setSettingsRetry((n) => n + 1)}>重试</button></div>
+      ) : dismissal !== 1 && (
+        <><OnboardingChecklist {...onboarding} collapsed={collapsed} pending={dismissPending}
+          onToggle={() => setCollapsedOverride(!collapsed)} onDismiss={() => void dismissOnboarding()} />
+          {dismissError && <p className="k-error" role="alert">{dismissError}</p>}</>
+      )}
 
       {inProgress && (
         <Link to={`/episodes/${inProgress.episode_id}`} className="k-card k-home-resume">

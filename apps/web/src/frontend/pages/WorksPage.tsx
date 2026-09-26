@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { Episode } from "@kelvoy/engine";
+import type { Episode, Persona } from "@kelvoy/engine";
 import { listEpisodes, listPersonas } from "../api/client";
 import { episodeLabel } from "../episode-view";
 import { useApiResource } from "../hooks/useApiResource";
@@ -15,6 +15,10 @@ export default function WorksPage() {
 
   const episodes = episodesRes.data?.episodes ?? [];
   const personas = personasRes.data?.personas ?? [];
+  return <WorksList episodes={episodes} personas={personas} />;
+}
+
+export function WorksList({ episodes, personas }: { episodes: Episode[]; personas: Persona[] }) {
   const personaById = new Map(personas.map((p) => [p.persona_id, p]));
 
   // "我的作品·按系列"：FR-13 说系列是按 persona_id 归组的浏览视图，不是
@@ -37,30 +41,31 @@ export default function WorksPage() {
     <div>
       <div className="k-eyebrow">按角色归组</div>
       <h1>我的作品</h1>
+      <p className="k-card-meta">从任意一期继续创作或查看成片。需要帮助可看<Link to="/help">创作指南</Link>，也可<Link to="/episodes/new">新建一期</Link>。</p>
 
       {series.length === 0 ? (
         <p className="k-empty">
           还没有期，<Link to="/episodes/new">新建一期</Link>开始第一期。
         </p>
       ) : (
-        <div className="k-card k-series-list">
+        <div className="k-card k-works-list">
           {series.map((s) => {
-            const latest = s.episodes[0]!;
             return (
-              <div className="k-series-row" key={s.personaId}>
-                <div>
-                  <div className="k-card-title">{s.persona?.name ?? s.personaId}</div>
-                  <div className="k-card-meta">
-                    <span className="k-mono">{s.episodes.length}</span> 期
-                  </div>
-                </div>
-                <div className="k-card-meta">
-                  最新：{episodeLabel(latest)} · {EPISODE_STATUS_LABELS[latest.status]}
-                </div>
-                <Link to={`/episodes/${latest.episode_id}`} className="k-series-action">
-                  {latest.status === "done" ? "查看" : "继续"} →
-                </Link>
-              </div>
+              <section className="k-works-series" key={s.personaId} aria-label={`${s.persona?.name ?? s.personaId}的作品`}>
+                <h2 className="k-card-title">{s.persona?.name ?? s.personaId} <span className="k-card-meta">{s.episodes.length} 期</span></h2>
+                <ol className="k-works-episodes">
+                  {s.episodes.map((episode) => <li className="k-works-episode" key={episode.episode_id}>
+                    <div className="k-works-episode-info">
+                      <span>{episodeLabel(episode)}</span>
+                      <span className="k-card-meta">{EPISODE_STATUS_LABELS[episode.status]}</span>
+                    </div>
+                    <Link to={`/episodes/${episode.episode_id}`} className="k-series-action"
+                      aria-label={`${episode.status === "done" ? "查看" : "继续"} ${episodeLabel(episode)}`}>
+                      {episode.status === "done" ? "查看" : "继续"} →
+                    </Link>
+                  </li>)}
+                </ol>
+              </section>
             );
           })}
         </div>

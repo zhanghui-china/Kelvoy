@@ -69,6 +69,19 @@ test("credit balance and ledger belong only to the signed-in account", async () 
 });
 
 describe("GET/PATCH /api/me/settings", () => {
+  test("persists onboarding dismissal for this account and can reopen it", async () => {
+    const app = buildApp();
+    await seedUser("onboarding", "hunter2");
+    await seedUser("neighbor", "hunter2");
+    const mine = await loginCookie(app, "onboarding", "hunter2");
+    const theirs = await loginCookie(app, "neighbor", "hunter2");
+    expect((await send(app, "PATCH", "/api/me/settings", { onboarding_dismissed_version: 2 }, mine)).status).toBe(400);
+    expect((await send(app, "PATCH", "/api/me/settings", { onboarding_dismissed_version: 1 }, mine)).status).toBe(200);
+    expect(await (await app.request("/api/me/settings", { headers: { cookie: mine } })).json()).toEqual({ ok: true, settings: { onboarding_dismissed_version: 1 } });
+    expect(await (await app.request("/api/me/settings", { headers: { cookie: theirs } })).json()).toEqual({ ok: true, settings: {} });
+    expect((await send(app, "PATCH", "/api/me/settings", { onboarding_dismissed_version: 0 }, mine)).status).toBe(200);
+    expect(await (await app.request("/api/me/settings", { headers: { cookie: mine } })).json()).toEqual({ ok: true, settings: { onboarding_dismissed_version: 0 } });
+  });
   test("returns only the authenticated account identity for draft isolation", async () => {
     const app = buildApp();
     await seedUser("first", "hunter2");

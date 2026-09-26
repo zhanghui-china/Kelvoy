@@ -1,5 +1,6 @@
 import type { Episode } from "@kelvoy/engine";
 import { convertLegacyCuts, episodeFileUrl, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
+import { GuideTip } from "../GuideTip";
 import ShareActions from "./ShareActions";
 import { MutationError } from "./ShotHeader";
 import { tally } from "./tally";
@@ -33,6 +34,7 @@ export default function DoneView({
   return (
     <section className="k-desk-main">
       <div className="k-card-title">成片</div>
+      <GuideTip section="deliver">先完整播放成片，再下载或开启分享链接。</GuideTip>
       <video className="k-media k-desk-final" src={url} controls aria-label="成片" />
       <p className="k-card-meta">文件还没生成时播放器会是空的，那说明合成还没跑完。</p>
       {episode.final && <p className="k-card-meta">

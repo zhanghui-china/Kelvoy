@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Persona } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
+import { GuideTip } from "../GuideTip";
 import { listPersonas } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
 import { canEditPersona } from "../persona-access";
@@ -72,6 +73,7 @@ export default function PersonasPage() {
           新建角色
         </Link>
       </div>
+      <GuideTip section="personas">官方角色可直接用于新建一期。自己的角色建议用 3–7 张多视角参考图，锁定特征帮助跨期保持一致；编辑后版本号会更新。</GuideTip>
       {personas.length === 0 ? (
         <p className="k-empty">
           还没有角色，点上面"新建角色"开始第一个。

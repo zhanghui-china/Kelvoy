@@ -390,6 +390,15 @@ describe("validateChangePasswordRequest", () => {
 });
 
 describe("validateUserSettingsPatch", () => {
+  test("accepts versioned onboarding dismissal and reopening", () => {
+    expect(validateUserSettingsPatch({ onboarding_dismissed_version: 1 })).toEqual({ valid: true, value: { onboarding_dismissed_version: 1 } });
+    expect(validateUserSettingsPatch({ onboarding_dismissed_version: 0 }).valid).toBe(true);
+  });
+  test("rejects invalid onboarding dismissal versions", () => {
+    for (const version of [-1, 2, 0.5, "1", null]) {
+      expect(validateUserSettingsPatch({ onboarding_dismissed_version: version }).valid).toBe(false);
+    }
+  });
   test("rejects grid as a new account default", () => {
     expect(validateUserSettingsPatch({ default_mode: "grid" }).valid).toBe(false);
   });

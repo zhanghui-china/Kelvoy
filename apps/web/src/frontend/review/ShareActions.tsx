@@ -30,6 +30,7 @@ export default function ShareActions({ episode }: { episode: Episode }) {
   }
 
   return <div className="k-share-actions">
+    <p className="k-card-meta">可复制文案或链接；抖音和小红书按钮只打开网站，平台发布需要自行完成。</p>
     <div className="k-desk-actions">
       <button type="button" className="k-btn k-btn-secondary" onClick={() => void copyText(copy, "分享文案")}>复制文案</button>
       {link && <button type="button" className="k-btn k-btn-secondary" onClick={() => void copyText(link, "链接")}>复制链接</button>}

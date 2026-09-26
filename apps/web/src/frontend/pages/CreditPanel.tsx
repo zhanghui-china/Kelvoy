@@ -10,7 +10,7 @@ export default function CreditPanel() {
   return (
     <section className="k-card">
       <h2>积分账户</h2>
-      <p className="k-card-meta">额度由团队发放。提交生成任务时先预留，成功后结算，失败时退回。</p>
+      <p className="k-card-meta">额度由团队发放。可用积分可用于新任务；预留积分已锁定待结算。成功后结算，失败时退回，下方列出实际记账流水。</p>
       {loading && <p className="k-card-meta">正在读取余额…</p>}
       {error && <p className="k-error" role="alert">余额加载失败：{error}</p>}
       {data && <>

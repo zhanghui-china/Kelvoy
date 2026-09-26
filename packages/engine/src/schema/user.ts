@@ -13,6 +13,8 @@ export interface UserSettings {
   default_candidates?: number;
   /** 历史 grid 值只读；新设置仅可写 per_shot。 */
   default_mode?: EpisodeMode;
+  /** 1 hides the current onboarding checklist; 0 explicitly reopens it. */
+  onboarding_dismissed_version?: 0 | 1;
 }
 
 // FR-04"每镜 N 候选"在 M2 阶段给用户开放的范围。估价公式（rules/credits.ts）

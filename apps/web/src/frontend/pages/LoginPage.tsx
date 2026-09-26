@@ -32,6 +32,7 @@ export default function LoginPage() {
       <div className="k-auth-card">
         <LogoMark size={36} />
         <h1>登录 Kelvoy</h1>
+        <p className="k-card-meta">登录后选角色与目的地，再按脚本、关键帧、片段三步审核出片。</p>
         <form onSubmit={handleSubmit}>
           <label className="k-field">
             用户名

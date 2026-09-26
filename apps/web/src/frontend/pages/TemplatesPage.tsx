@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import type { DestinationType, Template } from "@kelvoy/engine";
 import { createTemplate, deleteTemplate, listTemplates } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
+import { GuideTip } from "../GuideTip";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 
 const SKELETON_OPTIONS = Object.entries(DESTINATION_TYPE_LABELS) as [DestinationType, string][];
@@ -89,6 +90,7 @@ export default function TemplatesPage() {
     <div>
       <div className="k-eyebrow">账号级资产</div>
       <h1>模板</h1>
+      <GuideTip section="templates">新建一期会按目的地类型预选匹配模板；官方模板可直接使用，自建模板用于固定自己的叙事与视觉风格。LUT 是画面调色方案。</GuideTip>
 
       <div>
         <h2>官方模板</h2>

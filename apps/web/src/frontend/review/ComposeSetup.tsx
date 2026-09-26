@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MUSIC_CATALOG, type Episode } from "@kelvoy/engine";
 import { continueEpisode, patchEpisode } from "../api/client";
+import { GuideTip } from "../GuideTip";
 import { MutationError } from "./ShotHeader";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
@@ -26,6 +27,9 @@ export default function ComposeSetup({ episode, mutation }: { episode: Episode; 
     <section className="k-card k-compose-setup">
       <div className="k-eyebrow">第 5 步 · 合成与预览</div>
       <h2>合成设置</h2>
+      <GuideTip section="compose">{fixed
+        ? "调整标题、字幕、配乐与片头片尾后，先保存设置，再开始合成。下方时长按当前镜头数和首尾设置计算。"
+        : "旧版作品沿用原有节拍切点；调整标题、配乐与片头片尾后，先保存设置，再开始合成。"}</GuideTip>
       <p className="k-card-meta">
         {episode.shots.length} 镜 · {fixed ? `${duration?.toFixed(1)} 秒成片，每镜 30 帧` : "沿用旧项目的节拍切点"}
         {` · ${episode.render.res} · ${episode.render.fps} fps`}

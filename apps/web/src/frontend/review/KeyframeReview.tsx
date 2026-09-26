@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
+import { GuideTip } from "../GuideTip";
 import { describeWriteError } from "./errors";
 import ReviewQueue from "./ReviewQueue";
 import { AssetImage, MutationError, ShotHeader } from "./ShotHeader";
@@ -196,6 +197,8 @@ export default function KeyframeReview({
             </button>
           )}
         </div>
+
+        <GuideTip section="keyframes">对照角色和地标参考图，逐镜选一张候选；不合适时可改 prompt 后重生成。</GuideTip>
 
         {gridOpen && (
           <div className="k-card">

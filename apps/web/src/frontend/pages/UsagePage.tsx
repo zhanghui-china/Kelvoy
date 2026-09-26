@@ -6,6 +6,7 @@ import { tally } from "../review/tally";
 import "../review/review.css";
 import "./UsagePage.css";
 import CreditPanel from "./CreditPanel";
+import { GuideTip } from "../GuideTip";
 
 // 期的 created_at 是唯一记录在 Episode 上的时间戳（PRD v0.2 §6 没有
 // completed_at/updated_at 字段），所以"按期"表格显示的是创建时间，不是
@@ -58,6 +59,7 @@ export default function UsagePage() {
       <div>
         <div className="k-eyebrow">账号级成本聚合</div>
         <h1>用量</h1>
+        <GuideTip section="credits">这里记录账户可用与预留积分，以及实际流水；额度由团队发放。</GuideTip>
         <CreditPanel />
         <p className="k-empty">还没有出片记录。</p>
       </div>
@@ -83,6 +85,7 @@ export default function UsagePage() {
     <div>
       <div className="k-eyebrow">账号级成本聚合</div>
       <h1>用量</h1>
+      <GuideTip section="credits">这里记录账户可用与预留积分，以及实际流水；额度由团队发放。</GuideTip>
 
       <CreditPanel />
 

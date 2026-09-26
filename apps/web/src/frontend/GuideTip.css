@@ -1,0 +1,4 @@
+.k-guide-tip { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .7rem; padding: .75rem 1rem; border: 1px solid #cfddf3; border-radius: 12px; background: #f5f8fe; color: #34476a; line-height: 1.6; }
+.k-guide-tip-label { font-weight: 700; color: #365c9b; }
+.k-guide-tip a { margin-left: auto; white-space: nowrap; }
+@media (max-width: 600px) { .k-guide-tip a { margin-left: 0; white-space: normal; } }

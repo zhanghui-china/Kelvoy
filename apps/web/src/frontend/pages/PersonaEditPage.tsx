@@ -2,6 +2,7 @@ import { type ChangeEvent, type DragEvent, type FormEvent, useEffect, useRef, us
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { Persona } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
+import { GuideTip } from "../GuideTip";
 import {
   assetUrl,
   createPersona,
@@ -250,6 +251,7 @@ export default function PersonaEditPage() {
       <p>
         <Link to="/personas">← 返回角色列表</Link>
       </p>
+      <GuideTip section="personas">官方角色由平台维护，可直接选用。编辑自己的角色会更新版本；锁定脸型、发型、体态等特征有助于跨期一致。</GuideTip>
 
       <form onSubmit={handleSubmit} className="k-persona-edit-form">
         <div className="k-card">
