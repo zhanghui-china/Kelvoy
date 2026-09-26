@@ -3,6 +3,7 @@ import type { Episode, Shot } from "@kelvoy/engine";
 import type { WriteResult } from "../api/client";
 import {
   continueEpisode,
+  convertLegacyCuts,
   episodeFileUrl,
   patchShot,
   regenShot,
@@ -221,6 +222,15 @@ export default function ClipReview({
           <div className="k-card-title">审核 3 · 片段</div>
         </div>
         <MutationError error={mutation.error} />
+        {episode.cut_policy !== "fixed_1s" && episode.shots.every((shot) => !!shot.clip) &&
+          <div className="k-card">
+            <div className="k-card-title">旧版剪辑</div>
+            <p className="k-card-meta">可保留现有片段，改为每镜严格 1 秒。转换后需要重新确认每镜起点和质量。</p>
+            <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending}
+              onClick={() => mutation.run((rowVersion) => convertLegacyCuts(episode.episode_id, rowVersion))}>
+              使用新版 1 秒剪辑
+            </button>
+          </div>}
 
         {episode.shots.map((shot) => (
           <ClipShot

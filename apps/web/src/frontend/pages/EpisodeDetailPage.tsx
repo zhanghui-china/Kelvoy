@@ -10,6 +10,7 @@ import DoneView from "../review/DoneView";
 import KeyframeReview from "../review/KeyframeReview";
 import ProgressView from "../review/ProgressView";
 import SaveAsTemplateForm from "../review/SaveAsTemplateForm";
+import StageSteps from "../review/StageSteps";
 import ScriptReview from "../review/ScriptReview";
 import { useEpisodeMutation } from "../review/useEpisodeMutation";
 import "../review/review.css";
@@ -53,6 +54,7 @@ export default function EpisodeDetailPage() {
         <span className="k-card-meta">预计完整创作：{episode.estimated_credits} 积分</span>
         <span className="k-card-meta">{episode.shots.length} 镜 · 每 3 秒自动刷新</span>
       </div>
+      <StageSteps status={episode.status} />
 
       {episode.status === "script_review" && (
         <ScriptReview episode={episode} destination={destination} mutation={mutation} />
@@ -76,6 +78,9 @@ export default function EpisodeDetailPage() {
         episode.status === "scripting" ||
         episode.status === "assets" ||
         episode.status === "failed") && <ProgressView episode={episode} mutation={mutation} />}
+      {(episode.status === "keyframing" || episode.status === "clipping") &&
+        episode.shots.some((shot) => shot.status === "failed") &&
+        <ProgressView episode={episode} mutation={mutation} />}
 
       <SaveAsTemplateForm episodeId={episode.episode_id} />
     </div>

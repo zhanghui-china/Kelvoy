@@ -112,6 +112,17 @@ export interface EpisodeRender {
   transitions_enabled?: boolean;
 }
 
+export interface FinalArtifact {
+  version: number;
+  key: string;
+  duration_s: number;
+  width: number;
+  height: number;
+  fps: number;
+  size_bytes: number;
+  completed_at: string;
+}
+
 export interface Episode {
   episode_id: string;
   name: string;
@@ -128,6 +139,7 @@ export interface Episode {
   candidate_count: number;
   script_pending_task_id?: string | null;
   script_action_error?: string | null;
+  final?: FinalArtifact | null;
   created_at: string; // ISO 8601
   estimated_credits: number;
   credits_used: number;

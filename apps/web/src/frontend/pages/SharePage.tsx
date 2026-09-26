@@ -43,6 +43,8 @@ export default function SharePage() {
       />
       <h1>{episode.render.title || episode.episode_id}</h1>
       <p className="k-card-meta">{episode.shots.length} 镜 · AI 生成 · 虚构角色 · 真实目的地</p>
+      {episode.final && <p className="k-card-meta">{episode.final.duration_s.toFixed(1)} 秒 · {episode.final.width}×{episode.final.height}</p>}
+      <a className="k-btn k-btn-primary" href={shareFinalVideoUrl(slug)} download>下载视频</a>
     </div>
   );
 }

@@ -17,6 +17,7 @@ export interface Task {
   operation?: "script_regenerate" | "script_optimize";
   instruction?: string;
   lease_token?: string;
+  generation_id?: string;
 }
 
 /**

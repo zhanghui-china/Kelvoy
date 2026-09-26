@@ -1,4 +1,4 @@
-import { dequeueTask, insertEpisode, insertPersona, upsertDestination } from "@kelvoy/store";
+import { dequeueTask, insertEpisode, insertPersona, patchShot, upsertDestination } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode, Template } from "@kelvoy/engine";
 import { setupEpisodeRouteTests, buildApp, destinationFixture, fixture, login, personaFixture, shotFixture } from "./episode-test-fixtures";
@@ -29,7 +29,7 @@ test("legacy grid review actions cannot enqueue new generation", async () => {
   }
 });
 
-test("PATCH /:id applies a field patch and bumps row_version", async () => {
+test("PATCH /:id rejects forged credits without changing the episode", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertEpisode(fixture("e_1", ownerId));
 
@@ -39,12 +39,11 @@ test("PATCH /:id applies a field patch and bumps row_version", async () => {
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 1, patch: { credits_used: 3 } }),
   });
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, row_version: 2 });
+  expect(res.status).toBe(400);
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
   const body = (await got.json()) as { episode: Episode };
-  expect(body.episode.credits_used).toBe(3);
+  expect(body.episode.credits_used).toBe(0);
 });
 
 test("PATCH /:id rejects forged candidate count without changing the episode", async () => {
@@ -64,13 +63,15 @@ test("PATCH /:id rejects forged candidate count without changing the episode", a
 
 test("PATCH /:id 409s on a stale row_version", async () => {
   const { cookie, ownerId } = await login("dannei");
-  await insertEpisode(fixture("e_1", ownerId));
+  const episode = fixture("e_1", ownerId);
+  episode.status = "compose_ready";
+  await insertEpisode(episode);
 
   const app = buildApp();
   const res = await app.request("/api/episodes/e_1", {
     method: "PATCH",
     headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ row_version: 999, patch: { credits_used: 3 } }),
+    body: JSON.stringify({ row_version: 999, patch: { render: episode.render } }),
   });
   expect(res.status).toBe(409);
 });
@@ -101,9 +102,10 @@ test("PATCH /:id 404s on someone else's episode", async () => {
   expect(res.status).toBe(404);
 });
 
-test("PATCH /:id/shots/:no applies a shot patch and bumps the episode's row_version", async () => {
+test("PATCH /:id/shots/:no permits script text but rejects forged candidates", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);
+  episode.status = "script_review";
   episode.shots = [shotFixture(1)];
   await insertEpisode(episode);
 
@@ -111,13 +113,18 @@ test("PATCH /:id/shots/:no applies a shot patch and bumps the episode's row_vers
   const res = await app.request("/api/episodes/e_1/shots/1", {
     method: "PATCH",
     headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ row_version: 1, patch: { candidates: ["kf/01_a.png"] } }),
+    body: JSON.stringify({ row_version: 1, patch: { beat: "走过街口" } }),
   });
   expect(res.status).toBe(200);
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
   const body = (await got.json()) as { episode: Episode };
-  expect(body.episode.shots[0]?.candidates).toEqual(["kf/01_a.png"]);
+  expect(body.episode.shots[0]?.beat).toBe("走过街口");
+  const forged = await app.request("/api/episodes/e_1/shots/1", {
+    method: "PATCH", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 2, patch: { candidates: ["kf/01_a.png"] } }),
+  });
+  expect(forged.status).toBe(400);
 });
 
 test("PATCH /:id/shots/:no 404s on a shot number that doesn't exist", async () => {
@@ -239,7 +246,7 @@ test("POST /:id/continue advances kf_review only when every keyframe is selected
   episode.shots = [
     shotFixture(1, { status: "kf_selected", candidates: ["kf/1.png"], kf_selected: "kf/1.png" }),
     shotFixture(2, { status: "kf_selected", candidates: ["kf/2.png"], kf_selected: "kf/2.png" }),
-    shotFixture(3, { status: "kf_ready" }),
+    shotFixture(3, { status: "kf_ready", candidates: ["kf/3.png"] }),
   ];
   await insertEpisode(episode);
 
@@ -256,7 +263,7 @@ test("POST /:id/continue advances kf_review only when every keyframe is selected
   const second = await app.request("/api/episodes/e_1/shots/3", {
     method: "PATCH",
     headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ row_version: 1, patch: { status: "kf_selected", candidates: ["kf/3.png"], kf_selected: "kf/3.png" } }),
+    body: JSON.stringify({ row_version: 1, patch: { status: "kf_selected", kf_selected: "kf/3.png" } }),
   });
   expect(second.status).toBe(200);
   const proceed = await app.request("/api/episodes/e_1/continue", {
@@ -384,16 +391,8 @@ test("keyframe regen from clip review carries approved shots through to video", 
   expect(generationTask?.stage).toBe("keyframe");
 
   // Simulate the worker's state hops, then make the review decision.
-  const generating = await app.request("/api/episodes/e_1/shots/1", {
-    method: "PATCH", headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ row_version: 2, patch: { status: "generating_kf" } }),
-  });
-  expect(generating.status).toBe(200);
-  const ready = await app.request("/api/episodes/e_1/shots/1", {
-    method: "PATCH", headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ row_version: 3, patch: { status: "kf_ready", candidates: ["kf/new.png"] } }),
-  });
-  expect(ready.status).toBe(200);
+  expect((await patchShot("e_1", 1, 2, { status: "generating_kf" })).ok).toBe(true);
+  expect((await patchShot("e_1", 1, 3, { status: "kf_ready", candidates: ["kf/new.png"] })).ok).toBe(true);
   const selected = await app.request("/api/episodes/e_1/shots/1", {
     method: "PATCH", headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 4, patch: { status: "kf_selected", kf_selected: "kf/new.png" } }),

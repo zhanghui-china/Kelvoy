@@ -81,19 +81,22 @@ function fakeComposeProvider(): ComposeProvider & { calls: ComposePlan[] } {
     calls,
     async compose({ plan }) {
       calls.push(plan);
-      return { output_key: plan.output_key };
+      return { output_key: plan.output_key,
+        probe: { duration_s: 2, width: plan.res.w, height: plan.res.h,
+          fps: plan.fps, size_bytes: 2048 } };
     },
   };
 }
 
-test("finalOutputKey is a derived convention, not a schema field", () => {
-  expect(finalOutputKey("e_42")).toBe("final/e_42.mp4");
+test("finalOutputKey includes a delivery version", () => {
+  expect(finalOutputKey("e_42")).toBe("final/e_42_v1.mp4");
+  expect(finalOutputKey("e_42", 2)).toBe("final/e_42_v2.mp4");
 });
 
 test("buildComposePlan compiles an episode into a backend-agnostic plan", async () => {
   const plan = await buildComposePlan(episodeFixture(), { persona: personaFixture() });
 
-  expect(plan.output_key).toBe("final/e_1.mp4");
+  expect(plan.output_key).toBe("final/e_1_v1.mp4");
   expect(plan.res).toEqual({ w: 1080, h: 1920 });
   expect(plan.fps).toBe(30);
   expect(plan.lut_key).toBe("lut/warm_film.cube");
@@ -164,12 +167,26 @@ test("runCompose hands the plan to the injected provider and advances composing 
   const updated = await runCompose(episodeFixture(), undefined, { persona: personaFixture(), compose: provider });
 
   expect(provider.calls).toHaveLength(1);
-  expect(provider.calls[0]?.output_key).toBe("final/e_1.mp4");
+  expect(provider.calls[0]?.output_key).toBe("final/e_1_v1.mp4");
   expect(updated.status).toBe("done");
+  expect(updated.final).toMatchObject({ version: 1, key: "final/e_1_v1.mp4",
+    duration_s: 2, width: 1080, height: 1920, fps: 30, size_bytes: 2048 });
   // 选中的曲子回写进期记录（license 留痕、bpm 供重新合成复用同一套切点）。
-  expect(updated.music).toEqual({ file: "music/calm_morning.mp3", bpm: 84, license: "CC0-1.0" });
+  expect(updated.music).toEqual({ file: "music/calm_morning.mp3", bpm: 84, license: "Kelvoy original" });
   // 重新合成不动任何镜（PRD §4）。
   expect(updated.shots).toEqual(episodeFixture().shots);
+});
+
+test("recompose writes a new version and leaves the previous artifact reference intact until success", async () => {
+  const previous = { version: 1, key: "final/e_1_v1.mp4", duration_s: 2,
+    width: 1080, height: 1920, fps: 30, size_bytes: 1000,
+    completed_at: "2026-09-25T00:00:00Z" };
+  const episode = episodeFixture({ final: previous });
+  const provider = fakeComposeProvider();
+  const updated = await runCompose(episode, undefined, { persona: personaFixture(), compose: provider });
+  expect(provider.calls[0]?.output_key).toBe("final/e_1_v2.mp4");
+  expect(updated.final?.version).toBe(2);
+  expect(episode.final).toEqual(previous);
 });
 
 test("runCompose refuses to run without a ComposeProvider (engine never touches ffmpeg)", async () => {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 export interface ShotNavigation {
   currentNo: number | null;
@@ -16,7 +17,10 @@ const NEXT_KEYS = new Set(["j", "J", "ArrowRight"]);
  * 待审队列点击也走同一个定位逻辑。输入框里按键不拦截（否则打不了字）。
  */
 export function useShotNavigation(shotNos: number[]): ShotNavigation {
-  const [currentNo, setCurrentNo] = useState<number | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selected = Number(searchParams.get("shot"));
+  const urlShot = searchParams.has("shot") && shotNos.includes(selected) ? selected : null;
+  const [currentNo, setCurrentNo] = useState<number | null>(urlShot);
 
   // 轮询每 3 秒换一个新数组，直接进 effect 依赖会让键盘监听反复解绑重绑。
   const shotNosRef = useRef(shotNos);
@@ -31,8 +35,16 @@ export function useShotNavigation(shotNos: number[]): ShotNavigation {
 
   const focusShot = useCallback((no: number) => {
     setCurrentNo(no);
+    const next = new URLSearchParams(searchParams);
+    next.set("shot", String(no));
+    setSearchParams(next);
     elements.current.get(no)?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, []);
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    setCurrentNo(urlShot);
+    if (urlShot !== null) elements.current.get(urlShot)?.scrollIntoView({ block: "center" });
+  }, [urlShot]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

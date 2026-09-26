@@ -322,6 +322,9 @@
   color: var(--color-ink-soft);
   font-size: 0.85rem;
 }
+.k-share-actions { display: grid; gap: 12px; }
+.k-share-qr { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.k-share-qr img { padding: 6px; border: 1px solid var(--color-border); border-radius: 12px; background: #fff; }
 .k-compose-setup { display: grid; gap: 16px; max-width: 720px; }
 .k-compose-options { display: flex; flex-wrap: wrap; gap: 12px 24px; color: var(--color-ink-soft); }
 .k-compose-options label { display: inline-flex; align-items: center; gap: 8px; }

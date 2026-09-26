@@ -18,9 +18,10 @@ test("catalog seed copies real assets and imports stable records without version
   const first = await seedCatalog(root);
   expect(first.personas).toBe(2);
   expect(first.destinations).toBe(5);
-  expect(first.assets).toBe(21);
+  expect(first.assets).toBe(29);
   const asset = await readFile(join(root, "dest", "huangshan", "01.jpg"));
   expect(asset.length).toBeGreaterThan(1000);
+  expect((await readFile(join(root, "music", "calm_morning.mp3"))).length).toBeGreaterThan(1000);
   const second = await seedCatalog(root);
   expect(second).toEqual({ personas: 0, destinations: 0, assets: 0 });
   expect((await getPersona("c_official_aching"))?.version).toBe(1);

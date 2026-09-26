@@ -1,8 +1,9 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ComposePlan, ComposeProvider } from "@kelvoy/engine";
 import { artifactPath, sharedAssetPath } from "../storage/artifacts";
 import { buildFfmpegArgs, type ComposeInputPaths } from "./ffmpeg-args";
+import { buildAssOverlay } from "./ass-overlay";
 
 /**
  * 合成 provider（PRD §9, M1-13）：整个系统里唯一调用 ffmpeg 的地方，只在
@@ -65,10 +66,40 @@ async function probeVideoDurationS(path: string): Promise<number> {
   return seconds;
 }
 
+async function probeOutput(path: string): Promise<{
+  duration_s: number; width: number; height: number; fps: number; size_bytes: number;
+}> {
+  const { code, stdout, stderr } = await runCommand([
+    "ffprobe", "-v", "error", "-select_streams", "v:0",
+    "-show_entries", "stream=width,height,avg_frame_rate:format=duration,size", "-of", "json", path,
+  ]);
+  if (code !== 0) throw new Error(`ffprobe 验证成片失败：${stderr.slice(-STDERR_TAIL_CHARS)}`);
+  const data = JSON.parse(stdout) as {
+    streams?: { width?: number; height?: number; avg_frame_rate?: string }[];
+    format?: { duration?: string; size?: string };
+  };
+  const stream = data.streams?.[0];
+  const [numerator, denominator] = (stream?.avg_frame_rate ?? "").split("/").map(Number);
+  const fps = denominator ? numerator! / denominator : Number(stream?.avg_frame_rate);
+  const duration = Number(data.format?.duration);
+  const size = Number(data.format?.size);
+  if (!stream?.width || !stream.height || !Number.isFinite(fps) || fps <= 0 ||
+      !Number.isFinite(duration) || duration <= 0 || !Number.isSafeInteger(size) || size <= 0) {
+    throw new Error("ffprobe 返回了无效的成片参数");
+  }
+  return { duration_s: duration, width: stream.width, height: stream.height,
+    fps, size_bytes: size };
+}
+
 async function ffmpegVersionLine(): Promise<string> {
   const { code, stdout } = await runCommand(["ffmpeg", "-version"]);
   if (code !== 0) return "ffmpeg";
   return stdout.split("\n")[0]?.trim() ?? "ffmpeg";
+}
+
+async function supportsAssFilter(): Promise<boolean> {
+  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"]);
+  return code === 0 && /^\s*[.A-Z|]+\s+ass\s+/m.test(stdout);
 }
 
 async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
@@ -110,6 +141,19 @@ export const ffmpegComposeProvider: ComposeProvider = {
   async compose({ plan }) {
     const paths = await resolvePaths(plan);
     await mkdir(dirname(paths.output), { recursive: true });
+    const needsText = Boolean(plan.title) || plan.ai_label ||
+      (plan.subtitles_enabled && plan.cuts.some((cut) => Boolean(cut.caption)));
+    if (needsText && await supportsAssFilter()) {
+      const overlayPath = `${paths.output}.ass`;
+      const tempPath = `${overlayPath}.tmp-${crypto.randomUUID()}`;
+      try {
+        await writeFile(tempPath, buildAssOverlay(plan, paths.intro_duration_s, paths.outro_duration_s));
+        await rename(tempPath, overlayPath);
+      } finally {
+        await rm(tempPath, { force: true });
+      }
+      paths.overlay_ass = overlayPath;
+    }
 
     const stamped: ComposePlan = {
       ...plan,
@@ -125,6 +169,10 @@ export const ffmpegComposeProvider: ComposeProvider = {
     if (code !== 0) {
       throw new Error(`ffmpeg 合成失败（退出码 ${code}）：\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
     }
-    return { output_key: plan.output_key };
+    const probe = await probeOutput(paths.output);
+    if (probe.width !== plan.res.w || probe.height !== plan.res.h || Math.abs(probe.fps - plan.fps) > 0.01) {
+      throw new Error(`成片参数不匹配：${probe.width}x${probe.height} ${probe.fps}fps`);
+    }
+    return { output_key: plan.output_key, probe };
   },
 };

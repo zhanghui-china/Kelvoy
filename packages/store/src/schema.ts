@@ -62,6 +62,7 @@ create table if not exists tasks (
   attempt integer not null default 1,
   operation text,
   instruction text,
+  generation_id text,
   lease_until integer,
   lease_token text,
   status text not null default 'pending',
@@ -117,6 +118,7 @@ insert or ignore into credit_prices (kind, price) values
 export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
   { table: "tasks", column: "operation", ddl: "alter table tasks add column operation text" },
   { table: "tasks", column: "instruction", ddl: "alter table tasks add column instruction text" },
+  { table: "tasks", column: "generation_id", ddl: "alter table tasks add column generation_id text" },
   { table: "tasks", column: "lease_until", ddl: "alter table tasks add column lease_until integer" },
   { table: "tasks", column: "lease_token", ddl: "alter table tasks add column lease_token text" },
   {

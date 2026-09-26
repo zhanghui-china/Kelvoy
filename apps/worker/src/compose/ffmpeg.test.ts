@@ -115,6 +115,10 @@ afterEach(async () => {
 test.skipIf(!HAS_FFMPEG)("ffmpegComposeProvider renders final/<id>.mp4 at Σcuts + intro ± 0.5 s", async () => {
   const result = await ffmpegComposeProvider.compose({ plan: planFixture() });
   expect(result.output_key).toBe("final/e_it.mp4");
+  expect(result.probe.width).toBe(180);
+  expect(result.probe.height).toBe(320);
+  expect(result.probe.fps).toBe(30);
+  expect(result.probe.size_bytes).toBeGreaterThan(0);
 
   const output = join(projectsRoot, "e_it", "final", "e_it.mp4");
   expect(await Bun.file(output).exists()).toBe(true);

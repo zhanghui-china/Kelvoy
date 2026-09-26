@@ -10,6 +10,10 @@ interface Catalog { personas: Persona[]; destinations: Destination[] }
 export interface SeedResult { personas: number; destinations: number; assets: number }
 
 const DEMO_ROOT = resolve(import.meta.dir, "../../../assets/demo");
+const SHARED_ROOT = resolve(import.meta.dir, "../../../assets/shared");
+const SHARED_PATHS = ["music/calm_morning.mp3", "music/city_walk.mp3",
+  "music/bright_travel.mp3", "music/night_neon.mp3", "music/wide_nature.mp3",
+  "lut/warm_film.cube", "intro/kelvoy_open.mp4", "outro/kelvoy_close.mp4"];
 
 function refs(catalog: Catalog): string[] {
   return [...catalog.personas.flatMap((persona) => persona.refs),
@@ -22,6 +26,8 @@ export async function seedCatalog(projectsRoot = process.env.KELVOY_PROJECTS_ROO
   if (catalog.personas.length !== 2 || catalog.destinations.length !== 5) throw new Error("starter catalog count changed");
   const paths = refs(catalog);
   if (new Set(paths).size !== 21 || paths.length !== 21) throw new Error("starter catalog asset list changed");
+  const assets = [...paths.map((relative) => ({ relative, root: DEMO_ROOT })),
+    ...SHARED_PATHS.map((relative) => ({ relative, root: SHARED_ROOT }))];
   for (const destination of catalog.destinations) {
     const parsed = validateDestination(destination);
     if (!parsed.valid) throw new Error(parsed.errors.join("; "));
@@ -43,9 +49,10 @@ export async function seedCatalog(projectsRoot = process.env.KELVOY_PROJECTS_ROO
   // Check all existing files before any write. Never replace an existing path:
   // older persona revisions may still point to it.
   const missing: string[] = [];
-  for (const relative of paths) {
-    if (!/^(persona|dest)\/[a-z0-9_-]+\/[a-z0-9_-]+\.jpg$/.test(relative)) throw new Error(`unsafe asset path: ${relative}`);
-    const source = await readFile(join(DEMO_ROOT, relative));
+  for (const { relative, root } of assets) {
+    if (!/^(persona|dest)\/[a-z0-9_-]+\/[a-z0-9_-]+\.jpg$/.test(relative) &&
+        !SHARED_PATHS.includes(relative)) throw new Error(`unsafe asset path: ${relative}`);
+    const source = await readFile(join(root, relative));
     const target = Bun.file(join(projectsRoot, relative));
     if (!(await target.exists())) { missing.push(relative); continue; }
     const present = await target.arrayBuffer();
@@ -54,7 +61,8 @@ export async function seedCatalog(projectsRoot = process.env.KELVOY_PROJECTS_ROO
   for (const relative of missing) {
     const target = join(projectsRoot, relative);
     await mkdir(dirname(target), { recursive: true });
-    await copyFile(join(DEMO_ROOT, relative), target, constants.COPYFILE_EXCL);
+    const root = SHARED_PATHS.includes(relative) ? SHARED_ROOT : DEMO_ROOT;
+    await copyFile(join(root, relative), target, constants.COPYFILE_EXCL);
   }
   let personaCount = 0;
   for (const persona of catalog.personas) {

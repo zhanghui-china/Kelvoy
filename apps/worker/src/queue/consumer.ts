@@ -78,7 +78,7 @@ export async function buildStageContext(stage: StageName, episode: Episode, task
   if (stage === "compose") context.compose = ffmpegComposeProvider;
   if ((stage === "keyframe" || stage === "video") && task) {
     Object.assign(context, createLocalGenerationProviders(), {
-      generation_id: task.task_id,
+      generation_id: task.generation_id ?? task.task_id,
       attempt: task.attempt,
     });
   }
@@ -106,7 +106,8 @@ async function prepareShot(task: Task, rowVersion: number, episode: Episode): Pr
       (task.stage === "video" && shot.status === "clip_ready")) return { kind: "skip" };
   if (shot.status === target) return { kind: "ready", episode, row_version: rowVersion };
   const expected = task.stage === "keyframe" ? "draft" : "kf_selected";
-  if (shot.status !== expected && !(shot.status === "rejected" && shot.regen_stage === task.stage)) {
+  if (shot.status !== expected && shot.status !== "failed" &&
+      !(shot.status === "rejected" && shot.regen_stage === task.stage)) {
     throw new Error(`shot ${shot.no} cannot enter ${target} from ${shot.status}`);
   }
   const patched = await patchShot(task.episode_id, shot.no, rowVersion, { status: target });

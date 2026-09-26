@@ -5,6 +5,7 @@ import {
   estimateCost,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
+  MUSIC_CATALOG,
   validateCreateEpisodeRequest,
   validatePatchEpisodeRequest,
 } from "@kelvoy/engine";
@@ -177,6 +178,26 @@ episodes.patch("/:id", async (c) => {
   const body = await c.req.json().catch(() => null);
   const result = validatePatchEpisodeRequest(body);
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
+  if (Object.keys(result.value.patch).some((field) => field !== "render" && field !== "music") ||
+      (loaded.episode.status !== "compose_ready" && loaded.episode.status !== "done")) {
+    return c.json({ ok: false, error: "invalid_public_patch" }, 400);
+  }
+  const render = result.value.patch.render;
+  if (render && (render.res !== loaded.episode.render.res || render.fps !== loaded.episode.render.fps ||
+      render.ai_label !== loaded.episode.render.ai_label ||
+      ![null, "intro/kelvoy_open.mp4"].includes(render.intro) ||
+      ![null, "outro/kelvoy_close.mp4"].includes(render.outro))) {
+    return c.json({ ok: false, error: "invalid_render_settings" }, 400);
+  }
+  if (render && checkContent([{ field: "title", text: render.title }]).length > 0) {
+    return c.json({ ok: false, error: "content_blocked" }, 400);
+  }
+  const music = result.value.patch.music;
+  if (music && !(music.file === "" && music.bpm === 0 && music.license === "" ||
+      MUSIC_CATALOG.some((item) => item.file === music.file && item.bpm === music.bpm &&
+        item.license === music.license))) {
+    return c.json({ ok: false, error: "invalid_music_settings" }, 400);
+  }
 
   const patchResult = await patchEpisode(
     loaded.episode.episode_id,
@@ -264,7 +285,15 @@ episodes.get("/:id/files/:path{.+}", async (c) => {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 
-  const filePath = resolveArtifactPath(episodeId, c.req.param("path"));
+  const requestedKey = c.req.param("path");
+  const legacyGridDownload = result.episode.mode === "grid" && !result.episode.final &&
+    requestedKey === `final/${episodeId}.mp4`;
+  if (requestedKey.startsWith("final/") &&
+      !legacyGridDownload && (result.episode.status !== "done" ||
+       requestedKey !== (result.episode.final?.key ?? `final/${episodeId}.mp4`))) {
+    return c.json({ ok: false, error: "not_found" }, 404);
+  }
+  const filePath = resolveArtifactPath(episodeId, requestedKey);
   if (!filePath) {
     return c.json({ ok: false, error: "invalid_path" }, 400);
   }

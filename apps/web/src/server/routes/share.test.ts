@@ -99,6 +99,20 @@ test("GET /:slug/final.mp4 serves the final video with no login required", async
   expect(await res.text()).toBe("fake-mp4-bytes");
 });
 
+test("share serves the recorded delivery version instead of an older file", async () => {
+  const episode = fixture("e_1", true, "abc123");
+  episode.final = { version: 2, key: "final/e_1_v2.mp4", duration_s: 30,
+    width: 1080, height: 1920, fps: 30, size_bytes: 9,
+    completed_at: "2026-09-26T00:00:00Z" };
+  await insertEpisode(episode);
+  await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1_v1.mp4"), "old");
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1_v2.mp4"), "new");
+  const res = await buildApp().request("/api/share/abc123/final.mp4");
+  expect(res.status).toBe(200);
+  expect(await res.text()).toBe("new");
+});
+
 test("GET /:slug/final.mp4 404s when sharing is off, even if the file exists", async () => {
   await insertEpisode(fixture("e_1", false, "abc123"));
   await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });

@@ -15,6 +15,8 @@ import {
   submitReviewAdvance,
   submitShotRegeneration,
   submitScriptAction,
+  submitFailedTaskRetry,
+  convertLegacyCuts,
 } from "@kelvoy/store";
 import { Hono } from "hono";
 import { loadOwnedEpisode, parseRowVersion, patchErrorResponse } from "./episode-common";
@@ -26,6 +28,32 @@ import { loadOwnedEpisode, parseRowVersion, patchErrorResponse } from "./episode
  * 只是因为 episodes.ts 加完 #31 的两条路由就超了 500 行上限。
  */
 const review = new Hono();
+
+review.post("/:id/convert-cuts", async (c) => {
+  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
+  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  const body = await c.req.json().catch(() => null);
+  const rowVersion = parseRowVersion(body);
+  if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
+  const result = convertLegacyCuts({ episode_id: loaded.episode.episode_id,
+    owner_id: c.get("ownerId"), row_version: rowVersion });
+  if (!result.ok) return c.json(result, result.error === "version_conflict" ? 409 :
+    result.error === "not_found" ? 404 : 400);
+  return c.json(result);
+});
+
+review.post("/:id/retry", async (c) => {
+  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
+  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  const body = await c.req.json().catch(() => null);
+  const rowVersion = parseRowVersion(body);
+  if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
+  const result = submitFailedTaskRetry({ episode_id: loaded.episode.episode_id,
+    owner_id: c.get("ownerId"), row_version: rowVersion });
+  if (!result.ok) return c.json(result, result.error === "insufficient_credits" ? 402 :
+    result.error === "version_conflict" ? 409 : result.error === "not_found" ? 404 : 400);
+  return c.json(result);
+});
 
 review.post("/:id/script/:action", async (c) => {
   const action = c.req.param("action");
@@ -84,6 +112,22 @@ review.patch("/:id/shots/:no", async (c) => {
   const result = validatePatchShotRequest(body);
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
   const patch = { ...result.value.patch };
+  const shot = loaded.episode.shots.find((item) => item.no === Number(c.req.param("no")));
+  if (!shot) return c.json({ ok: false, error: "not_found" }, 404);
+  const scriptFields = ["beat", "caption", "size", "camera", "landmark", "kf_prompt", "motion_prompt"];
+  const keys = Object.keys(patch);
+  const scriptEdit = loaded.episode.status === "script_review" && keys.every((key) => scriptFields.includes(key));
+  const keyframeEdit = loaded.episode.status === "kf_review" &&
+    keys.every((key) => ["kf_selected", "status", "kf_prompt", "motion_prompt"].includes(key)) &&
+    (patch.status === undefined || patch.status === "kf_selected") &&
+    (patch.status === undefined || shot.status === "kf_ready") &&
+    (patch.kf_selected === undefined || (patch.kf_selected !== null && shot.candidates.includes(patch.kf_selected)));
+  const clipEdit = loaded.episode.status === "clip_review" &&
+    keys.every((key) => ["trim_start_s", "status"].includes(key)) &&
+    (patch.status === undefined || (patch.status === "approved" && shot.status === "clip_ready"));
+  if (keys.length === 0 || (!scriptEdit && !keyframeEdit && !clipEdit)) {
+    return c.json({ ok: false, error: "invalid_public_patch" }, 400);
+  }
   if (loaded.episode.cut_policy === "fixed_1s" && patch.trim_start_s !== undefined && patch.trim_start_s !== null) {
     patch.trim_start_s = Math.round(patch.trim_start_s * 30) / 30;
   }

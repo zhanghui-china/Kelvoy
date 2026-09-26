@@ -1,17 +1,13 @@
 import type { Episode } from "@kelvoy/engine";
-import { episodeFileUrl, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
+import { convertLegacyCuts, episodeFileUrl, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
+import ShareActions from "./ShareActions";
 import { MutationError } from "./ShotHeader";
 import { tally } from "./tally";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
-/**
- * 成片文件名约定和 engine 的 `finalOutputKey(episodeId)`
- * （packages/engine/src/stages/compose.ts）保持一致。前端不 import engine
- * 的运行时代码（会把 providers/stages 一起拉进 bundle，见 #30 的取舍），
- * 所以这里手抄同一个字符串；改约定时两处一起改。
- */
-function finalKey(episodeId: string): string {
-  return `final/${episodeId}.mp4`;
+/** Old episodes had a fixed key; new deliveries carry their versioned key. */
+function finalKey(episode: Episode): string {
+  return episode.final?.key ?? `final/${episode.episode_id}.mp4`;
 }
 
 export default function DoneView({
@@ -21,7 +17,7 @@ export default function DoneView({
   episode: Episode;
   mutation: EpisodeMutation;
 }) {
-  const url = episodeFileUrl(episode.episode_id, finalKey(episode.episode_id));
+  const url = episodeFileUrl(episode.episode_id, finalKey(episode));
   const rows = tally(episode);
   const totalCost = rows.reduce((sum, row) => sum + row.costUsd, 0);
 
@@ -39,11 +35,24 @@ export default function DoneView({
       <div className="k-card-title">成片</div>
       <video className="k-media k-desk-final" src={url} controls aria-label="成片" />
       <p className="k-card-meta">文件还没生成时播放器会是空的，那说明合成还没跑完。</p>
+      {episode.final && <p className="k-card-meta">
+        {episode.final.duration_s.toFixed(1)} 秒 · {episode.final.width}×{episode.final.height} · {episode.final.fps} fps · {(episode.final.size_bytes / 1024 / 1024).toFixed(1)} MB · {new Date(episode.final.completed_at).toLocaleString()}
+      </p>}
       <p>
         <a href={url} download>
           下载成片
         </a>
       </p>
+      {episode.cut_policy !== "fixed_1s" && episode.mode === "per_shot" &&
+        episode.shots.length > 0 && episode.shots.every((shot) => !!shot.clip) &&
+        <div className="k-card">
+          <div className="k-card-title">使用新版 1 秒剪辑</div>
+          <p className="k-card-meta">保留片段，逐镜重新确认 1 秒选段。转换后旧成片暂停交付，完成新版合成后可恢复分享。</p>
+          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending}
+            onClick={() => mutation.run((rowVersion) => convertLegacyCuts(episode.episode_id, rowVersion))}>
+            转换并重新确认选段
+          </button>
+        </div>}
 
       <div className="k-card k-share-card">
         <div className="k-card-title">分享</div>
@@ -51,13 +60,6 @@ export default function DoneView({
           <>
             <div className="k-share-row">
               <input className="k-share-input" readOnly value={shareUrl(episode.share.slug)} />
-              <button
-                type="button"
-                className="k-btn k-btn-secondary"
-                onClick={() => navigator.clipboard?.writeText(shareUrl(episode.share.slug))}
-              >
-                复制链接
-              </button>
             </div>
             <button
               type="button"
@@ -79,6 +81,7 @@ export default function DoneView({
           </button>
         )}
         <div className="k-card-meta">分享页不含账号信息，链接不随 90 天清理失效（FR-12）。</div>
+        <ShareActions episode={episode} />
       </div>
 
       <div className="k-card">

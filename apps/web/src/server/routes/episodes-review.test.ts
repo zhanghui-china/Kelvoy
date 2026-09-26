@@ -190,6 +190,7 @@ test("PATCH /:id/shots/:no applies the review-1/2 editable fields", async () => 
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
+  episode.status = "script_review";
   episode.destination_id = "d_1";
   episode.shots = [shotFixture(1)];
   await insertEpisode(episode);
@@ -225,6 +226,7 @@ test("PATCH /:id/shots/:no applies the review-1/2 editable fields", async () => 
 test("PATCH /:id/shots/:no 400s with content_blocked when an edited prompt hits the blocklist", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);
+  episode.status = "script_review";
   episode.shots = [shotFixture(1)];
   await insertEpisode(episode);
 
@@ -247,6 +249,7 @@ test("PATCH /:id/shots/:no 400s on a landmark id the destination doesn't have", 
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
+  episode.status = "script_review";
   episode.destination_id = "d_1";
   episode.shots = [shotFixture(1)];
   await insertEpisode(episode);
@@ -265,6 +268,7 @@ test("PATCH /:id/shots/:no accepts clearing the landmark to null", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
+  episode.status = "script_review";
   episode.destination_id = "d_1";
   episode.shots = [shotFixture(1, { landmark: "l1" })];
   await insertEpisode(episode);

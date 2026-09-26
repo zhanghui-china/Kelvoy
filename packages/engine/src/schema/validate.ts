@@ -251,6 +251,16 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
   if (!isFiniteNumber(e.credits_used) || e.credits_used < 0) {
     errors.push("credits_used: 必须是 ≥0 的数字");
   }
+  if (e.final !== undefined && e.final !== null) {
+    if (!isPlainObject(e.final) || !Number.isInteger(e.final.version) || e.final.version < 1 ||
+        !isNonEmptyString(e.final.key) || !e.final.key.startsWith("final/") ||
+        !isFiniteNumber(e.final.duration_s) || e.final.duration_s <= 0 ||
+        !Number.isInteger(e.final.width) || e.final.width <= 0 ||
+        !Number.isInteger(e.final.height) || e.final.height <= 0 ||
+        !isFiniteNumber(e.final.fps) || e.final.fps <= 0 ||
+        !Number.isSafeInteger(e.final.size_bytes) || e.final.size_bytes <= 0 ||
+        !isNonEmptyString(e.final.completed_at)) errors.push("final: 成片参数不合法");
+  }
   if (e.share !== undefined) validateShare(e.share, errors);
   else errors.push("share: 缺失");
   if (e.brief !== undefined) validateBrief(e.brief, errors);

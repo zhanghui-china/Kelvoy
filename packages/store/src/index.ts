@@ -4,6 +4,8 @@ export * from "./destinations";
 export * from "./personas";
 export * from "./templates";
 export * from "./tasks";
+export * from "./task-retry";
+export * from "./legacy-cuts";
 export * from "./users";
 export * from "./sessions";
 export * from "./script-actions";

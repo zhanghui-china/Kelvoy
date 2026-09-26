@@ -20,12 +20,10 @@ import type { StageContext } from "./types";
 export const AI_LABEL_TEXT = "AI 生成 · 虚构角色 · 真实目的地";
 
 /**
- * 成片路径是**约定**，不是 schema 字段——PRD §6 的 Episode 里没有"成片路径"，
- * 为了一个可推导的字符串去改数据模型不值得。前端/分享页按这个约定走既有的
- * `GET /api/episodes/:id/files/final/<episode_id>.mp4` 取成片。
+ * 版本化成片，旧版本可以保留在磁盘但只有当前已交付版本可下载。
  */
-export function finalOutputKey(episodeId: string): string {
-  return `final/${episodeId}.mp4`;
+export function finalOutputKey(episodeId: string, version = 1): string {
+  return `final/${episodeId}_v${version}.mp4`;
 }
 
 /** 解析 render.res（"1080x1920"）。宽高是渲染参数，坏值直接报错，不猜。 */
@@ -66,7 +64,7 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
 
   return {
     episode_id: episode.episode_id,
-    output_key: finalOutputKey(episode.episode_id),
+    output_key: finalOutputKey(episode.episode_id, (episode.final?.version ?? 0) + 1),
     cuts,
     music,
     lut_key: persona.style.lut !== "" ? persona.style.lut : null,
@@ -102,7 +100,8 @@ export async function runCompose(
   }
 
   const plan = await buildComposePlan(episode, context);
-  await context.compose.compose({ plan });
+  const result = await context.compose.compose({ plan });
+  if (result.output_key !== plan.output_key) throw new Error("合成产物路径与计划不一致");
 
   // 选中的曲子回写进期记录：license 是合规留痕，bpm 是下次重新合成时保持同一
   // 套切点的依据（PRD §8 / FR-07）。
@@ -112,5 +111,11 @@ export async function runCompose(
     music: plan.music
       ? { file: plan.music.file_key, bpm: plan.music.bpm, license: plan.music.license }
       : episode.music,
+    final: {
+      version: (episode.final?.version ?? 0) + 1,
+      key: result.output_key,
+      ...result.probe,
+      completed_at: new Date().toISOString(),
+    },
   };
 }

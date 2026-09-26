@@ -16,6 +16,7 @@ interface TaskRow {
   attempt: number;
   operation: "script_regenerate" | "script_optimize" | null;
   instruction: string | null;
+  generation_id: string | null;
   lease_token: string | null;
 }
 
@@ -31,6 +32,7 @@ function toTask(row: TaskRow): Task {
   if (row.shot_no !== null) task.shot_no = row.shot_no;
   if (row.operation) task.operation = row.operation;
   if (row.instruction) task.instruction = row.instruction;
+  if (row.generation_id) task.generation_id = row.generation_id;
   if (row.lease_token) task.lease_token = row.lease_token;
   return task;
 }
@@ -42,17 +44,19 @@ export async function enqueueTask(input: {
   shot_no?: number;
   operation?: "script_regenerate" | "script_optimize";
   instruction?: string;
+  generation_id?: string;
 }): Promise<Task> {
   const taskId = input.task_id ?? `tk_${crypto.randomUUID()}`;
   getDb()
     .query(
-      "insert into tasks (task_id, episode_id, stage, shot_no, operation, instruction, attempt, status) values (?, ?, ?, ?, ?, ?, 1, 'pending')",
+      "insert into tasks (task_id, episode_id, stage, shot_no, operation, instruction, generation_id, attempt, status) values (?, ?, ?, ?, ?, ?, ?, 1, 'pending')",
     )
-    .run(taskId, input.episode_id, input.stage, input.shot_no ?? null, input.operation ?? null, input.instruction ?? null);
+    .run(taskId, input.episode_id, input.stage, input.shot_no ?? null, input.operation ?? null, input.instruction ?? null, input.generation_id ?? null);
   return { task_id: taskId, episode_id: input.episode_id, stage: input.stage, attempt: 1,
     ...(input.shot_no !== undefined ? { shot_no: input.shot_no } : {}),
     ...(input.operation ? { operation: input.operation } : {}),
-    ...(input.instruction ? { instruction: input.instruction } : {}) };
+    ...(input.instruction ? { instruction: input.instruction } : {}),
+    ...(input.generation_id ? { generation_id: input.generation_id } : {}) };
 }
 
 export async function dequeueTask(): Promise<Task | null> {
@@ -69,7 +73,7 @@ export async function dequeueTask(): Promise<Task | null> {
          where status = 'pending' or (status = 'processing' and (lease_until is null or lease_until <= unixepoch('now')))
          order by created_at asc limit 1
        )
-       returning task_id, episode_id, stage, shot_no, attempt, operation, instruction, lease_token`,
+       returning task_id, episode_id, stage, shot_no, attempt, operation, instruction, generation_id, lease_token`,
     )
     .get(leaseUntil, leaseToken);
   return row ? toTask(row) : null;

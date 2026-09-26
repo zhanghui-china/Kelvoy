@@ -19,6 +19,8 @@ export interface ComposeInputPaths {
   output: string;
   /** CJK 字体文件；plan 需要 drawtext（标题或 AI 标识）时必须有。 */
   font: string | null;
+  /** Pre-rendered ASS overlay when this ffmpeg build lacks drawtext. */
+  overlay_ass?: string | null;
   /** ffprobe 量出来的片头/片尾时长，没有片头片尾时为 0。 */
   intro_duration_s: number;
   outro_duration_s: number;
@@ -111,7 +113,7 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
   }
   const needsText = plan.title !== "" || plan.ai_label ||
     (plan.subtitles_enabled === true && plan.cuts.some((cut) => Boolean(cut.caption)));
-  if (needsText && !paths.font) {
+  if (needsText && !paths.font && !paths.overlay_ass) {
     throw new Error(
       "合成需要 drawtext 渲染中文（标题 / AI 标识），请把环境变量 KELVOY_FONT_FILE 指向一个 CJK 字体文件",
     );
@@ -144,7 +146,7 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
       args.push("-ss", String(cut.trim_start_s), "-t", String(cut.duration_s), "-i", paths.clips[i]!);
     }
     chain += lutChain;
-    if (plan.subtitles_enabled && cut.caption) chain += `,${captionDrawtext(plan, cut.caption, paths.font!)}`;
+    if (plan.subtitles_enabled && cut.caption && !paths.overlay_ass) chain += `,${captionDrawtext(plan, cut.caption, paths.font!)}`;
     if (plan.transitions_enabled && cut.frame_count !== undefined) {
       if (i > 0) chain += ",fade=t=in:s=0:n=2";
       if (i < plan.cuts.length - 1) chain += `,fade=t=out:s=${cut.frame_count - 2}:n=2`;
@@ -173,11 +175,15 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
 
   // 标题和 AI 标识加在拼接**之后**：标识要覆盖全片（片头片尾也算 AI 生成内容）。
   let videoLabel = "[vcat]";
-  if (plan.title !== "") {
+  if (paths.overlay_ass) {
+    filters.push(`${videoLabel}ass=filename=${escapeFilterValue(paths.overlay_ass)}[vtext]`);
+    videoLabel = "[vtext]";
+  }
+  if (!paths.overlay_ass && plan.title !== "") {
     filters.push(`${videoLabel}${titleDrawtext(plan, paths.font!)}[vtitle]`);
     videoLabel = "[vtitle]";
   }
-  if (plan.ai_label) {
+  if (!paths.overlay_ass && plan.ai_label) {
     filters.push(`${videoLabel}${aiLabelDrawtext(plan, paths.font!)}[vlabel]`);
     videoLabel = "[vlabel]";
   }
