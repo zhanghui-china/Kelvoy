@@ -30,6 +30,7 @@ const ADVANCE: Partial<Record<EpisodeStatus, EpisodeStatus>> = {
   kf_review: "clipping",
   clipping: "clip_review",
   clip_review: "composing",
+  compose_ready: "composing",
   composing: "done",
 };
 
@@ -38,6 +39,7 @@ export type EpisodeEvent =
   | { type: "fail" }
   | { type: "retry"; into: GeneratingEpisodeStatus }
   | { type: "recompose" }
+  | { type: "prepare_compose" }
   | { type: "reopen_review"; into: "kf_review" | "clip_review" };
 
 export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): EpisodeStatus {
@@ -58,6 +60,10 @@ export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): 
     case "recompose": {
       if (current !== "done") throw illegalTransition(current, event.type);
       return "composing";
+    }
+    case "prepare_compose": {
+      if (current !== "clip_review") throw illegalTransition(current, event.type);
+      return "compose_ready";
     }
     case "reopen_review": {
       if (current === "done" || (current === "clip_review" && event.into === "kf_review")) {
@@ -88,6 +94,7 @@ export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatu
     { type: "advance" },
     { type: "fail" },
     { type: "recompose" },
+    { type: "prepare_compose" },
     { type: "reopen_review", into: "kf_review" },
     { type: "reopen_review", into: "clip_review" },
     ...RETRY_TARGETS.map((into): EpisodeEvent => ({ type: "retry", into })),

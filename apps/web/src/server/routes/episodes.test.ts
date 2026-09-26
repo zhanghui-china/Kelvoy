@@ -127,7 +127,7 @@ test("resolveArtifactPath accepts a normal nested key", () => {
   expect(result).toBe(join(tmpRoot, "projects", "e_1", "kf", "01_a.png"));
 });
 
-test("POST creates a draft episode, snapshots versions, prefills render from the template, and enqueues a brief task", async () => {
+test("POST creates a fixed-cut draft with intro/outro off and enqueues a brief task", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertPersona(personaFixture("c_1", ownerId));
   await upsertDestination(destinationFixture("d_1"));
@@ -148,10 +148,11 @@ test("POST creates a draft episode, snapshots versions, prefills render from the
   expect(episode.persona_version).toBe(1);
   expect(episode.destination_version).toBe(1);
   expect(episode.mode).toBe("per_shot"); // FR-01: 默认逐镜
+  expect(episode.cut_policy).toBe("fixed_1s");
   // FR-01/FR-09 粗估：建期这一刻没有真实镜数，estimateCost 用它的默认常量。
   expect(episode.estimated_credits).toBe(estimateCost({ mode: "per_shot" }).estimated_credits);
   expect(episode.estimated_credits).toBeGreaterThan(0);
-  expect(episode.render.intro).toBe("intro/default.mp4");
+  expect(episode.render.intro).toBeNull();
   expect(episode.render.outro).toBeNull();
   expect(episode.brief.season).toBe("秋"); // 缺省取 destination.season_best[0]
   expect(episode.brief.outfit_override).toBeNull(); // FR-01: 缺省不覆盖角色默认穿搭

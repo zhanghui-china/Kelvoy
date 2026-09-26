@@ -89,6 +89,13 @@ test("advances scripting -> script_review and fills shots/scenes", async () => {
   expect(updated.scenes).toHaveLength(1);
 });
 
+test("new projects get one-second shots and editable generated captions", async () => {
+  const updated = await runScript({ ...fixtureEpisode(), cut_policy: "fixed_1s" }, undefined, { destination });
+  expect(updated.shots).toHaveLength(26);
+  expect(updated.shots.every((shot) => shot.duration_s === 1)).toBe(true);
+  expect(updated.shots[0]?.caption).toBe("动作 1");
+});
+
 test("throws ContentBlockedError before calling the provider when brief.banned hits the blocklist", async () => {
   let fetchCalled = false;
   globalThis.fetch = (async () => {

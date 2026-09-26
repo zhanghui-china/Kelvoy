@@ -87,13 +87,17 @@ review.patch("/:id/shots/:no", async (c) => {
   const body = await c.req.json().catch(() => null);
   const result = validatePatchShotRequest(body);
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
-  const patch = result.value.patch;
+  const patch = { ...result.value.patch };
+  if (loaded.episode.cut_policy === "fixed_1s" && patch.trim_start_s !== undefined && patch.trim_start_s !== null) {
+    patch.trim_start_s = Math.round(patch.trim_start_s * 30) / 30;
+  }
 
   // 审核 1/2 改的这三个字段是用户自由输入的文本，和建期时的 season/tone/
   // banned 一样要过关键词拦截（PRD §8/§11，#29）——否则拦了建期这一处，
   // 用户在审片台里改 prompt 就绕过去了。
   const contentViolations = checkContent([
     ...(patch.beat !== undefined ? [{ field: "beat", text: patch.beat }] : []),
+    ...(patch.caption !== undefined ? [{ field: "caption", text: patch.caption }] : []),
     ...(patch.kf_prompt !== undefined ? [{ field: "kf_prompt", text: patch.kf_prompt }] : []),
     ...(patch.motion_prompt !== undefined
       ? [{ field: "motion_prompt", text: patch.motion_prompt }]
@@ -170,6 +174,7 @@ const REVIEW_GATE_ADVANCE: Partial<Record<EpisodeStatus, { stage: StageName; per
   script_review: { stage: "assets", perShot: false },
   kf_review: { stage: "video", perShot: true },
   clip_review: { stage: "compose", perShot: false },
+  compose_ready: { stage: "compose", perShot: false },
 };
 
 review.post("/:id/continue", async (c) => {
@@ -190,15 +195,21 @@ review.post("/:id/continue", async (c) => {
         (shot.status !== "kf_selected" || !shot.kf_selected || !shot.candidates.includes(shot.kf_selected))))) {
     return c.json({ ok: false, error: "keyframes_not_selected" }, 400);
   }
-  if (loaded.episode.status === "clip_review" &&
+  if ((loaded.episode.status === "clip_review" || loaded.episode.status === "compose_ready") &&
       (loaded.episode.shots.length === 0 || loaded.episode.shots.some((shot) =>
         shot.status !== "approved" || !shot.clip))) {
     return c.json({ ok: false, error: "clips_not_approved" }, 400);
   }
-  const nextStatus = transitionEpisode(loaded.episode.status, { type: "advance" });
+  const nextStatus = loaded.episode.status === "clip_review" && loaded.episode.cut_policy === "fixed_1s"
+    ? transitionEpisode(loaded.episode.status, { type: "prepare_compose" })
+    : transitionEpisode(loaded.episode.status, { type: "advance" });
 
   const patchResult = await patchEpisode(loaded.episode.episode_id, rowVersion, { status: nextStatus });
   if (!patchResult.ok) return patchErrorResponse(c, patchResult);
+
+  if (nextStatus === "compose_ready") {
+    return c.json({ ok: true, row_version: patchResult.row_version });
+  }
 
   if (gate.perShot) {
     const readyShots = loaded.episode.shots.filter((s) => s.status === "kf_selected");

@@ -54,6 +54,29 @@ export interface ShotCut {
   clip_key: string;
   trim_start_s: number;
   duration_s: number;
+  trim_start_frame?: number;
+  frame_count?: number;
+}
+
+/** New projects use integer-frame cuts; music never moves a shot boundary. */
+export function planFixedCuts(shots: Shot[], fps: number): ShotCut[] {
+  if (!Number.isInteger(fps) || fps <= 0) throw new Error("固定剪辑需要有效帧率");
+  if (shots.length === 0) throw new Error("没有镜头可以合成");
+  return shots.map((shot) => {
+    if (shot.status !== "approved") {
+      throw new Error(`第 ${shot.no} 镜未 approved（当前 ${shot.status}），不能合成`);
+    }
+    if (!shot.clip) throw new Error(`第 ${shot.no} 镜没有片段（clip 为空），不能合成`);
+    const startFrame = Math.max(0, Math.round((shot.trim_start_s ?? 0) * fps));
+    return {
+      no: shot.no,
+      clip_key: shot.clip,
+      trim_start_s: startFrame / fps,
+      duration_s: 1,
+      trim_start_frame: startFrame,
+      frame_count: fps,
+    };
+  });
 }
 
 /**

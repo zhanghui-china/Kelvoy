@@ -41,5 +41,10 @@ export async function runScript(episode: Episode, _shotNo?: number, context?: St
     destination: context.destination,
   });
   const nextStatus = transitionEpisode(episode.status, { type: "advance" });
-  return { ...episode, status: nextStatus, shots, scenes };
+  return {
+    ...episode,
+    status: nextStatus,
+    shots: episode.cut_policy === "fixed_1s" ? shots.map((shot) => ({ ...shot, duration_s: 1 })) : shots,
+    scenes,
+  };
 }

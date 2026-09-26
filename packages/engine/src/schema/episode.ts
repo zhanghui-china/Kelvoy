@@ -14,6 +14,7 @@ export type EpisodeStatus =
   | "kf_review"
   | "clipping"
   | "clip_review"
+  | "compose_ready"
   | "composing"
   | "done"
   | "failed";
@@ -63,6 +64,7 @@ export interface Shot {
   scene: string; // Scene.id
   size: ShotSize;
   beat: string;
+  caption?: string;
   camera: ShotCamera;
   landmark: string | null; // Landmark.id
   kf_prompt: string;
@@ -120,6 +122,7 @@ export interface Episode {
   template_id: string;
   status: EpisodeStatus;
   mode: EpisodeMode;
+  cut_policy?: "fixed_1s" | "beat_aligned";
   candidate_count: number;
   created_at: string; // ISO 8601
   estimated_credits: number;

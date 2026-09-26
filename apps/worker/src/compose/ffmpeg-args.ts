@@ -118,9 +118,16 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
   // 把品牌色带偏（PRD FR-07 说的是"账号级统一 LUT"，指的是生成内容）。
   const lutChain = paths.lut !== null ? `,lut3d=file=${escapeFilterValue(paths.lut)}` : "";
   plan.cuts.forEach((cut, i) => {
-    // -ss/-t 放在 -i 前面：让 ffmpeg 只解码这一段，避免整片解码。
-    args.push("-ss", String(cut.trim_start_s), "-t", String(cut.duration_s), "-i", paths.clips[i]!);
-    filters.push(`[${inputIndex}:v]${normalizeChain(plan)}${lutChain}[vcut${i}]`);
+    if (cut.trim_start_frame !== undefined && cut.frame_count !== undefined) {
+      // Normalize to the output frame rate first, then take exactly one
+      // integer-frame window. Input-side -ss/-t can yield 29/31 frames.
+      args.push("-i", paths.clips[i]!);
+      filters.push(`[${inputIndex}:v]${normalizeChain(plan)},trim=start_frame=${cut.trim_start_frame}:end_frame=${cut.trim_start_frame + cut.frame_count},setpts=PTS-STARTPTS${lutChain}[vcut${i}]`);
+    } else {
+      // Legacy beat-aligned projects retain their original trim policy.
+      args.push("-ss", String(cut.trim_start_s), "-t", String(cut.duration_s), "-i", paths.clips[i]!);
+      filters.push(`[${inputIndex}:v]${normalizeChain(plan)}${lutChain}[vcut${i}]`);
+    }
     concatLabels.push(`[vcut${i}]`);
     inputIndex += 1;
   });

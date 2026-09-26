@@ -1,6 +1,6 @@
 import { musicLibraryProvider } from "../providers/music-library";
 import type { ComposePlan, ComposePlanMusic } from "../providers/types";
-import { planCuts } from "../rules/beat";
+import { planCuts, planFixedCuts } from "../rules/beat";
 import type { Episode } from "../schema";
 import { transitionEpisode } from "../state";
 import type { StageContext } from "./types";
@@ -60,7 +60,9 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
   }
 
   const music = await resolveMusic(episode);
-  const cuts = planCuts(episode.shots, music.bpm);
+  const cuts = episode.cut_policy === "fixed_1s"
+    ? planFixedCuts(episode.shots, episode.render.fps)
+    : planCuts(episode.shots, music.bpm);
 
   return {
     episode_id: episode.episode_id,

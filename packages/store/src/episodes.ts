@@ -27,6 +27,7 @@ function decodeEpisode(doc: string): Episode {
     ...episode,
     name: episode.name ?? (episode.render.title || episode.destination_id),
     candidate_count: episode.candidate_count ?? 2,
+    cut_policy: episode.cut_policy ?? "beat_aligned",
     brief: { ...episode.brief, aspect: episode.brief.aspect ?? "9:16",
       requirements: episode.brief.requirements ?? "" },
   };

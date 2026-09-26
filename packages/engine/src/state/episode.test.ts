@@ -82,6 +82,7 @@ describe("transitionEpisode: legal transitions", () => {
     ["kf_review", "clipping"],
     ["clipping", "clip_review"],
     ["clip_review", "composing"],
+    ["compose_ready", "composing"],
     ["composing", "done"],
   ];
 
@@ -90,6 +91,12 @@ describe("transitionEpisode: legal transitions", () => {
       expect(transitionEpisode(from, { type: "advance" })).toBe(to);
     });
   }
+
+  test("new projects can pause at compose settings before starting", () => {
+    expect(transitionEpisode("clip_review", { type: "prepare_compose" })).toBe("compose_ready");
+    expect(isLegalEpisodeStatusChange("clip_review", "compose_ready")).toBe(true);
+    expect(() => transitionEpisode("kf_review", { type: "prepare_compose" })).toThrow();
+  });
 
   test("review can reopen for regeneration after clip review or completion", () => {
     expect(transitionEpisode("clip_review", { type: "reopen_review", into: "kf_review" })).toBe("kf_review");

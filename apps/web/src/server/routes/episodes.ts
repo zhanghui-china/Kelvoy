@@ -87,6 +87,7 @@ episodes.post("/", async (c) => {
     template_id: template.template_id,
     status: "draft",
     mode,
+    cut_policy: "fixed_1s",
     candidate_count: candidateCount,
     created_at: new Date().toISOString(),
     // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
@@ -114,8 +115,8 @@ episodes.post("/", async (c) => {
       res: aspect === "9:16" ? "1080x1920" : "1920x1080",
       fps: 30,
       title: `${destination.city} · ${destination.name}`,
-      intro: template.intro,
-      outro: template.outro,
+      intro: null,
+      outro: null,
       ai_label: true,
     },
   };

@@ -185,6 +185,7 @@ describe("validatePatchShotRequest", () => {
       row_version: 1,
       patch: {
         beat: "抬头看大佛",
+        caption: "山风吹过佛前",
         size: "close",
         camera: "push",
         landmark: null,
@@ -199,6 +200,7 @@ describe("validatePatchShotRequest", () => {
     expect(validatePatchShotRequest({ row_version: 1, patch: { size: "macro" } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { camera: "zoom" } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { beat: "" } }).valid).toBe(false);
+    expect(validatePatchShotRequest({ row_version: 1, patch: { caption: "字".repeat(121) } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { kf_prompt: 7 } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { landmark: 7 } }).valid).toBe(false);
   });

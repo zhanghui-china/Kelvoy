@@ -5,6 +5,7 @@ import { useApiResource, usePolledApiResource } from "../hooks/useApiResource";
 import { EPISODE_STATUS_LABELS } from "../labels";
 import { episodeLabel } from "../episode-view";
 import ClipReview from "../review/ClipReview";
+import ComposeSetup from "../review/ComposeSetup";
 import DoneView from "../review/DoneView";
 import KeyframeReview from "../review/KeyframeReview";
 import ProgressView from "../review/ProgressView";
@@ -68,6 +69,7 @@ export default function EpisodeDetailPage() {
       {(episode.status === "clip_review" || episode.status === "clipping") && (
         <ClipReview episode={episode} mutation={mutation} />
       )}
+      {episode.status === "compose_ready" && <ComposeSetup episode={episode} mutation={mutation} />}
       {(episode.status === "done" || episode.status === "composing") && (
         <DoneView episode={episode} mutation={mutation} />
       )}

@@ -53,7 +53,11 @@ function ClipShot({
   const [error, setError] = useState<string | null>(null);
 
   const total = clipSeconds ?? FALLBACK_CLIP_SECONDS;
-  const maxStart = Math.max(0, Number((total - shot.duration_s).toFixed(2)));
+  const fixedCut = episode.cut_policy === "fixed_1s";
+  const cutSeconds = fixedCut ? 1 : shot.duration_s;
+  const maxStart = Math.max(0, fixedCut
+    ? Math.floor((total - cutSeconds) * 30) / 30
+    : Number((total - cutSeconds).toFixed(2)));
   const allChecked = REDLINES.every((r) => checked[r.key]);
 
   // 拖动时实时预览那 1 秒（FR-05）：把播放头挪到起点，放 1 秒就停。
@@ -120,26 +124,27 @@ function ClipShot({
             />
           )}
           <label className="k-field k-desk-slider">
-            起点（目标时长 {shot.duration_s} 秒，片段长 {total.toFixed(1)} 秒）
+            起点（截取 {cutSeconds} 秒，片段长 {total.toFixed(1)} 秒）
             <input
               type="range"
               min={0}
               max={maxStart}
-              step={0.1}
+              step={fixedCut ? 1 / 30 : 0.1}
               value={Math.min(trimStart, maxStart)}
-              aria-valuetext={`起点 ${trimStart.toFixed(1)} 秒`}
+              aria-valuetext={`起点 ${trimStart.toFixed(2)} 秒`}
               disabled={mutation.pending}
               onChange={(e) => {
                 const value = Number(e.target.value);
-                setTrimStart(value);
-                preview(value);
+                const snapped = fixedCut ? Math.round(value * 30) / 30 : value;
+                setTrimStart(snapped);
+                preview(snapped);
               }}
               onPointerUp={saveTrim}
               onKeyUp={saveTrim}
               onBlur={saveTrim}
             />
             <span className="k-card-meta">
-              起点 {trimStart.toFixed(1)} 秒（已保存 {(shot.trim_start_s ?? 0).toFixed(1)} 秒）
+              起点 {trimStart.toFixed(2)} 秒（已保存 {(shot.trim_start_s ?? 0).toFixed(2)} 秒）
             </span>
           </label>
         </div>
@@ -235,7 +240,7 @@ export default function ClipReview({
             disabled={mutation.pending || unapproved > 0 || episode.status !== "clip_review"}
             onClick={() => mutation.run((rowVersion) => continueEpisode(episode.episode_id, rowVersion))}
           >
-            继续 → 合成
+            {episode.cut_policy === "fixed_1s" ? "下一步：合成设置" : "继续 → 合成"}
           </button>
           {unapproved > 0 && <span className="k-card-meta">还有 {unapproved} 镜没通过。</span>}
         </div>

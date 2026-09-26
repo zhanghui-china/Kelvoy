@@ -25,6 +25,7 @@ interface RawShot {
   time: SceneTime;
   size: ShotSize;
   beat: string;
+  caption?: string;
   camera: ShotCamera;
   landmark: string | null;
   kf_prompt: string;
@@ -74,7 +75,8 @@ ${skeleton.notes}
 - 不得出现政治、色情、暴力、违法、歧视内容及他人商标
 - scene 字段填这一镜所属的段落名（同一段落内的镜头用完全相同的字符串，用于后续分组）
 
-每个元素字段：scene, time, size, beat, camera, landmark, kf_prompt, motion_prompt。
+每个元素字段：scene, time, size, beat, caption, camera, landmark, kf_prompt, motion_prompt。
+caption 是可以直接烧录到成片的一句简短中文字幕，不能重复冗长镜头描述。
 kf_prompt 是关键帧图片生成的描述（中文，一句话，含光线/机位/动作，不含角色外貌细节）。
 motion_prompt 是给视频阶段的运动提示（中文，一句话，只描述一个动作）。
 ${input.feedback ? `\n上一轮生成有以下问题，这一轮改正：\n${input.feedback}` : ""}`;
@@ -107,6 +109,7 @@ function parseRawShots(data: unknown): RawShot[] {
       time: r.time as SceneTime,
       size: r.size as ShotSize,
       beat: r.beat,
+      caption: typeof r.caption === "string" && r.caption.trim() ? r.caption.trim() : r.beat,
       camera: r.camera as ShotCamera,
       landmark: (r.landmark as string | null) ?? null,
       kf_prompt: r.kf_prompt,
@@ -143,6 +146,7 @@ function buildScenesAndShots(raw: RawShot[], durationTotal: number): { shots: Sh
     scene: sceneIdByName.get(r.scene) as string,
     size: r.size,
     beat: r.beat,
+    caption: r.caption,
     camera: r.camera,
     landmark: r.landmark,
     kf_prompt: r.kf_prompt,
@@ -166,6 +170,7 @@ function buildScenesAndShots(raw: RawShot[], durationTotal: number): { shots: Sh
 function checkShotsContent(shots: Shot[]) {
   const inputs = shots.flatMap((shot) => [
     { field: `第 ${shot.no} 镜 beat`, text: shot.beat },
+    { field: `第 ${shot.no} 镜 caption`, text: shot.caption ?? "" },
     { field: `第 ${shot.no} 镜 kf_prompt`, text: shot.kf_prompt },
     { field: `第 ${shot.no} 镜 motion_prompt`, text: shot.motion_prompt },
   ]);

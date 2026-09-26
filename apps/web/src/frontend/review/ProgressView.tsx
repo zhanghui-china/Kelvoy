@@ -14,6 +14,7 @@ const STEPS: { status: EpisodeStatus; label: string }[] = [
   { status: "kf_review", label: "审核 2 · 关键帧" },
   { status: "clipping", label: "生成片段" },
   { status: "clip_review", label: "审核 3 · 片段" },
+  { status: "compose_ready", label: "合成设置" },
   { status: "composing", label: "合成" },
   { status: "done", label: "完成" },
 ];

@@ -53,6 +53,18 @@ async function probeDurationS(path: string): Promise<number> {
   return seconds;
 }
 
+async function probeVideoDurationS(path: string): Promise<number> {
+  const { code, stdout, stderr } = await runCommand([
+    "ffprobe", "-v", "error", "-select_streams", "v:0",
+    "-show_entries", "stream=duration", "-of", "default=noprint_wrappers=1:nokey=1", path,
+  ]);
+  const seconds = Number(stdout.trim());
+  if (code !== 0 || !Number.isFinite(seconds)) {
+    throw new Error(`ffprobe 读不出视频时长：${path}\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+  }
+  return seconds;
+}
+
 async function ffmpegVersionLine(): Promise<string> {
   const { code, stdout } = await runCommand(["ffmpeg", "-version"]);
   if (code !== 0) return "ffmpeg";
@@ -63,6 +75,13 @@ async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
   const clips = await Promise.all(
     plan.cuts.map((cut) => requireFile(artifactPath(plan.episode_id, cut.clip_key), `第 ${cut.no} 镜的片段`)),
   );
+  for (const [index, cut] of plan.cuts.entries()) {
+    if (cut.frame_count === undefined) continue;
+    const duration = await probeVideoDurationS(clips[index]!);
+    if (cut.trim_start_s + cut.duration_s > duration + 1e-6) {
+      throw new Error(`第 ${cut.no} 镜选段超出片段尾部：需要 ${cut.trim_start_s + cut.duration_s} 秒，实际 ${duration} 秒`);
+    }
+  }
 
   // 跨期共享素材（曲库、LUT、片头片尾）挂在 projects 根下，不在期目录里。
   const intro = plan.intro_key !== null ? await requireFile(sharedAssetPath(plan.intro_key), "片头") : null;

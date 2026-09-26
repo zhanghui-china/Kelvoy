@@ -52,6 +52,7 @@ export type ShotPatch = Partial<
     | "bad_shot_reported"
     | "model"
     | "beat"
+    | "caption"
     | "size"
     | "camera"
     | "landmark"

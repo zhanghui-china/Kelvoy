@@ -141,6 +141,15 @@ test("buildComposePlan keeps a track the user already picked instead of re-selec
   expect(plan.cuts[0]?.duration_s).toBe(1);
 });
 
+test("new fixed-cut projects keep 30 frames per shot when music changes", async () => {
+  const episode = episodeFixture({ cut_policy: "fixed_1s", shots: [shotFixture(1, { trim_start_s: 0.06 }), shotFixture(2)] });
+  const slow = await buildComposePlan(episode, { persona: personaFixture() });
+  const fast = await buildComposePlan({ ...episode, music: { file: "music/fast.mp3", bpm: 160, license: "自有" } }, { persona: personaFixture() });
+  expect(slow.cuts).toEqual(fast.cuts);
+  expect(slow.cuts.map((cut) => cut.frame_count)).toEqual([30, 30]);
+  expect(totalCutDurationS(slow.cuts)).toBe(2);
+});
+
 test("buildComposePlan refuses an episode with a shot that isn't approved", async () => {
   const episode = episodeFixture({ shots: [shotFixture(1), shotFixture(2, { status: "clip_ready" })] });
   await expect(buildComposePlan(episode, { persona: personaFixture() })).rejects.toThrow("第 2 镜未 approved");

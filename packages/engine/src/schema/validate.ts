@@ -38,6 +38,7 @@ const EPISODE_STATUSES: EpisodeStatus[] = [
   "kf_review",
   "clipping",
   "clip_review",
+  "compose_ready",
   "composing",
   "done",
   "failed",
@@ -111,6 +112,9 @@ export function validateShot(input: unknown): ValidationResult<Shot> {
   if (!isNonEmptyString(s.scene)) errors.push("scene: 缺失或为空");
   if (!isOneOf(s.size, SHOT_SIZES)) errors.push(`size: 必须是 ${SHOT_SIZES.join(" / ")} 之一`);
   if (typeof s.beat !== "string") errors.push("beat: 必须是字符串");
+  if (s.caption !== undefined && (typeof s.caption !== "string" || s.caption.length > 120)) {
+    errors.push("caption: 必须是 120 字以内的字符串");
+  }
   if (!isOneOf(s.camera, SHOT_CAMERAS)) {
     errors.push(`camera: 必须是 ${SHOT_CAMERAS.join(" / ")} 之一`);
   }
@@ -127,8 +131,8 @@ export function validateShot(input: unknown): ValidationResult<Shot> {
     errors.push("kf_selected: 必须是字符串或 null");
   }
   if (s.clip !== null && !isNonEmptyString(s.clip)) errors.push("clip: 必须是字符串或 null");
-  if (s.trim_start_s !== null && !isFiniteNumber(s.trim_start_s)) {
-    errors.push("trim_start_s: 必须是数字或 null");
+  if (s.trim_start_s !== null && (!isFiniteNumber(s.trim_start_s) || s.trim_start_s < 0)) {
+    errors.push("trim_start_s: 必须是非负数字或 null");
   }
   if (!isOneOf(s.status, SHOT_STATUSES)) {
     errors.push(`status: 必须是 ${SHOT_STATUSES.join(" / ")} 之一`);
@@ -235,6 +239,9 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
     errors.push(`status: 必须是 ${EPISODE_STATUSES.join(" / ")} 之一`);
   }
   if (e.mode !== "per_shot" && e.mode !== "grid") errors.push("mode: 必须是 per_shot / grid 之一");
+  if (e.cut_policy !== undefined && e.cut_policy !== "fixed_1s" && e.cut_policy !== "beat_aligned") {
+    errors.push("cut_policy: 必须是 fixed_1s / beat_aligned 之一");
+  }
   if (!isNonEmptyString(e.created_at)) errors.push("created_at: 缺失或为空");
   if (!isFiniteNumber(e.estimated_credits) || e.estimated_credits < 0) {
     errors.push("estimated_credits: 必须是 ≥0 的数字");
@@ -349,8 +356,9 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
   if ("clip" in patch && patch.clip !== null && !isNonEmptyString(patch.clip)) {
     errors.push("patch.clip: 必须是字符串或 null");
   }
-  if ("trim_start_s" in patch && patch.trim_start_s !== null && !isFiniteNumber(patch.trim_start_s)) {
-    errors.push("patch.trim_start_s: 必须是数字或 null");
+  if ("trim_start_s" in patch && patch.trim_start_s !== null &&
+      (!isFiniteNumber(patch.trim_start_s) || (patch.trim_start_s as number) < 0)) {
+    errors.push("patch.trim_start_s: 必须是非负数字或 null");
   }
   if (
     "regen_stage" in patch &&
@@ -369,6 +377,9 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
   // （apps/web 的 PATCH shot 路由）用 rules/script.ts 同一条规则去查。
   if ("beat" in patch && !isNonEmptyString(patch.beat)) {
     errors.push("patch.beat: 必须是非空字符串");
+  }
+  if ("caption" in patch && (typeof patch.caption !== "string" || patch.caption.length > 120)) {
+    errors.push("patch.caption: 必须是 120 字以内的字符串");
   }
   if ("size" in patch && !isOneOf(patch.size, SHOT_SIZES)) {
     errors.push(`patch.size: 必须是 ${SHOT_SIZES.join(" / ")} 之一`);

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Shot } from "../schema/episode";
-import { MAX_SHOT_S, MIN_SHOT_S, alignToBeat, planCuts, totalCutDurationS } from "./beat";
+import { MAX_SHOT_S, MIN_SHOT_S, alignToBeat, planCuts, planFixedCuts, totalCutDurationS } from "./beat";
 
 function shotFixture(no: number, overrides: Partial<Shot> = {}): Shot {
   return {
@@ -64,4 +64,13 @@ test("planCuts refuses to compose when a shot isn't approved or has no clip", ()
   );
   expect(() => planCuts([shotFixture(3, { clip: null })], 120)).toThrow("第 3 镜没有片段");
   expect(() => planCuts([], 120)).toThrow("没有镜头可以合成");
+});
+
+test("new-project cuts snap to frame starts and stay at exactly 30 frames regardless of music", () => {
+  const shots = [shotFixture(1, { trim_start_s: 0.06 }), shotFixture(2, { trim_start_s: 0.1 })];
+  const cuts = planFixedCuts(shots, 30);
+  expect(cuts.map((cut) => cut.trim_start_frame)).toEqual([2, 3]);
+  expect(cuts.map((cut) => cut.frame_count)).toEqual([30, 30]);
+  expect(totalCutDurationS(cuts)).toBe(2);
+  expect(cuts[0]?.trim_start_s).toBeCloseTo(2 / 30, 9);
 });

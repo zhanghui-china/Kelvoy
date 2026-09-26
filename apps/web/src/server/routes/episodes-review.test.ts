@@ -107,6 +107,31 @@ test("POST /:id/recompose 400s from any status other than done", async () => {
   expect(res.status).toBe(400);
 });
 
+test("fixed-cut episodes pause for compose settings and enqueue only after start", async () => {
+  const { cookie, ownerId } = await login("fixed-compose");
+  const episode = fixture("e_fixed", ownerId);
+  episode.cut_policy = "fixed_1s";
+  episode.status = "clip_review";
+  episode.shots = [shotFixture(1, { status: "approved", clip: "clip/01.mp4" })];
+  await insertEpisode(episode);
+  const app = buildApp();
+
+  const ready = await app.request("/api/episodes/e_fixed/continue", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(ready.status).toBe(200);
+  expect((await dequeueTask())).toBeNull();
+  expect(((await (await app.request("/api/episodes/e_fixed", { headers: { cookie } })).json()) as { episode: Episode }).episode.status).toBe("compose_ready");
+
+  const start = await app.request("/api/episodes/e_fixed/continue", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 2 }),
+  });
+  expect(start.status).toBe(200);
+  expect((await dequeueTask())?.stage).toBe("compose");
+});
+
 // ---- M2-9 (#31): 审片台交互页要的写路由 ----
 
 test("PATCH /:id/shots/:no applies the review-1/2 editable fields", async () => {
