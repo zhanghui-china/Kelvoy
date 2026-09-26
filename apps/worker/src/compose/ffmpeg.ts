@@ -1,9 +1,9 @@
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import type { ComposePlan, ComposeProvider } from "@kelvoy/engine";
 import { artifactPath, sharedAssetPath } from "../storage/artifacts";
 import { buildFfmpegArgs, type ComposeInputPaths } from "./ffmpeg-args";
-import { buildAssOverlay } from "./ass-overlay";
+import { buildAssOverlay, textOverlayEvents } from "./ass-overlay";
 
 /**
  * 合成 provider（PRD §9, M1-13）：整个系统里唯一调用 ffmpeg 的地方，只在
@@ -102,6 +102,28 @@ async function supportsAssFilter(): Promise<boolean> {
   return code === 0 && /^\s*[.A-Z|]+\s+ass\s+/m.test(stdout);
 }
 
+async function supportsDrawtextFilter(): Promise<boolean> {
+  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"]);
+  return code === 0 && /^\s*[.A-Z|]+\s+drawtext\s+/m.test(stdout);
+}
+
+async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths): Promise<void> {
+  const events = textOverlayEvents(plan, paths.intro_duration_s, paths.outro_duration_s);
+  if (!events.length) return;
+  const overlayImages = events.map((event, index) => ({
+    ...event,
+    path: `${paths.output}.overlay-${index}.png`,
+  }));
+  const manifestPath = `${paths.output}.overlay.json`;
+  await writeFile(manifestPath, JSON.stringify({ width: plan.res.w, height: plan.res.h, events: overlayImages }));
+  const script = resolve(import.meta.dir, "../../../../scripts/render-text-overlays.py");
+  const { code, stderr } = await runCommand(["python3", script, manifestPath]);
+  if (code !== 0) {
+    throw new Error(`无法绘制成片文字图层：${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+  }
+  paths.overlay_images = overlayImages;
+}
+
 async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
   const clips = await Promise.all(
     plan.cuts.map((cut) => requireFile(artifactPath(plan.episode_id, cut.clip_key), `第 ${cut.no} 镜的片段`)),
@@ -153,6 +175,8 @@ export const ffmpegComposeProvider: ComposeProvider = {
         await rm(tempPath, { force: true });
       }
       paths.overlay_ass = overlayPath;
+    } else if (needsText && !(paths.font && await supportsDrawtextFilter())) {
+      await renderPngOverlays(plan, paths);
     }
 
     const stamped: ComposePlan = {

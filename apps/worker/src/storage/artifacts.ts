@@ -45,5 +45,7 @@ export function artifactPath(episodeId: string, relativeKey: string): string {
  * put there by hand (see apps/worker/README.md), not produced by the pipeline.
  */
 export function sharedAssetPath(relativeKey: string): string {
-  return join(projectsRoot(), relativeKey);
+  // Older official role records used a style name before the actual LUT was
+  // packaged. Keep those immutable role snapshots usable during compose.
+  return join(projectsRoot(), relativeKey === "warm_natural" ? "lut/warm_film.cube" : relativeKey);
 }

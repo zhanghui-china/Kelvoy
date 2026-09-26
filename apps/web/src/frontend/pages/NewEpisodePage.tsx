@@ -261,12 +261,33 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
                 {destinations.map((d) => <option key={d.destination_id} value={d.destination_id}>{d.city} · {d.name}（{DESTINATION_TYPE_LABELS[d.type]}）</option>)}
               </select>
             </label>
+            <div className="k-create-row">
+              <div className="k-field">季节 / 时段
+                <div className="k-create-choices">{(selectedDestination?.season_best ?? []).map((item) =>
+                  <button type="button" key={item} className={seasonMode === "preset" && season === item ? "active" : ""}
+                    aria-pressed={seasonMode === "preset" && season === item}
+                    onClick={() => { setSeasonMode("preset"); setSeason(item); }}>{item}</button>)}
+                  <button type="button" className={seasonMode === "custom" ? "active" : ""}
+                    aria-pressed={seasonMode === "custom"} onClick={() => setSeasonMode("custom")}>自定义</button>
+                </div>
+                {seasonMode === "custom" && <input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="例如：早春" />}
+              </div>
+              <div className="k-field">画幅比例
+                <div className="k-create-choices">{(["9:16", "16:9"] as const).map((item) =>
+                  <button type="button" key={item} className={aspect === item ? "active" : ""}
+                    aria-pressed={aspect === item} onClick={() => setAspect(item)}>{item} {item === "9:16" ? "竖屏" : "横屏"}</button>)}</div>
+              </div>
+            </div>
+            <label className="k-field">风格 / 语气
+              <input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="例如：松弛治愈" />
+            </label>
+            <div className="k-brief-chips">{TONE_CHIPS.map((chip) => <button type="button" key={chip} className="k-chip" onClick={() => setTone(chip)}>{chip}</button>)}</div>
             <label className="k-field">创作要求
               <textarea value={requirements} onChange={(e) => setRequirements(e.target.value)} placeholder="描述这一期想呈现的重点、画面或故事" />
             </label>
           </div>
           <details className="k-create-advanced">
-            <summary>高级设置 <span>模板、季节、语气与画面参数</span></summary>
+            <summary>高级设置 <span>模板、候选数、服装和禁止项</span></summary>
             <div className="k-create-fields">
               <label className="k-field">模板
                 <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
@@ -274,22 +295,12 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
                 </select>
               </label>
               {selectedTemplate && <p className="k-card-meta">LUT：{selectedTemplate.lut} · 片头：{selectedTemplate.intro ?? "无"} · 片尾：{selectedTemplate.outro ?? "无"} · 标题样式：{selectedTemplate.title_style}</p>}
-              <label className="k-field">季节
-                <select value={seasonMode === "custom" ? "__custom__" : season} onChange={(e) => { if (e.target.value === "__custom__") { setSeasonMode("custom"); return; } setSeasonMode("preset"); setSeason(e.target.value); }}>
-                  {(selectedDestination?.season_best ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
-                  <option value="__custom__">自定义…</option>
-                </select>
-              </label>
-              {seasonMode === "custom" && <label className="k-field">自定义季节<input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="例如：早春" /></label>}
-              <label className="k-field">语气<input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="例如：松弛" /></label>
-              <div className="k-brief-chips">{TONE_CHIPS.map((chip) => <button type="button" key={chip} className="k-chip" onClick={() => setTone(chip)}>{chip}</button>)}</div>
               <label className="k-field">穿搭覆盖（可选）<input value={outfitOverride} onChange={(e) => setOutfitOverride(e.target.value)} placeholder={selectedPersona?.default_outfit ?? ""} /></label>
               <label className="k-field">禁止项
                 <div className="k-brief-banned-input"><input value={bannedInput} onChange={(e) => setBannedInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addBannedTerms(); } }} placeholder="按逗号/顿号/回车分隔多项" /><button type="button" className="k-btn k-btn-secondary" onClick={addBannedTerms}>添加</button></div>
               </label>
               <div className="k-brief-chips">{banned.map((term) => <span className="k-chip k-chip-removable" key={term}>{term}<button type="button" aria-label={`删除禁止项 ${term}`} onClick={() => removeBanned(term)}>×</button></span>)}</div>
               <label className="k-field">每镜候选数<select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>{CANDIDATE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-              <label className="k-field">画幅<select value={aspect} onChange={(e) => setAspect(e.target.value as EpisodeAspect)}><option value="9:16">9:16 竖屏</option><option value="16:9">16:9 横屏</option></select><span className="k-card-meta">约 30 秒 · 30 fps</span></label>
             </div>
           </details>
           {violations && violations.length > 0 && <ul className="k-error" role="alert">{violations.map((v) => <li key={`${v.field}-${v.term}`}>以下内容不允许出现：{v.field}: {v.term}</li>)}</ul>}

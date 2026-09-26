@@ -167,3 +167,23 @@ test.skipIf(!HAS_FFMPEG)("fixed cuts render exactly 30 frames per shot and rejec
   plan.cuts[0] = { ...plan.cuts[0]!, trim_start_s: 75 / 30, trim_start_frame: 75 };
   await expect(ffmpegComposeProvider.compose({ plan })).rejects.toThrow("选段超出片段尾部");
 });
+
+test.skipIf(!HAS_FFMPEG || process.platform !== "darwin")("renders title, captions and AI label without ASS or drawtext", async () => {
+  const plan = planFixture();
+  plan.title = "无锡一日游";
+  plan.ai_label = true;
+  plan.subtitles_enabled = true;
+  plan.cuts[0]!.caption = "来到水边";
+  const previousFont = process.env.KELVOY_FONT_FILE;
+  delete process.env.KELVOY_FONT_FILE;
+  try {
+    await ffmpegComposeProvider.compose({ plan });
+  } finally {
+    if (previousFont === undefined) delete process.env.KELVOY_FONT_FILE;
+    else process.env.KELVOY_FONT_FILE = previousFont;
+  }
+  const output = join(projectsRoot, "e_it", "final", "e_it.mp4");
+  expect(await Bun.file(output).exists()).toBe(true);
+  expect(await Bun.file(`${output}.overlay-0.png`).exists()).toBe(true);
+  expect(await probeFrames(output)).toBeGreaterThan(90);
+});

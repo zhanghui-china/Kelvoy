@@ -7,6 +7,10 @@
 .k-create-panel-heading p { font-size: 0.82rem; color: var(--color-muted); margin: 0; line-height: 1.5; }
 .k-create-step { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; background: #e8efff; color: var(--color-accent); font-size: 0.8rem; font-weight: 700; }
 .k-create-fields { display: grid; gap: 1rem; }
+.k-create-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.k-create-choices { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.k-create-choices button { min-height: 40px; padding: 0 0.8rem; border: 1px solid var(--color-border-strong); border-radius: 8px; background: #fff; color: var(--color-ink-soft); cursor: pointer; }
+.k-create-choices button.active { color: var(--color-accent); background: #eaf0ff; border-color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent); }
 .k-create-fields textarea { min-height: 115px; }
 .k-create-advanced { margin-top: 1.3rem; border-top: 1px solid var(--color-border); }
 .k-create-advanced summary { cursor: pointer; list-style: none; font-weight: 650; padding: 1.3rem 0; }
@@ -39,3 +43,4 @@
 .k-create-persona-add { display: block; margin: 1rem 0; padding: 0.8rem; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-control); text-decoration: none; text-align: center; font-size: 0.85rem; }
 @media (max-width: 980px) { .k-create-layout { grid-template-columns: 1fr; } .k-create-personas { grid-row: 1; } }
 @media (max-width: 600px) { .k-create-form-panel, .k-create-personas { padding: 1rem; } .k-create-submit .k-btn { width: 100%; } }
+@media (max-width: 600px) { .k-create-row { grid-template-columns: 1fr; } }

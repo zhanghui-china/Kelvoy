@@ -168,7 +168,7 @@ async function main() {
       return runImportPersona(rest);
     case "seed-catalog": {
       const seeded = await seedCatalog();
-      console.log(`导入 ${seeded.personas} 个角色、${seeded.destinations} 个目的地、${seeded.assets} 张素材`);
+      console.log(`导入 ${seeded.personas} 个角色、${seeded.destinations} 个目的地、${seeded.templates} 个模板、${seeded.assets} 个素材`);
       return;
     }
     case "create-user":

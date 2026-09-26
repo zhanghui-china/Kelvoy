@@ -1,19 +1,27 @@
 import { constants } from "node:fs";
 import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import type { Destination, Persona } from "@kelvoy/engine";
-import { getDestination, getPersona, getPersonaVersion, upsertDestination } from "@kelvoy/store";
+import type { Destination, Persona, Template } from "@kelvoy/engine";
+import { getDestination, getPersona, getPersonaVersion, getTemplate,
+  upsertDestination, upsertTemplate } from "@kelvoy/store";
 import { importOfficialPersona } from "./import-persona";
 import { validateDestination } from "./validate-destination";
 
 interface Catalog { personas: Persona[]; destinations: Destination[] }
-export interface SeedResult { personas: number; destinations: number; assets: number }
+export interface SeedResult { personas: number; destinations: number; templates: number; assets: number }
 
 const DEMO_ROOT = resolve(import.meta.dir, "../../../assets/demo");
 const SHARED_ROOT = resolve(import.meta.dir, "../../../assets/shared");
 const SHARED_PATHS = ["music/calm_morning.mp3", "music/city_walk.mp3",
   "music/bright_travel.mp3", "music/night_neon.mp3", "music/wide_nature.mp3",
   "lut/warm_film.cube", "intro/kelvoy_open.mp4", "outro/kelvoy_close.mp4"];
+const STARTER_TEMPLATES: Template[] = [
+  ["mountain_summit", "名山登顶"], ["city_night", "城市街区夜游"],
+  ["theme_town", "主题小镇"], ["scenic_area", "大型景区"],
+  ["water_town", "古镇水乡"], ["island", "海岛旅行"],
+].map(([skeleton, name]) => ({ template_id: `t_official_${skeleton}`, owner_id: null,
+  name: `${name} · 一日旅行`, skeleton: skeleton as Template["skeleton"],
+  lut: "lut/warm_film.cube", intro: null, outro: null, title_style: "clean_center" }));
 
 function refs(catalog: Catalog): string[] {
   return [...catalog.personas.flatMap((persona) => persona.refs),
@@ -44,6 +52,12 @@ export async function seedCatalog(projectsRoot = process.env.KELVOY_PROJECTS_ROO
       if (JSON.stringify(initial) !== JSON.stringify({ ...persona, version: 1 })) {
         throw new Error(`persona ID collision: ${persona.persona_id}`);
       }
+    }
+  }
+  for (const template of STARTER_TEMPLATES) {
+    const existing = await getTemplate(template.template_id);
+    if (existing && existing.owner_id !== null) {
+      throw new Error(`template ID collision: ${template.template_id}`);
     }
   }
   // Check all existing files before any write. Never replace an existing path:
@@ -77,5 +91,12 @@ export async function seedCatalog(projectsRoot = process.env.KELVOY_PROJECTS_ROO
     await upsertDestination(destination);
     destinationCount++;
   }
-  return { personas: personaCount, destinations: destinationCount, assets: missing.length };
+  let templateCount = 0;
+  for (const template of STARTER_TEMPLATES) {
+    if (await getTemplate(template.template_id)) continue;
+    await upsertTemplate(template);
+    templateCount++;
+  }
+  return { personas: personaCount, destinations: destinationCount,
+    templates: templateCount, assets: missing.length };
 }

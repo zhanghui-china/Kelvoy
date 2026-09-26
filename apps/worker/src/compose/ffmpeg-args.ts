@@ -21,6 +21,7 @@ export interface ComposeInputPaths {
   font: string | null;
   /** Pre-rendered ASS overlay when this ffmpeg build lacks drawtext. */
   overlay_ass?: string | null;
+  overlay_images?: { path: string; start_s: number; end_s: number }[];
   /** ffprobe 量出来的片头/片尾时长，没有片头片尾时为 0。 */
   intro_duration_s: number;
   outro_duration_s: number;
@@ -113,7 +114,7 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
   }
   const needsText = plan.title !== "" || plan.ai_label ||
     (plan.subtitles_enabled === true && plan.cuts.some((cut) => Boolean(cut.caption)));
-  if (needsText && !paths.font && !paths.overlay_ass) {
+  if (needsText && !paths.font && !paths.overlay_ass && !paths.overlay_images?.length) {
     throw new Error(
       "合成需要 drawtext 渲染中文（标题 / AI 标识），请把环境变量 KELVOY_FONT_FILE 指向一个 CJK 字体文件",
     );
@@ -146,7 +147,8 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
       args.push("-ss", String(cut.trim_start_s), "-t", String(cut.duration_s), "-i", paths.clips[i]!);
     }
     chain += lutChain;
-    if (plan.subtitles_enabled && cut.caption && !paths.overlay_ass) chain += `,${captionDrawtext(plan, cut.caption, paths.font!)}`;
+    if (plan.subtitles_enabled && cut.caption && !paths.overlay_ass && !paths.overlay_images?.length)
+      chain += `,${captionDrawtext(plan, cut.caption, paths.font!)}`;
     if (plan.transitions_enabled && cut.frame_count !== undefined) {
       if (i > 0) chain += ",fade=t=in:s=0:n=2";
       if (i < plan.cuts.length - 1) chain += `,fade=t=out:s=${cut.frame_count - 2}:n=2`;
@@ -171,6 +173,12 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
     inputIndex += 1;
   }
 
+  const imageInputs = (paths.overlay_images ?? []).map((event) => {
+    const index = inputIndex++;
+    args.push("-loop", "1", "-framerate", String(plan.fps), "-i", event.path);
+    return { ...event, index };
+  });
+
   filters.push(`${concatLabels.join("")}concat=n=${concatLabels.length}:v=1:a=0[vcat]`);
 
   // 标题和 AI 标识加在拼接**之后**：标识要覆盖全片（片头片尾也算 AI 生成内容）。
@@ -179,14 +187,19 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
     filters.push(`${videoLabel}ass=filename=${escapeFilterValue(paths.overlay_ass)}[vtext]`);
     videoLabel = "[vtext]";
   }
-  if (!paths.overlay_ass && plan.title !== "") {
+  if (!paths.overlay_ass && imageInputs.length === 0 && plan.title !== "") {
     filters.push(`${videoLabel}${titleDrawtext(plan, paths.font!)}[vtitle]`);
     videoLabel = "[vtitle]";
   }
-  if (!paths.overlay_ass && plan.ai_label) {
+  if (!paths.overlay_ass && imageInputs.length === 0 && plan.ai_label) {
     filters.push(`${videoLabel}${aiLabelDrawtext(plan, paths.font!)}[vlabel]`);
     videoLabel = "[vlabel]";
   }
+  imageInputs.forEach((event, index) => {
+    const next = `[vimage${index}]`;
+    filters.push(`${videoLabel}[${event.index}:v]overlay=0:0:shortest=1:format=auto:enable=gte(t\\,${event.start_s})*lt(t\\,${event.end_s})${next}`);
+    videoLabel = next;
+  });
 
   const totalDurationS = roundMs(
     paths.intro_duration_s +
