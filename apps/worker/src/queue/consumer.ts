@@ -15,7 +15,7 @@ import {
   failTask,
   getDestination,
   getEpisode,
-  getPersona,
+  getPersonaVersion,
   patchEpisode,
   patchShot,
   replaceEpisode,
@@ -63,7 +63,7 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
 export async function buildStageContext(stage: StageName, episode: Episode, task?: Task): Promise<StageContext> {
   const [destination, persona] = await Promise.all([
     getDestination(episode.destination_id),
-    getPersona(episode.persona_id),
+    getPersonaVersion(episode.persona_id, episode.persona_version),
   ]);
   const context: StageContext = {};
   if (destination) context.destination = destination;

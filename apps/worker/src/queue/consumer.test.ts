@@ -11,6 +11,7 @@ import {
   patchEpisode,
   patchShot,
   upsertDestination,
+  updatePersona,
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { buildStageContext, consumeLoop, handleTask } from "./consumer";
@@ -188,6 +189,16 @@ test("buildStageContext reads destination + persona and injects ffmpeg only for 
 
   const composeContext = await buildStageContext("compose", episode);
   expect(composeContext.compose).toBe(ffmpegComposeProvider);
+});
+
+test("buildStageContext uses the episode's frozen official persona revision", async () => {
+  const episode = fixtureEpisode("e_frozen");
+  await insertPersona({ ...personaFixture("c_test"), owner_id: null });
+  await insertEpisode(episode);
+  await updatePersona("c_test", { name: "新版角色", style: { lut: "new", title_style: "new" } });
+  const context = await buildStageContext("script", episode);
+  expect(context.persona?.name).toBe(personaFixture("c_test").name);
+  expect(context.persona?.style.lut).toBe(personaFixture("c_test").style.lut);
 });
 
 test("assets, one keyframe shot and video reach both review gates", async () => {

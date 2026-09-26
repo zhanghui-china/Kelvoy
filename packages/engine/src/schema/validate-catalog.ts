@@ -42,7 +42,7 @@ export function validatePersona(input: unknown): ValidationResult<Persona> {
   const p = input as Partial<Persona>;
 
   if (!isNonEmptyString(p.persona_id)) errors.push("persona_id: 缺失或为空");
-  if (!isNonEmptyString(p.owner_id)) errors.push("owner_id: 缺失或为空");
+  if (p.owner_id !== null && !isNonEmptyString(p.owner_id)) errors.push("owner_id: 必须是字符串或 null");
   if (!isFiniteNumber(p.version) || !Number.isInteger(p.version) || p.version < 1) {
     errors.push("version: 必须是 ≥1 的整数");
   }
@@ -83,7 +83,10 @@ export function validateCreatePersonaRequest(input: unknown): ValidationResult<C
   else errors.push("style: 缺失");
 
   if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: r as CreatePersonaRequest };
+  return { valid: true, value: {
+    name: r.name!, desc: r.desc!, locked: r.locked!,
+    default_outfit: r.default_outfit!, style: r.style!,
+  } };
 }
 
 /**
@@ -108,7 +111,13 @@ export function validatePersonaPatchRequest(input: unknown): ValidationResult<Pe
   if ("refs" in p) errors.push("refs: 不支持通过 PATCH 修改，走 POST /api/personas/:id/refs");
 
   if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: p as PersonaPatch };
+  const allowed: PersonaPatch = {};
+  if ("name" in p) allowed.name = p.name;
+  if ("desc" in p) allowed.desc = p.desc;
+  if ("locked" in p) allowed.locked = p.locked;
+  if ("default_outfit" in p) allowed.default_outfit = p.default_outfit;
+  if ("style" in p) allowed.style = p.style;
+  return { valid: true, value: allowed };
 }
 
 // Shared by validateTemplate (whole document) and validateCreateTemplateRequest

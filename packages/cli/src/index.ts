@@ -6,6 +6,8 @@
  *   kelvoy import-destination <path.json>
  *   kelvoy import-episode <path.json>
  *   kelvoy import-template <path.json>
+ *   kelvoy import-persona <path.json>
+ *   kelvoy seed-catalog
  *   kelvoy create-user <username> <password>
  *   kelvoy set-password <username> <password>
  */
@@ -14,6 +16,8 @@ import { createUserAccount } from "./create-user";
 import { importDestination } from "./import-destination";
 import { importEpisode } from "./import-episode";
 import { importTemplate } from "./import-template";
+import { importOfficialPersona } from "./import-persona";
+import { seedCatalog } from "./seed-catalog";
 import { runEpisodeStage } from "./run-stage";
 import { setUserPassword } from "./set-password";
 
@@ -23,6 +27,8 @@ function usage(): never {
   console.error("  kelvoy import-destination <path.json>");
   console.error("  kelvoy import-episode <path.json>");
   console.error("  kelvoy import-template <path.json>");
+  console.error("  kelvoy import-persona <path.json>");
+  console.error("  kelvoy seed-catalog");
   console.error("  kelvoy create-user <username> <password>");
   console.error("  kelvoy set-password <username> <password>");
   process.exit(1);
@@ -91,6 +97,18 @@ async function runImportTemplate(argv: string[]): Promise<void> {
   console.log(`导入成功：${result.template_id}`);
 }
 
+async function runImportPersona(argv: string[]): Promise<void> {
+  const [path] = argv;
+  if (!path) usage();
+  const result = await importOfficialPersona(await Bun.file(path).json());
+  if (!result.ok) {
+    for (const error of result.errors) console.error(`导入失败：${error}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`官方角色：${result.persona.persona_id} v${result.persona.version}`);
+}
+
 async function runCreateUser(argv: string[]): Promise<void> {
   const [username, password] = argv;
   if (!username || !password) usage();
@@ -126,6 +144,13 @@ async function main() {
       return runImportEpisode(rest);
     case "import-template":
       return runImportTemplate(rest);
+    case "import-persona":
+      return runImportPersona(rest);
+    case "seed-catalog": {
+      const seeded = await seedCatalog();
+      console.log(`导入 ${seeded.personas} 个角色、${seeded.destinations} 个目的地、${seeded.assets} 张素材`);
+      return;
+    }
     case "create-user":
       return runCreateUser(rest);
     case "set-password":

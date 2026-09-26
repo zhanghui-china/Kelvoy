@@ -55,7 +55,7 @@ assets.get("/:path{.+}", async (c) => {
   if (key.startsWith(PERSONA_PREFIX)) {
     const personaId = key.slice(PERSONA_PREFIX.length).split("/")[0];
     const persona = personaId ? await getPersona(personaId) : null;
-    if (!persona || persona.owner_id !== c.get("ownerId")) {
+    if (!persona || (persona.owner_id !== null && persona.owner_id !== c.get("ownerId"))) {
       return c.json({ ok: false, error: "not_found" }, 404);
     }
   }

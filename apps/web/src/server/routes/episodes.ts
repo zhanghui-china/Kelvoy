@@ -13,6 +13,7 @@ import {
   getDestination,
   getEpisode,
   getPersona,
+  getPersonaVersion,
   getTemplate,
   getUserById,
   insertEpisode,
@@ -60,7 +61,7 @@ episodes.post("/", async (c) => {
     getTemplate(req.template_id),
     getUserById(c.get("ownerId")),
   ]);
-  if (!persona || persona.owner_id !== c.get("ownerId")) {
+  if (!persona || (persona.owner_id !== null && persona.owner_id !== c.get("ownerId"))) {
     return c.json({ ok: false, error: "persona_not_found" }, 404);
   }
   if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
@@ -197,7 +198,7 @@ episodes.post("/:id/save-as-template", async (c) => {
 
   const [destination, persona] = await Promise.all([
     getDestination(loaded.episode.destination_id),
-    getPersona(loaded.episode.persona_id),
+    getPersonaVersion(loaded.episode.persona_id, loaded.episode.persona_version),
   ]);
   if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
   if (!persona) return c.json({ ok: false, error: "persona_not_found" }, 404);

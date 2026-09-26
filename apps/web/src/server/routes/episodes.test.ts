@@ -340,6 +340,19 @@ test("POST snapshots the persona version at submit time, not the latest one", as
   expect(stored.episode.persona_version).toBe(1); // 不受之后的角色改动影响
 });
 
+test("POST lets a logged-in user select an official persona", async () => {
+  const { cookie } = await login("official-user");
+  await insertPersona({ ...personaFixture("c_official", "u_other"), owner_id: null });
+  await upsertDestination(destinationFixture("d_1"));
+  await upsertTemplate(templateFixture("t_1"));
+  const res = await buildApp().request("/api/episodes", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ persona_id: "c_official", destination_id: "d_1", template_id: "t_1" }),
+  });
+  expect(res.status).toBe(201);
+  expect((await res.json() as { episode: Episode }).episode.persona_version).toBe(1);
+});
+
 test("POST 404s when persona_id doesn't belong to the caller", async () => {
   const { cookie } = await login("dannei");
   await insertPersona(personaFixture("c_1", "u_someone_else"));

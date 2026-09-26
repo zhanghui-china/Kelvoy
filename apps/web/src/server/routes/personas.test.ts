@@ -94,6 +94,26 @@ test("creates a persona with zero reference images", async () => {
   expect(body.persona.version).toBe(1);
 });
 
+test("browser cannot forge official ownership on create or patch", async () => {
+  const { cookie, ownerId } = await login("owner-spoof");
+  const app = buildApp();
+  const created = await app.request("/api/personas", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ ...createRequestBody(), owner_id: null, version: 88, persona_id: "c_official_spoof" }),
+  });
+  expect(created.status).toBe(201);
+  const body = await created.json() as { persona: Persona };
+  expect(body.persona.owner_id).toBe(ownerId);
+  expect(body.persona.version).toBe(1);
+  expect(body.persona.persona_id).not.toBe("c_official_spoof");
+  const patched = await app.request(`/api/personas/${body.persona.persona_id}`, {
+    method: "PATCH", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ name: "changed", owner_id: null, persona_id: "c_official_spoof", version: 88 }),
+  });
+  expect(patched.status).toBe(200);
+  expect((await getPersona(body.persona.persona_id))?.owner_id).toBe(ownerId);
+});
+
 test("rejects a malformed create request", async () => {
   const { cookie } = await login("dannei");
   const app = buildApp();
@@ -139,6 +159,20 @@ test("patching someone else's persona 404s", async () => {
     body: JSON.stringify({ desc: "试图改别人的角色" }),
   });
   expect(res.status).toBe(404);
+});
+
+test("official personas are listed but browser patch and upload return 404", async () => {
+  const { cookie } = await login("official-reader");
+  await insertPersona({ ...fixture("c_official", "u_other"), owner_id: null });
+  const app = buildApp();
+  const listed = await app.request("/api/personas", { headers: { cookie } });
+  expect((await listed.json() as { personas: Persona[] }).personas[0]?.persona_id).toBe("c_official");
+  const patched = await app.request("/api/personas/c_official", { method: "PATCH", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ name: "hack" }) });
+  expect(patched.status).toBe(404);
+  const form = new FormData();
+  for (const name of ["a.png", "b.png", "c.png"]) form.append("files", pngFile(name));
+  const uploaded = await app.request("/api/personas/c_official/refs", { method: "POST", headers: { cookie }, body: form });
+  expect(uploaded.status).toBe(404);
 });
 
 test("uploading refs below the minimum is rejected", async () => {

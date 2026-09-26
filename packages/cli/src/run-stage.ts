@@ -1,5 +1,5 @@
 import { type StageName, runStage, transitionEpisode } from "@kelvoy/engine";
-import { getDestination, getEpisode, patchEpisode, replaceEpisode } from "@kelvoy/store";
+import { getDestination, getEpisode, getPersonaVersion, patchEpisode, replaceEpisode } from "@kelvoy/store";
 
 /**
  * 已知限制（M1-13, #28）：`run compose` 在 CLI 里跑不通，会拿到 engine 的
@@ -46,7 +46,10 @@ export async function runEpisodeStage(episodeId: string, stage: StageName): Prom
     // "script" needs the destination record, so it's fetched here and
     // threaded through as context. Other stages ignore it for now.
     const destination = await getDestination(result.episode.destination_id);
-    const updated = await runStage(stage, result.episode, undefined, destination ? { destination } : undefined);
+    const persona = await getPersonaVersion(result.episode.persona_id, result.episode.persona_version);
+    const updated = await runStage(stage, result.episode, undefined, {
+      ...(destination ? { destination } : {}), ...(persona ? { persona } : {}),
+    });
     const written = await replaceEpisode(episodeId, result.row_version, updated);
     if (!written.ok) {
       return { ok: false, error: `写回失败：${written.error}` };

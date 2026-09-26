@@ -19,10 +19,18 @@ create table if not exists destinations (
 
 create table if not exists personas (
   persona_id text primary key,
-  owner_id text not null,
+  owner_id text,
   version integer not null default 1,
   doc text not null,
   updated_at text not null default (datetime('now'))
+);
+
+create table if not exists persona_versions (
+  persona_id text not null,
+  version integer not null,
+  doc text not null,
+  compatibility_approximation integer not null default 0,
+  primary key (persona_id, version)
 );
 
 create table if not exists templates (

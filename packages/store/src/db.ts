@@ -20,7 +20,43 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
   db.exec("pragma journal_mode = WAL;");
   db.exec(SCHEMA);
   applyColumnMigrations(db);
+  migratePersonaOwnershipAndVersions(db);
   return db;
+}
+
+/** Legacy rows had NOT NULL owners and no historical persona documents. */
+function migratePersonaOwnershipAndVersions(database: Database): void {
+  database.transaction(() => {
+    const owner = database.query<{ name: string; notnull: number }, []>("pragma table_info(personas)").all()
+      .find((column) => column.name === "owner_id");
+    if (owner?.notnull) {
+      database.exec(`create table personas_new (
+        persona_id text primary key, owner_id text, version integer not null default 1,
+        doc text not null, updated_at text not null default (datetime('now'))
+      );
+      insert into personas_new select persona_id, owner_id, version, doc, updated_at from personas;
+      drop table personas;
+      alter table personas_new rename to personas;`);
+    }
+    // Existing current docs become exact revisions. Older versions referenced
+    // by episodes cannot be reconstructed; freeze today's document under the
+    // requested version once and mark that compatibility approximation.
+    database.exec(`insert or ignore into persona_versions (persona_id, version, doc)
+      select persona_id, version, doc from personas`);
+    const rows = database.query<{ persona_id: string; persona_version: number }, []>(
+      `select distinct json_extract(doc, '$.persona_id') as persona_id,
+        json_extract(doc, '$.persona_version') as persona_version from episodes
+       where json_valid(doc) and persona_id is not null and persona_version is not null`,
+    ).all();
+    for (const row of rows) {
+      const current = database.query<{ doc: string }, [string]>("select doc from personas where persona_id = ?").get(row.persona_id);
+      if (!current) continue;
+      const approximation = { ...JSON.parse(current.doc), version: row.persona_version };
+      database.query(`insert or ignore into persona_versions
+        (persona_id, version, doc, compatibility_approximation) values (?, ?, ?, 1)`)
+        .run(row.persona_id, row.persona_version, JSON.stringify(approximation));
+    }
+  }).immediate();
 }
 
 // 见 schema.ts 的 COLUMN_MIGRATIONS：给已存在的表补新列，新建的库这里全是

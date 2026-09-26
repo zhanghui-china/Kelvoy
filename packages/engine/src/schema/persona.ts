@@ -5,7 +5,7 @@ export interface PersonaStyle {
 
 export interface Persona {
   persona_id: string;
-  owner_id: string;
+  owner_id: string | null; // null = official catalog, writable only through internal CLI
   version: number; // bumped on every edit; episodes snapshot the version they were generated with
   name: string;
   desc: string;

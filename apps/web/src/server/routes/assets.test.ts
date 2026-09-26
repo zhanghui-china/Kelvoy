@@ -91,6 +91,15 @@ test("404s on someone else's persona reference image", async () => {
   expect(res.status).toBe(404);
 });
 
+test("serves an official persona reference image to another account", async () => {
+  const { cookie } = await login("official-reader");
+  await insertPersona({ ...personaFixture("c_official", "u_other"), owner_id: null });
+  await writeAsset("persona/c_official/front.png", "official-bytes");
+  const res = await buildApp().request("/api/assets/persona/c_official/front.png", { headers: { cookie } });
+  expect(res.status).toBe(200);
+  expect(await res.text()).toBe("official-bytes");
+});
+
 test("404s on a persona id that doesn't exist", async () => {
   const { cookie } = await login("dannei");
   await writeAsset("persona/c_missing/front.png", "persona-bytes");
