@@ -118,6 +118,8 @@ episodes.post("/", async (c) => {
       intro: null,
       outro: null,
       ai_label: true,
+      subtitles_enabled: true,
+      transitions_enabled: true,
     },
   };
 

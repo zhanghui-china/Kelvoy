@@ -68,6 +68,8 @@ export interface ComposePlan {
   metadata: Record<string, string>;
   res: { w: number; h: number };
   fps: number;
+  subtitles_enabled?: boolean;
+  transitions_enabled?: boolean;
 }
 
 export interface ComposePlanMusic {

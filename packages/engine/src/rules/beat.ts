@@ -56,6 +56,7 @@ export interface ShotCut {
   duration_s: number;
   trim_start_frame?: number;
   frame_count?: number;
+  caption?: string;
 }
 
 /** New projects use integer-frame cuts; music never moves a shot boundary. */
@@ -75,6 +76,7 @@ export function planFixedCuts(shots: Shot[], fps: number): ShotCut[] {
       duration_s: 1,
       trim_start_frame: startFrame,
       frame_count: fps,
+      caption: shot.caption ?? "",
     };
   });
 }

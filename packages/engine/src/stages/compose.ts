@@ -87,6 +87,8 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
     },
     res: parseRes(episode.render.res),
     fps: episode.render.fps,
+    subtitles_enabled: episode.render.subtitles_enabled === true,
+    transitions_enabled: episode.cut_policy === "fixed_1s" && episode.render.transitions_enabled === true,
   };
 }
 

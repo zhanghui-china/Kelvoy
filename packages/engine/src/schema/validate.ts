@@ -209,6 +209,8 @@ export function validateRender(input: unknown, path = "render"): string[] {
     errors.push(`${path}.outro: 必须是字符串或 null`);
   }
   if (!isBoolean(r.ai_label)) errors.push(`${path}.ai_label: 必须是布尔值`);
+  if (r.subtitles_enabled !== undefined && !isBoolean(r.subtitles_enabled)) errors.push(`${path}.subtitles_enabled: 必须是布尔值`);
+  if (r.transitions_enabled !== undefined && !isBoolean(r.transitions_enabled)) errors.push(`${path}.transitions_enabled: 必须是布尔值`);
   return errors;
 }
 

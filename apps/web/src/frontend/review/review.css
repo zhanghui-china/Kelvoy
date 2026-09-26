@@ -322,3 +322,6 @@
   color: var(--color-ink-soft);
   font-size: 0.85rem;
 }
+.k-compose-setup { display: grid; gap: 16px; max-width: 720px; }
+.k-compose-options { display: flex; flex-wrap: wrap; gap: 12px 24px; color: var(--color-ink-soft); }
+.k-compose-options label { display: inline-flex; align-items: center; gap: 8px; }

@@ -7,7 +7,11 @@ import type { EpisodeMutation } from "./useEpisodeMutation";
 /** Settings gate between approving every clip and submitting the compose job. */
 export default function ComposeSetup({ episode, mutation }: { episode: Episode; mutation: EpisodeMutation }) {
   const [title, setTitle] = useState(episode.render.title);
-  const titleChanged = title !== episode.render.title;
+  const [subtitles, setSubtitles] = useState(episode.render.subtitles_enabled === true);
+  const [transitions, setTransitions] = useState(episode.render.transitions_enabled === true);
+  const settingsChanged = title !== episode.render.title ||
+    subtitles !== (episode.render.subtitles_enabled === true) ||
+    transitions !== (episode.render.transitions_enabled === true);
   const fixed = episode.cut_policy === "fixed_1s";
 
   return (
@@ -22,16 +26,20 @@ export default function ComposeSetup({ episode, mutation }: { episode: Episode; 
         成片标题
         <input value={title} maxLength={80} onChange={(event) => setTitle(event.target.value)} />
       </label>
+      {fixed && <div className="k-compose-options">
+        <label><input type="checkbox" checked={subtitles} onChange={(event) => setSubtitles(event.target.checked)} /> 烧录每镜字幕</label>
+        <label><input type="checkbox" checked={transitions} onChange={(event) => setTransitions(event.target.checked)} /> 切点前后各 2 帧淡出淡入</label>
+      </div>}
       <p className="k-card-meta">配乐：{episode.music.file || "按创作语气自动选择"}</p>
       <p className="k-card-meta">片头：{episode.render.intro || "关闭"} · 片尾：{episode.render.outro || "关闭"}</p>
       <MutationError error={mutation.error} />
       <div className="k-desk-actions">
-        <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || !titleChanged || !title.trim()}
+        <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || !settingsChanged || !title.trim()}
           onClick={() => void mutation.run((rowVersion) => patchEpisode(episode.episode_id, rowVersion,
-            { render: { ...episode.render, title: title.trim() } }))}>
-          保存标题
+            { render: { ...episode.render, title: title.trim(), subtitles_enabled: subtitles, transitions_enabled: transitions } }))}>
+          保存设置
         </button>
-        <button type="button" className="k-btn k-btn-primary" disabled={mutation.pending || titleChanged}
+        <button type="button" className="k-btn k-btn-primary" disabled={mutation.pending || settingsChanged}
           onClick={() => void mutation.run((rowVersion) => continueEpisode(episode.episode_id, rowVersion))}>
           {mutation.pending ? "提交中…" : "开始合成"}
         </button>

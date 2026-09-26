@@ -108,6 +108,8 @@ export interface EpisodeRender {
   intro: string | null; // defaults from template, overridable per episode
   outro: string | null;
   ai_label: boolean;
+  subtitles_enabled?: boolean;
+  transitions_enabled?: boolean;
 }
 
 export interface Episode {
