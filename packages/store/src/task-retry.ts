@@ -86,7 +86,7 @@ export function submitFailedTaskRetry(input: {
     }
     getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
       updated_at = datetime('now') where episode_id = ?`)
-      .run(JSON.stringify({ ...episode, status: target }), input.episode_id);
+      .run(JSON.stringify({ ...episode, status: target, failure_reason: null }), input.episode_id);
     return { ok: true, row_version: row.row_version + 1, stage, shot_no: failed.shot_no } as const;
   }).immediate();
 }

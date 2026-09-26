@@ -40,6 +40,18 @@ const POLL_INTERVAL_MS = 1000;
 // packages/engine/src/providers/overflow.ts.
 const MAX_LOCAL_ATTEMPTS = 2;
 
+function failureReason(error: unknown): string {
+  if (error instanceof ContentBlockedError) return "内容未通过审核，请修改创作要求后重新提交。";
+  const message = error instanceof Error ? error.message : String(error);
+  if (/no active step plan subscription/i.test(message))
+    return "StepFun Step Plan 尚未开通，联系团队开通订阅后重试。";
+  if (/quota_exceeded|exceeded your current quota/i.test(message))
+    return "StepFun API 额度不足，联系团队补充额度后重试。";
+  if (/缺少环境变量 STEPFUN_API_KEY/.test(message))
+    return "脚本服务未配置 StepFun 密钥，请联系团队。";
+  return "生成失败。已有产物已保留，可重试或联系团队排查。";
+}
+
 // Brief-to-script enqueue commits with the episode in store. Assets still
 // fans out per-shot keyframe tasks after review 1.
 
@@ -172,7 +184,8 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       // 内容审核拦截是确定性失败，重试也还是命中同样的词——不重试，直接
       // 把期标成 failed（同 packages/cli/src/run-stage.ts 的失败写回方式）。
       failTaskWithCredits(task, false);
-      await patchEpisode(task.episode_id, current.row_version, { status: "failed" });
+      await patchEpisode(task.episode_id, current.row_version,
+        { status: "failed", failure_reason: failureReason(err) });
       return;
     }
     const retry = task.attempt < MAX_LOCAL_ATTEMPTS;
@@ -183,9 +196,12 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
         const target = generationStatus(task.stage);
         const shot = fresh.episode.shots.find((item) => item.no === task.shot_no);
         if (target && shot?.status === target) {
-          await patchShot(task.episode_id, shot.no, fresh.row_version, { status: "failed" });
+          const patched = await patchShot(task.episode_id, shot.no, fresh.row_version, { status: "failed" });
+          if (patched.ok) await patchEpisode(task.episode_id, patched.row_version,
+            { failure_reason: failureReason(err) });
         } else if (!target && ["scripting", "assets", "composing"].includes(fresh.episode.status)) {
-          await patchEpisode(task.episode_id, fresh.row_version, { status: "failed" });
+          await patchEpisode(task.episode_id, fresh.row_version,
+            { status: "failed", failure_reason: failureReason(err) });
         }
       }
     }

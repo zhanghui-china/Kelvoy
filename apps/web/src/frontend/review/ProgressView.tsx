@@ -21,9 +21,9 @@ export default function ProgressView({
     <section className="k-desk-main">
       <div className="k-card">
         <div className="k-card-title">{EPISODE_STATUS_LABELS[episode.status]}</div>
-        {episode.status === "failed" ? (
+        {retryAvailable ? (
           <p className="k-error" role="alert">
-            这一期失败了。产物和已有的镜都还在，重试只会重跑失败的那个阶段。
+            {episode.failure_reason ?? "生成失败。产物和已有的镜都还在，重试只会重跑失败的阶段。"}
           </p>
         ) : (
           <p className="k-card-meta">后台正在跑，页面每 3 秒自动刷新一次。</p>

@@ -74,7 +74,7 @@ export interface PatchShotRequest {
 // and render-stage outputs). Brief/scenes/shots are not touched here —
 // shots go through PatchShotRequest.
 export type EpisodePatch = Partial<
-  Pick<Episode, "status" | "credits_used" | "grid_refs" | "render" | "music">
+  Pick<Episode, "status" | "credits_used" | "grid_refs" | "render" | "music" | "failure_reason">
 >;
 
 export interface PatchEpisodeRequest {

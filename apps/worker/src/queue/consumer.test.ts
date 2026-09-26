@@ -201,6 +201,32 @@ test("handleTask fails permanently and marks the episode failed when content is 
   expect(result.ok && result.episode.status).toBe("failed");
 });
 
+test("terminal StepFun quota failure tells the reviewer why retry cannot work yet", async () => {
+  const episode = { ...fixtureEpisode("e_quota"), status: "scripting" as const };
+  await insertEpisode(episode);
+  await upsertDestination(destinationFixture("d_test"));
+  const task = await enqueueTask({ episode_id: episode.episode_id, stage: "script" });
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.STEPFUN_API_KEY;
+  process.env.STEPFUN_API_KEY = "test-key";
+  globalThis.fetch = (async () => new Response(JSON.stringify({ error: {
+    message: "You exceeded your current quota", type: "quota_exceeded",
+  } }), { status: 402 })) as unknown as typeof fetch;
+  try {
+    await dequeueTask();
+    await handleTask(task);
+    const retry = await dequeueTask();
+    await handleTask(retry!);
+    const result = await getEpisode(episode.episode_id);
+    expect(result.ok && result.episode.status).toBe("failed");
+    expect(result.ok && result.episode.failure_reason).toContain("额度不足");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.STEPFUN_API_KEY;
+    else process.env.STEPFUN_API_KEY = originalKey;
+  }
+});
+
 test("consumeLoop stops promptly once its AbortSignal fires", async () => {
   const controller = new AbortController();
   controller.abort();

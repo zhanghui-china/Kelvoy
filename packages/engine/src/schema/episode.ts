@@ -139,6 +139,7 @@ export interface Episode {
   candidate_count: number;
   script_pending_task_id?: string | null;
   script_action_error?: string | null;
+  failure_reason?: string | null;
   final?: FinalArtifact | null;
   created_at: string; // ISO 8601
   estimated_credits: number;
