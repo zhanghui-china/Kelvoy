@@ -6,6 +6,8 @@ import { Link } from "react-router-dom";
 export default function LandingHero() {
   return (
     <section id="top" className="k-lp-hero">
+      <div className="k-lp-hero-image" role="img" aria-label="山川与旅行中的目的地风景" />
+      <div className="k-lp-hero-content">
       <div className="k-eyebrow">虚拟角色 × 真实目的地</div>
       <h1>一个虚拟角色，走遍你的每一个目的地</h1>
       <p>
@@ -16,6 +18,7 @@ export default function LandingHero() {
         <Link to="/login" className="k-btn k-btn-primary">
           登录，出你的第一期
         </Link>
+      </div>
       </div>
     </section>
   );

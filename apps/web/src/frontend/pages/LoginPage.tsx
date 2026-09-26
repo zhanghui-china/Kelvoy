@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../api/client";
 import { LogoMark } from "../icons";
+import "./LoginPage.css";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -31,6 +32,7 @@ export default function LoginPage() {
 
   return (
     <div className="k-auth-shell">
+      <div className="k-auth-visual"><div className="k-auth-visual-inner"><LogoMark size={42} /><span>Kelvoy · 可旅</span><h2>每一段旅程，<br />都值得被讲述。</h2><p>用一致的虚拟角色和真实目的地，创作有记忆点的旅行内容。</p></div></div>
       <div className="k-auth-card">
         <LogoMark size={36} />
         <h1>登录 Kelvoy</h1>

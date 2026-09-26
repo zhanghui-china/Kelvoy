@@ -4,6 +4,7 @@ import { logout } from "../api/client";
 import {
   DestinationIcon,
   HomeIcon,
+  HelpIcon,
   LogoMark,
   LogoutIcon,
   NewEpisodeIcon,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: "/templates", label: "模板中心", Icon: TemplateIcon },
   { to: "/usage", label: "用量", Icon: UsageIcon },
   { to: "/settings", label: "设置", Icon: SettingsIcon },
+  { to: "/help", label: "帮助", Icon: HelpIcon },
 ];
 
 function readStoredUsername(): string | null {
@@ -68,13 +70,16 @@ export default function Layout() {
             {menuOpen ? "收起菜单" : "菜单"}
           </button>
         </div>
-        <div className="k-sidebar-links" id="workspace-navigation">
+        <div className="k-sidebar-drawer" id="workspace-navigation">
+        <div className="k-sidebar-links">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === "/episodes"}
               className={({ isActive }) => `k-sidebar-link${isActive ? " active" : ""}`}
+              aria-label={item.label}
+              title={item.label}
               onClick={() => setMenuOpen(false)}
             >
               <item.Icon size={20} />
@@ -93,6 +98,7 @@ export default function Layout() {
           <LogoutIcon size={18} />
           退出登录
         </button>
+        </div>
       </nav>
       <main className="k-content">
         <Outlet />

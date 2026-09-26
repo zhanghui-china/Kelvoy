@@ -1,5 +1,5 @@
 import { type ChangeEvent, type DragEvent, type FormEvent, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { Persona } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
 import {
@@ -14,6 +14,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { canEditPersona } from "../persona-access";
 import { describeWriteError } from "../review/errors";
 import "./PersonaEditPage.css";
+import { selectDraftPersona } from "./episode-draft";
 
 // §4："这三项是锁定的" —— 新建时默认全选；schema 是 string[]，用户可以
 // 取消勾选（不做自由文本新增，设计稿只画了这三个可勾选标签）。
@@ -37,6 +38,8 @@ export default function PersonaEditPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = id !== undefined;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo") === "/episodes/new" ? "/episodes/new" : "/personas";
 
   const personasRes = useApiResource(listPersonas, []);
   const templatesRes = useApiResource(listTemplates, []);
@@ -198,7 +201,7 @@ export default function PersonaEditPage() {
       setSavedPersona(createResult.persona);
       // 角色已经建好了——把地址栏换成编辑页，这样接下来传图失败也不会
       // 让用户以为"什么都没发生"再点一次提交，从而建出第二个角色。
-      navigate(`/personas/${targetId}/edit`, { replace: true });
+      navigate(`/personas/${targetId}/edit${returnTo === "/episodes/new" ? "?returnTo=/episodes/new" : ""}`, { replace: true });
     }
 
     if (pendingFiles.length > 0) {
@@ -214,7 +217,8 @@ export default function PersonaEditPage() {
       setSubmitting(false);
     }
 
-    navigate("/personas");
+    if (returnTo === "/episodes/new") selectDraftPersona(targetId);
+    navigate(returnTo);
   }
 
   if (personasRes.loading) return <p className="k-empty">加载中…</p>;

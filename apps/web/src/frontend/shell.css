@@ -1,0 +1,148 @@
+/* 登录后的工作台外壳（M2-7 起，跟共享设计稿的深色侧栏对齐）——侧栏放
+   导航和账号状态，主区顶栏 + 内容区。GPU 队列/积分余额这些设计稿里画的
+   常显数字目前没有真实数据源，没有做假——侧栏底部只放真实的当前账号。 */
+
+.k-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.k-sidebar {
+  width: 208px;
+  flex-shrink: 0;
+  background: var(--color-primary);
+  color: #d6e0f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1.5rem 1rem;
+}
+
+.k-sidebar-header,
+.k-sidebar-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.k-sidebar-drawer { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+
+.k-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0 0.6rem 1.25rem 0.6rem;
+}
+
+.k-sidebar-menu {
+  display: none;
+}
+
+.k-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: var(--radius-control);
+  color: #d6e0f0;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.k-sidebar-link svg {
+  flex-shrink: 0;
+}
+
+.k-sidebar-link:hover {
+  background: rgba(245, 242, 236, 0.08);
+  color: #d6e0f0;
+}
+
+.k-sidebar-link.active {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.k-sidebar-spacer {
+  flex: 1;
+}
+
+.k-sidebar-account {
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-control);
+  background: #2b3950;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.k-sidebar-account-label {
+  color: #b7c3d7;
+}
+
+.k-sidebar-account-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* .k-btn-secondary is dark-text-on-transparent — invisible against the
+   sidebar's own dark background, hence a dedicated light variant here. */
+.k-sidebar-logout {
+  background: transparent;
+  border: 1px solid rgba(245, 242, 236, 0.3);
+  color: #d6e0f0;
+}
+
+.k-sidebar-logout:hover {
+  border-color: #d6e0f0;
+  background: rgba(245, 242, 236, 0.08);
+}
+
+.k-content {
+  flex: 1;
+  min-width: 0;
+  padding: 2.25rem 2.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.k-content > * {
+  max-width: 1180px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .k-sidebar { width: 72px; padding: 1rem 0.65rem; align-items: center; }
+  .k-sidebar-drawer { align-items: center; }
+  .k-sidebar-brand { font-size: 0; padding: 0 0 1.5rem; }
+  .k-sidebar-link { width: 52px; height: 48px; justify-content: center; padding: 0; font-size: 0; }
+  .k-sidebar-account { display: none; }
+  .k-sidebar-logout { width: 52px; padding: 0; font-size: 0; }
+  .k-sidebar-logout svg { flex-shrink: 0; }
+  .k-content { padding: 2rem; }
+}
+@media (max-width: 767px) {
+  .k-shell { flex-direction: column; }
+  .k-sidebar { position: relative; width: 100%; height: 56px; padding: 0 1rem; z-index: 20; }
+  .k-sidebar-header { flex-direction: row; align-items: center; justify-content: space-between; height: 56px; }
+  .k-sidebar-brand { padding: 0; }
+  .k-sidebar-menu { display: inline-flex; align-items: center; min-height: 40px; padding: 0 0.8rem; border: 1px solid #637188; border-radius: var(--radius-control); background: transparent; color: #fff; font: inherit; cursor: pointer; }
+  .k-sidebar-drawer { display: none; }
+  .k-sidebar-open .k-sidebar-drawer { display: flex; position: absolute; top: 56px; right: 0; width: min(320px, 100vw); max-height: calc(100vh - 56px); overflow-y: auto; padding: 1rem; background: var(--color-primary); box-shadow: 0 20px 30px #1b243430; border-radius: 0 0 0 12px; }
+  .k-sidebar-open .k-sidebar-links { display: flex; width: 100%; }
+  .k-sidebar-open .k-sidebar-link { min-height: 44px; }
+  .k-sidebar-spacer, .k-sidebar-account { display: none; }
+  .k-sidebar-logout { align-self: stretch; margin-top: 0.8rem; }
+  .k-content { padding: 1.25rem 1rem 3rem; }
+}

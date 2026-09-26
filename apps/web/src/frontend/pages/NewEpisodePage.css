@@ -1,131 +1,41 @@
-/* Brief form / new episode (M2-8, #30). 拆成独立文件而不是继续往
-   index.css 里加——index.css 已经接近 CLAUDE.md 的 500 行上限，这里复用它
-   定义的 CSS 变量和 .k-field/.k-btn/.k-error 工具类，不重定设计规范，只补
-   这一个页面独有的 k-brief- 前缀类。 */
-
-.k-brief-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.k-brief-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem 1.5rem;
-  align-items: start;
-}
-
-.k-brief-template-preview {
-  grid-column: 1 / -1;
-  margin: -0.5rem 0 0 0;
-}
-
-.k-brief-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.k-brief-tone-chips {
-  margin-top: -0.5rem;
-}
-
-.k-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-card);
-  color: var(--color-ink-soft);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.k-chip:hover {
-  border-color: var(--color-accent);
-  color: var(--color-ink);
-}
-
-.k-chip-removable {
-  background: var(--color-border);
-  cursor: default;
-}
-
-.k-chip-removable button {
-  border: none;
-  background: none;
-  padding: 0;
-  font-size: 0.95rem;
-  line-height: 1;
-  color: var(--color-muted);
-  cursor: pointer;
-}
-
-.k-chip-removable button:hover {
-  color: var(--color-danger);
-}
-
-.k-brief-banned-input {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.k-brief-banned-input input {
-  flex: 1;
-}
-
-.k-brief-mode {
-  grid-column: 1 / -1;
-  min-width: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 0.9rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.k-brief-mode legend {
-  font-family: var(--font-display);
-  font-weight: 700;
-  padding: 0 0.3rem;
-}
-
-.k-brief-radio {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.k-brief-aspect {
-  height: 44px;
-  display: flex;
-  align-items: center;
-  font-size: 0.9rem;
-  color: var(--color-muted);
-}
-
-.k-brief-submit-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.k-brief-estimate {
-  font-size: 0.9rem;
-  color: var(--color-ink-soft);
-}
-
-@media (max-width: 720px) {
-  .k-brief-grid {
-    grid-template-columns: 1fr;
-  }
-}
+.k-create-page { min-width: 0; }
+.k-page-intro { color: var(--color-muted); line-height: 1.7; margin: 0.6rem 0 1.5rem; }
+.k-create-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr); gap: 1.3rem; align-items: start; }
+.k-create-form-panel, .k-create-personas { min-width: 0; padding: 1.5rem; }
+.k-create-panel-heading { display: flex; align-items: flex-start; gap: 0.9rem; margin-bottom: 1.45rem; }
+.k-create-panel-heading h2 { font-size: 1.12rem; margin: 0.05rem 0 0.3rem; }
+.k-create-panel-heading p { font-size: 0.82rem; color: var(--color-muted); margin: 0; line-height: 1.5; }
+.k-create-step { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; background: #e8efff; color: var(--color-accent); font-size: 0.8rem; font-weight: 700; }
+.k-create-fields { display: grid; gap: 1rem; }
+.k-create-fields textarea { min-height: 115px; }
+.k-create-advanced { margin-top: 1.3rem; border-top: 1px solid var(--color-border); }
+.k-create-advanced summary { cursor: pointer; list-style: none; font-weight: 650; padding: 1.3rem 0; }
+.k-create-advanced summary::-webkit-details-marker { display: none; }
+.k-create-advanced summary::before { content: '＋'; display: inline-block; width: 1.8rem; color: var(--color-accent); }
+.k-create-advanced[open] summary::before { content: '－'; }
+.k-create-advanced summary span { display: block; margin-left: 1.8rem; font-size: 0.77rem; font-weight: 400; color: var(--color-muted); }
+.k-create-advanced .k-create-fields { padding: 0 0 1.2rem; }
+.k-brief-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.k-chip { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 34px; padding: 0.25rem 0.7rem; border: 1px solid var(--color-border-strong); border-radius: 8px; background: var(--color-panel); color: var(--color-ink-soft); font-size: 0.82rem; cursor: pointer; }
+.k-chip:hover { border-color: var(--color-accent); }
+.k-chip-removable button { border: 0; background: transparent; cursor: pointer; color: var(--color-muted); }
+.k-brief-banned-input { display: flex; gap: 0.5rem; min-width: 0; }
+.k-brief-banned-input input { flex: 1; min-width: 0; }
+.k-brief-banned-input button { height: 44px; }
+.k-create-submit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--color-border); padding-top: 1.4rem; }
+.k-brief-estimate { color: var(--color-muted); font-size: 0.82rem; }
+.k-create-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--color-border); margin-bottom: 1rem; }
+.k-create-tabs button { min-height: 42px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-muted); cursor: pointer; }
+.k-create-tabs button.active { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 700; }
+.k-create-persona-list { display: grid; gap: 0.65rem; max-height: 440px; overflow-y: auto; }
+.k-create-persona-card { display: flex; width: 100%; align-items: center; gap: 0.8rem; min-width: 0; padding: 0.65rem; border: 1px solid var(--color-border); border-radius: var(--radius-card); background: #fff; color: var(--color-ink); cursor: pointer; text-align: left; }
+.k-create-persona-card.active { border-color: var(--color-accent); background: #f5f8ff; }
+.k-create-persona-avatar { width: 50px; height: 58px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; overflow: hidden; background: #e8efff; color: var(--color-accent); font-size: 1.2rem; font-weight: 700; }
+.k-create-persona-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.k-create-persona-card span:nth-child(2) { min-width: 0; display: grid; gap: 0.25rem; }
+.k-create-persona-card small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--color-muted); }
+.k-create-persona-check { margin-left: auto; color: var(--color-accent); visibility: hidden; }
+.k-create-persona-card.active .k-create-persona-check { visibility: visible; }
+.k-create-persona-add { display: block; margin: 1rem 0; padding: 0.8rem; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-control); text-decoration: none; text-align: center; font-size: 0.85rem; }
+@media (max-width: 980px) { .k-create-layout { grid-template-columns: 1fr; } .k-create-personas { grid-row: 1; } }
+@media (max-width: 600px) { .k-create-form-panel, .k-create-personas { padding: 1rem; } .k-create-submit .k-btn { width: 100%; } }
