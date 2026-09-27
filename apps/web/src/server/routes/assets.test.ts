@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Persona } from "@kelvoy/engine";
@@ -79,6 +79,19 @@ test("serves the owner's own persona reference image", async () => {
   const res = await app.request("/api/assets/persona/c_1/front.png", { headers: { cookie } });
   expect(res.status).toBe(200);
   expect(await res.text()).toBe("persona-bytes");
+});
+
+test("does not follow a persona asset symlink into another account's directory", async () => {
+  const { cookie, ownerId } = await login("asset-symlink-reader");
+  await insertPersona(personaFixture("c_own", ownerId));
+  await insertPersona(personaFixture("c_private", "u_other"));
+  await writeAsset("persona/c_private/front.png", "private-bytes");
+  const ownDir = join(tmpRoot, "projects", "persona", "c_own");
+  await mkdir(ownDir, { recursive: true });
+  await symlink(join(tmpRoot, "projects", "persona", "c_private", "front.png"), join(ownDir, "front.png"));
+
+  const res = await buildApp().request("/api/assets/persona/c_own/front.png", { headers: { cookie } });
+  expect(res.status).toBe(400);
 });
 
 test("404s on someone else's persona reference image", async () => {

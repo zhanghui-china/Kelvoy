@@ -30,6 +30,7 @@ import {
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 import { loadOwnedEpisode, patchErrorResponse } from "./episode-common";
+import { staysOnDiskPath } from "./file-path";
 import review from "./episode-review";
 
 // FR-01/FR-05: 建期/期列表/详情/存为模板/产物文件。审片台的写路由在
@@ -296,10 +297,11 @@ function projectsRoot(): string {
  * the prefix check then catches anything that still climbed out.
  */
 export function resolveArtifactPath(episodeId: string, relativeKey: string | undefined): string | null {
-  if (!relativeKey) return null;
+  if (!relativeKey || !/^[A-Za-z0-9_-]+$/.test(episodeId)) return null;
   const root = resolve(projectsRoot(), episodeId);
   const filePath = resolve(join(root, relativeKey));
   if (filePath !== root && !filePath.startsWith(root + sep)) return null;
+  if (!staysOnDiskPath(resolve(projectsRoot()), filePath)) return null;
   return filePath;
 }
 

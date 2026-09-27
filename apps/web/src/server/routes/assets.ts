@@ -2,6 +2,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { getPersona } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
+import { staysOnDiskPath } from "./file-path";
 
 /**
  * FR-05 审片台要的共享参考图：地标实景图（Destination.landmarks[].refs，
@@ -42,6 +43,7 @@ export function resolveAssetPath(relativeKey: string | undefined): string | null
   const filePath = resolve(join(root, relativeKey));
   if (!filePath.startsWith(root + sep)) return null;
   if (relative(root, filePath) !== relativeKey) return null;
+  if (!staysOnDiskPath(root, filePath)) return null;
   return filePath;
 }
 

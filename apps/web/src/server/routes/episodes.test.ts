@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dequeueTask, enqueueTask, failTask, submitFailedTaskRetry, estimateCreditQuote, getCreditBalance, insertEpisode, insertPersona, updatePersona, upsertDestination, upsertTemplate, updateUserSettings } from "@kelvoy/store";
 import { expect, test } from "bun:test";
@@ -195,6 +195,20 @@ test("serves an artifact file under the episode's directory", async () => {
   const res = await app.request("/api/episodes/e_1/files/kf/01_a.png", { headers: { cookie } });
   expect(res.status).toBe(200);
   expect(await res.text()).toBe("fake-png-bytes");
+});
+
+test("does not follow an episode file symlink into another episode", async () => {
+  const { cookie, ownerId } = await login("episode-symlink-reader");
+  await insertEpisode(fixture("e_own", ownerId));
+  await insertEpisode(fixture("e_private", "u_other"));
+  const root = join(tmpRoot, "projects");
+  await mkdir(join(root, "e_own", "kf"), { recursive: true });
+  await mkdir(join(root, "e_private", "kf"), { recursive: true });
+  await writeFile(join(root, "e_private", "kf", "01.png"), "private-bytes");
+  await symlink(join(root, "e_private", "kf", "01.png"), join(root, "e_own", "kf", "01.png"));
+
+  const res = await buildApp().request("/api/episodes/e_own/files/kf/01.png", { headers: { cookie } });
+  expect(res.status).toBe(400);
 });
 
 test("404s a missing file under a real episode", async () => {
