@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import random
+import shutil
 import time
 import uuid
 from copy import deepcopy
@@ -193,6 +194,8 @@ async def _generate_once(
         raise ValueError("video duration must be 3 to 5 seconds")
     if aspect not in ("9:16", "16:9"):
         raise ValueError("unsupported aspect")
+    if kind in ("video", "video_reference") and shutil.which("ffmpeg") is None:
+        raise ComfyUIError(503, "ffmpeg is required for video validation")
     inputs = [resolve_reference(projects_root, key) for key in refs]
     template_kind = "image_single" if kind == "image" and len(refs) == 1 else kind
     filename, output_node, output_key, extension = TEMPLATES[template_kind]
