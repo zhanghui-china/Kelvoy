@@ -151,7 +151,7 @@ def test_dual_reference_video_uses_person_and_scene_with_requested_aspect():
     assert workflow["92"]["inputs"]["image"] == "scene.jpg"
     assert workflow["77"]["inputs"]["prompt"] == "traveler walks through scene"
     assert workflow["76"]["inputs"]["value"] == 3
-    assert workflow["82"]["inputs"]["aspect_ratio"] == "9:16 (Vertical)"
+    assert workflow["82"]["inputs"]["aspect_ratio"] == "9:16 (Portrait Widescreen)"
     assert workflow["82"]["inputs"]["megapixels"] == 0.9
     assert workflow["49"]["inputs"]["seed"] == 31
     assert template["76"]["inputs"]["value"] == 15

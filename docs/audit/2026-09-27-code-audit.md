@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | A1 已修复 | 模板创建带额外 `template_id`/`owner_id` 可覆盖服务端身份甚至覆盖已有官方模板；`apps/web/src/server/routes/templates.ts`、`packages/engine/src/schema/validate-catalog.ts`、`packages/store/src/templates.ts`。根因是输入透传和创建使用 upsert。| 显式 DTO + insert；未知字段/身份覆盖/重复 ID 回归测试。 |
 | A2 已修复 | 建期可引用别人的私有模板；`apps/web/src/server/routes/episodes.ts` 查询后未核 owner。根因是存在性代替授权。| 同时允许官方或本人模板，跨账号回归测试。 |
-| B1 部分修复 | 默认 `video_source=references` 的双参考图工作流缺模型与 CLIP 连线，含隐式节点；`comfyui-bridge/2_2_DualRef2Video_MinimaxH3_api.json`。静态图无法自洽。| 已改显式图、保留原 `BlockSparseAttention` 采样链，并对四份生产图做链接/可达性测试；目标 DGX 节点契约、该加速节点稳定性和两种画幅仍待验证。 |
+| B1 部分修复 | 默认 `video_source=references` 的双参考图工作流缺模型与 CLIP 连线，含隐式节点；`comfyui-bridge/2_2_DualRef2Video_MinimaxH3_api.json`。静态图无法自洽。真机提交另复现 `ResolutionSelector` 对竖屏值 `9:16 (Vertical)` 返回 HTTP 400，节点实际只接受 `9:16 (Portrait Widescreen)`。| 已改显式图、保留原 `BlockSparseAttention` 采样链，并对四份生产图做链接/可达性测试；已修双参考竖屏映射并补回归。DGX 节点类与模型文件均存在，双参考与关键帧路径各自横竖画幅的四次真实生成均成功；长时间运行稳定性、失败恢复及最终合成仍待验收。 |
 | C1 部分修复 | 模型运行期间选择另一镜导致整期行版本变化，提交冲突耗尽重试、镜头停留生成中；`packages/store/src/charged-tasks.ts`、`apps/worker/src/queue/consumer.ts`。根因是整期替换与无关用户编辑争锁。| 已按目标镜合并；store 与 worker 并发回归证明另一镜选择保留，同镜改稿后的过时结果被拒绝，审核态可实际提交重试，写入冲突不消耗模型失败预算。旧 JSON 默认字段与事务读用同一解码器。执行令牌与租约回收仍待补。 |
 | C2 部分修复 | 任务失败/退款后另起写入更新镜头和原因，中间崩溃会分裂状态；`apps/worker/src/queue/consumer.ts`。| 终态失败已在 store 事务内完成任务、退款、镜头/期失败和原因；脚本优化失败也在同一事务清除待处理标记、保留原稿并退款。SQLite 触发器分别在成功和失败的任务终态写入处注入错误，证明期结果、待处理标记与积分结算一起回滚；文件发布边界、取消和真实进程崩溃仍待覆盖。 |
 | C3 已修复 | brief 可从 `script_review` 再运行并错误推进；`packages/engine/src/stages/index.ts`。根因是只检查状态机可推进，未检查阶段的起点。| 阶段入口表约束，反向阶段测试。 |
@@ -64,15 +64,26 @@
 
 ## 迁移与真机验收清单
 
-以下项目尚未在目标环境执行，验收时逐项记录结果、时间、日志和数据库/产物样本：
+以下项目分项记录目标环境结果。2026-09-27 从 systemd 的 `KELVOY_DB_PATH` 找到真实服务库 `/home/Developer/kelvoy/apps/web/data/kelvoy.db`；旧仓库默认路径下另有空库，不作为生产数据验收依据。通过 SQLite backup API 制作权限 0600 的副本，本机只对副本运行新代码：5 期、2 角色、5 目的地、193 任务、6 用户的行数前后不变；`integrity_check=ok`，复启后一次性迁移记录仍只有一条，近似版本为 0。该样本没有缺失历史版本，尚不能验证近似提示。迁移副本中的一条已开启分享、已完成期，经新代码分享接口返回 200，保留 30 镜和成片元数据；线上原服务的同一分享页和成片下载均返回 200，媒体大小 21,361,552 字节。新代码的真实媒体下载仍需在部署副本上验收。
 
-- [ ] 备份生产 SQLite 与 `projects` 目录；记录迁移前每张表行数和数据库文件大小。
-- [ ] 在副本上首次启动并复启，确认 `schema_migrations` 只记录一次目录版本回填；抽样核对历史角色/目的地快照，缺失旧版须标记 `compatibility_approximation=1` 且审片台显示提示。
-- [ ] 复核旧分享链接及成片下载可访问，已批准成片和旧缓存未被清理；回滚仅使用备份，不把近似快照写回为精确历史。
+- [x] 使用 SQLite backup API 备份实际服务库并记录核心表行数；`projects` 目录备份及全表核对仍待部署前执行。
+- [x] 在实际服务库副本上首次启动并复启，确认 `schema_migrations` 只记录一次目录版本回填；该样本没有缺失旧版，近似标记与 UI 提示仍需构造旧数据回归。
+- [x] 复核迁移副本旧分享元数据与线上原服务成片下载；新代码的真实媒体读取、完整 `projects` 备份及部署回滚演练仍待验收。
 - [ ] 在目标 ComfyUI `/object_info` 核对四份生产工作流所需节点、输入名与模型文件，并分别运行默认双参考视频与关键帧视频的 9:16/16:9 路径。
 - [ ] 排队和采样阶段分别取消，验证只终止目标任务；覆盖租约回收、HTTP 断线、取消 404/500、推理超时及 Worker 重启。
 - [ ] 验证 1080×1920、1920×1080、30 fps、字幕/中文字体、AI 标识、成片元数据和分享预览；分别检查 ASS、drawtext、Pillow 路径。
 - [ ] 记录 10/100/1000 期、单/5 活跃浏览器、1/2 Worker 的 API p50/p95、响应字节、SQLite 写锁、队列等待、长任务、内存与 GPU 时间；与本地合成基线区分。
+
+真机 ComfyUI 合约：四份生产图的节点类与模型文件在目标 `/object_info` 中均存在。使用 `scripts/dgx-workflow-acceptance.py` 把当前分支模板复制到隔离临时目录并提交 3 秒视频，不改运行中的 Kelvoy 服务或旧工作区。双参考竖屏首次提交因 `9:16 (Vertical)` 不在 `ResolutionSelector` 选项中返回 HTTP 400；修正为 `9:16 (Portrait Widescreen)` 后成功。
+
+| 生成路径/画幅 | 结果 | ComfyUI 运行时间 | 输出媒体 |
+| --- | --- | ---: | --- |
+| 双参考直出 / 9:16 | 成功 | 235.5 s | 736×1280，24 fps，3.042 s，1,874,586 B |
+| 双参考直出 / 16:9 | 成功 | 256.2 s | 1280×736，24 fps，3.042 s，2,844,938 B |
+| 关键帧生视频 / 9:16 | 成功 | 60.3 s | 480×864，24 fps，3.042 s，889,280 B |
+| 关键帧生视频 / 16:9 | 成功 | 60.3 s | 864×480，24 fps，3.042 s，1,593,396 B |
+
+这些是模型原始片段，不是最终合成片；最终分辨率、30 fps、字幕、AI 标识和分享预览需要单独验证。验收脚本经独立复审后增加输入画幅、输出画幅/时长/帧率及 ComfyUI 完成状态检查，并在异常时尝试按 prompt ID 取消。用新 seed 提交独立关键帧 prompt，在 1 秒期限后触发定向取消：取消接口确认成功，随后队列运行/待处理均为 0，该 prompt 历史 `status=error`、`completed=false`。排队阶段取消、HTTP 断线、Worker 租约回收及真实失败恢复仍待执行。
 
 ## 性能基线与局部对照
 

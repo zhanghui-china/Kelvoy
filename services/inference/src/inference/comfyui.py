@@ -136,7 +136,7 @@ def build_dual_ref_video_workflow(
         raise ValueError("direct video needs person and scene images")
     if duration_s not in (3, 4, 5):
         raise ValueError("video duration must be 3 to 5 seconds")
-    aspects = {"9:16": "9:16 (Vertical)", "16:9": "16:9 (Widescreen)"}
+    aspects = {"9:16": "9:16 (Portrait Widescreen)", "16:9": "16:9 (Widescreen)"}
     if aspect not in aspects:
         raise ValueError("unsupported video aspect")
     workflow = deepcopy(template)
