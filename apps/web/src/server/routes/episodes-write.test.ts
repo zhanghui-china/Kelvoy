@@ -46,6 +46,35 @@ test("PATCH /:id rejects forged credits without changing the episode", async () 
   expect(body.episode.credits_used).toBe(0);
 });
 
+test("a ready keyframe can be selected while other shots are still generating", async () => {
+  const { cookie, ownerId } = await login("early-keyframe-review");
+  const episode = fixture("e_early_keyframe", ownerId);
+  episode.status = "keyframing";
+  episode.shots = [
+    shotFixture(1, { status: "kf_ready", candidates: ["kf/01_a.png", "kf/01_b.png"] }),
+    shotFixture(2, { status: "generating_kf", candidates: [] }),
+  ];
+  await insertEpisode(episode);
+  const app = buildApp();
+  const headers = { cookie, "content-type": "application/json" };
+  const selected = await app.request("/api/episodes/e_early_keyframe/shots/1", {
+    method: "PATCH", headers,
+    body: JSON.stringify({ row_version: 1,
+      patch: { kf_selected: "kf/01_b.png", status: "kf_selected" } }),
+  });
+  expect(selected.status).toBe(200);
+  const loaded = await app.request("/api/episodes/e_early_keyframe", { headers: { cookie } });
+  const body = await loaded.json() as { episode: Episode };
+  expect(body.episode.status).toBe("keyframing");
+  expect(body.episode.shots[0]?.kf_selected).toBe("kf/01_b.png");
+  expect(body.episode.shots[1]?.status).toBe("generating_kf");
+  const prematurePrompt = await app.request("/api/episodes/e_early_keyframe/shots/1", {
+    method: "PATCH", headers,
+    body: JSON.stringify({ row_version: 2, patch: { kf_prompt: "换一个画面" } }),
+  });
+  expect(prematurePrompt.status).toBe(400);
+});
+
 test("PATCH /:id rejects forged candidate count without changing the episode", async () => {
   const { cookie, ownerId } = await login("candidate-patch");
   await insertEpisode(fixture("e_count", ownerId));

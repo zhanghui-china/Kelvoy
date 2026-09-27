@@ -117,8 +117,9 @@ review.patch("/:id/shots/:no", async (c) => {
   const scriptFields = ["beat", "caption", "size", "camera", "landmark", "kf_prompt", "motion_prompt"];
   const keys = Object.keys(patch);
   const scriptEdit = loaded.episode.status === "script_review" && keys.every((key) => scriptFields.includes(key));
-  const keyframeEdit = loaded.episode.status === "kf_review" &&
-    keys.every((key) => ["kf_selected", "status", "kf_prompt", "motion_prompt"].includes(key)) &&
+  const keyframeEdit = (loaded.episode.status === "kf_review" || loaded.episode.status === "keyframing") &&
+    keys.every((key) => (loaded.episode.status === "keyframing"
+      ? ["kf_selected", "status"] : ["kf_selected", "status", "kf_prompt", "motion_prompt"]).includes(key)) &&
     (patch.status === undefined || patch.status === "kf_selected") &&
     (patch.status === undefined || shot.status === "kf_ready") &&
     (patch.kf_selected === undefined || (patch.kf_selected !== null && shot.candidates.includes(patch.kf_selected)));

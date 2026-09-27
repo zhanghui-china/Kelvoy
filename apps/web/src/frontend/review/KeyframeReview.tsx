@@ -127,6 +127,7 @@ function KeyframeShot({
         <button
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
+          disabled={episode.status !== "kf_review"}
           onClick={() => setPromptOpen(!promptOpen)}
         >
           {promptOpen ? "收起 prompt" : "改 prompt 并重生成"}
@@ -134,7 +135,7 @@ function KeyframeShot({
         <button
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
-          disabled={mutation.pending || !canRegen(shot)}
+          disabled={mutation.pending || episode.status !== "kf_review" || !canRegen(shot)}
           onClick={() => regenerate(false)}
         >
           直接重生成
@@ -151,7 +152,7 @@ function KeyframeShot({
             <button
               type="button"
               className="k-btn k-btn-primary k-btn-tiny"
-              disabled={mutation.pending || !canRegen(shot)}
+              disabled={mutation.pending || episode.status !== "kf_review" || !canRegen(shot)}
               onClick={() => regenerate(true)}
             >
               保存 prompt 并重生成
@@ -198,7 +199,7 @@ export default function KeyframeReview({
           )}
         </div>
 
-        <GuideTip section="keyframes">对照角色和地标参考图，逐镜选一张候选；不合适时可改 prompt 后重生成。</GuideTip>
+        <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；全部生成完毕后可改 prompt 并重生成。</GuideTip>
 
         {gridOpen && (
           <div className="k-card">
