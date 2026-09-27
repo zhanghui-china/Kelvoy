@@ -125,6 +125,37 @@ test("shot completion keeps a selection made on another shot during generation",
     .get(task!.task_id)?.status).toBe("done");
 });
 
+test("a failed success commit rolls back the episode result and credit settlement", async () => {
+  const started = { ...episode(), status: "keyframing" as const, shots: [
+    { no: 1, status: "generating_kf", candidates: [], kf_selected: null },
+  ] } as Episode;
+  await insertEpisode(started);
+  grantCredits(ownerId, 1, "completion-grant");
+  const queued = await enqueueTask({ episode_id: started.episode_id,
+    stage: "keyframe", shot_no: 1 });
+  expect(reserveCredits({ action_id: queued.task_id, user_id: ownerId,
+    episode_id: started.episode_id, task_id: queued.task_id, kind: "image", units: 1 }).ok).toBe(true);
+  const task = (await dequeueTask())!;
+  const generated = { ...started, status: "kf_review" as const, shots: [
+    { ...started.shots[0]!, status: "kf_ready" as const, candidates: ["kf/new.png"] },
+  ] };
+  getDb().exec(`create trigger reject_success before update on tasks
+    when new.status = 'done' begin select raise(abort, 'injected completion failure'); end`);
+  expect(() => completeTaskWithEpisode(task, 1, generated, started))
+    .toThrow("injected completion failure");
+  const during = await getEpisode(started.episode_id);
+  expect(during.ok && during.episode.shots[0]?.status).toBe("generating_kf");
+  expect(during.ok && during.row_version).toBe(1);
+  expect(getCreditBalance(ownerId).reserved).toBe(1);
+  expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
+    .get(task.task_id)?.status).toBe("processing");
+  getDb().exec("drop trigger reject_success");
+  expect(completeTaskWithEpisode(task, 1, generated, started).ok).toBe(true);
+  const saved = await getEpisode(started.episode_id);
+  expect(saved.ok && saved.episode.shots[0]?.status).toBe("kf_ready");
+  expect(getCreditBalance(ownerId).reserved).toBe(0);
+});
+
 test("an obsolete result cannot restore a shot changed by another command", async () => {
   const started = { ...episode(), status: "keyframing" as const,
     shots: [{ no: 1, status: "generating_kf", candidates: [], kf_selected: null }] } as unknown as Episode;
