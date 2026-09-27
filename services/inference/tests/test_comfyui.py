@@ -94,6 +94,23 @@ def test_reference_key_must_stay_within_projects_root(tmp_path):
         resolve_reference(tmp_path, "persona/front.txt")
 
 
+def test_video_fails_before_gpu_work_when_ffmpeg_is_missing(tmp_path, monkeypatch):
+    (tmp_path / "first.png").write_bytes(b"reference")
+    monkeypatch.setattr("inference.comfyui.shutil.which", lambda name: None)
+
+    async def run():
+        async with httpx.AsyncClient(base_url="http://comfy", transport=httpx.MockTransport(
+            lambda request: pytest.fail(f"unexpected GPU request: {request.url}")
+        )) as client:
+            with pytest.raises(ComfyUIError, match="ffmpeg is required") as error:
+                await generate(
+                    "video", "scene", ["first.png"], tmp_path, "http://comfy", client=client
+                )
+            assert error.value.status == 503
+
+    asyncio.run(run())
+
+
 def test_image_workflow_uses_role_then_landmark_and_vertical_format():
     template = json.loads((BRIDGE / "1_2_DualRef2IMG_QwenImage2_1_api.json").read_text())
 
