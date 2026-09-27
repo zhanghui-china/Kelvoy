@@ -5,6 +5,7 @@ export type EpisodeOverview = Pick<Episode,
   "episode_id" | "name" | "status" | "persona_id" | "destination_id" | "created_at" | "credits_used"
 > & {
   render: Pick<Episode["render"], "title">;
+  season: string;
   shot_count: number;
   approved_shot_count: number;
   any_shot_started: boolean;

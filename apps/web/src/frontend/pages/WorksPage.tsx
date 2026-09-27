@@ -25,6 +25,7 @@ export default function WorksPage() {
 type WorkStatus = "all" | "draft" | "active" | "done" | "failed";
 type Region = "all" | "CN" | "overseas";
 type Work = EpisodeOverview | Episode;
+const workSeason = (episode: Work) => "season" in episode ? episode.season : episode.brief?.season ?? "";
 
 export function filterWorks(episodes: Work[], personas: Persona[], destinations: Destination[], query: string, status: WorkStatus, region: Region, province: string, season: string): Work[] {
   const personaById = new Map(personas.map((p) => [p.persona_id, p]));
@@ -41,7 +42,7 @@ export function filterWorks(episodes: Work[], personas: Persona[], destinations:
     if (region === "CN" && destination?.country_code !== "CN") return false;
     if (region === "overseas" && (!destination?.country_code || destination.country_code === "CN")) return false;
     if (province && destination?.province !== province) return false;
-    if (season && !destination?.season_best.includes(season)) return false;
+    if (season && workSeason(episode) !== season) return false;
     if (!needle) return true;
     return [episodeLabel(episode), persona?.name, destination?.name, destination?.city, destination?.province]
       .some((value) => value?.toLocaleLowerCase().includes(needle));
@@ -57,7 +58,7 @@ export function WorksList({ episodes, personas, destinations = [] }: { episodes:
   const personaById = new Map(personas.map((p) => [p.persona_id, p]));
   const destinationById = new Map(destinations.map((d) => [d.destination_id, d]));
   const provinces = [...new Set(destinations.filter((d) => d.country_code === "CN" && d.province).map((d) => d.province!))].sort();
-  const seasons = [...new Set(destinations.flatMap((d) => d.season_best))].sort();
+  const seasons = [...new Set(episodes.map(workSeason).filter(Boolean))].sort();
   const filtered = filterWorks(episodes, personas, destinations, query, status, region, province, season);
 
   // "我的作品·按系列"：FR-13 说系列是按 persona_id 归组的浏览视图，不是
@@ -116,6 +117,7 @@ export function WorksList({ episodes, personas, destinations = [] }: { episodes:
                     <div className="k-works-episode-info">
                       <strong>{episodeLabel(episode)}</strong>
                       <span className="k-card-meta">{destinationById.get(episode.destination_id)?.name ?? episode.destination_id}</span>
+                      {workSeason(episode) && <span className="k-card-meta">{workSeason(episode)}</span>}
                       <span className="k-pill">{EPISODE_STATUS_LABELS[episode.status]}</span>
                       <span className="k-card-meta">{new Date(episode.created_at).toLocaleDateString("zh-CN")}</span>
                     </div>

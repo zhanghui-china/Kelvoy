@@ -22,7 +22,7 @@ test("milestones accumulate from persisted episodes without counting empty shots
   const overview = (source: Episode): EpisodeOverview => ({
     episode_id: source.episode_id, name: "测试", status: source.status,
     persona_id: "p", destination_id: "d", created_at: source.created_at,
-    credits_used: 0, render: { title: "" }, shot_count: source.shots.length,
+    credits_used: 0, render: { title: "" }, season: "", shot_count: source.shots.length,
     approved_shot_count: source.shots.filter((shot) => shot.status === "approved").length,
     any_shot_started: source.shots.some((shot) => shot.status !== "draft"),
     all_keyframes_selected: source.shots.length > 0 && source.shots.every((shot) => !!shot.kf_selected),

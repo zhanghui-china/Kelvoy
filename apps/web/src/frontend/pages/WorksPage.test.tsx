@@ -20,9 +20,9 @@ test("works lists every episode in newest first order with its own status and li
 
 test("works filters use real status and catalog metadata without guessing missing regions", () => {
   const episodes = [
-    { episode_id: "cn", name: "黄山日记", persona_id: "p1", destination_id: "huangshan", status: "script_review", created_at: "2026-02-01" },
-    { episode_id: "fr", name: "巴黎日记", persona_id: "p1", destination_id: "paris", status: "done", created_at: "2026-02-02" },
-    { episode_id: "old", name: "旧作品", persona_id: "p1", destination_id: "legacy", status: "draft", created_at: "2026-02-03" },
+    { episode_id: "cn", name: "黄山日记", persona_id: "p1", destination_id: "huangshan", status: "script_review", created_at: "2026-02-01", brief: { season: "春" } },
+    { episode_id: "fr", name: "巴黎日记", persona_id: "p1", destination_id: "paris", status: "done", created_at: "2026-02-02", brief: { season: "冬" } },
+    { episode_id: "old", name: "旧作品", persona_id: "p1", destination_id: "legacy", status: "draft", created_at: "2026-02-03", brief: { season: "" } },
   ] as Episode[];
   const personas = [{ persona_id: "p1", name: "阿晴" }] as Persona[];
   const destinations = [
@@ -35,6 +35,8 @@ test("works filters use real status and catalog metadata without guessing missin
   expect(ids("阿晴", "all", "all")).toEqual(["cn", "fr", "old"]);
   expect(ids("黄山", "active", "CN", "安徽", "春")).toEqual(["cn"]);
   expect(ids("", "done", "overseas")).toEqual(["fr"]);
+  expect(ids("", "done", "overseas", "", "秋")).toEqual([]);
+  expect(ids("", "done", "overseas", "", "冬")).toEqual(["fr"]);
   expect(ids("", "draft", "CN")).toEqual([]);
   expect(ids("", "draft", "all")).toEqual(["old"]);
 });

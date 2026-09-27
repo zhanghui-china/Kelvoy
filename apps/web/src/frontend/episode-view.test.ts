@@ -112,7 +112,7 @@ test("weekStats counts only episodes created inside the current week", () => {
     episode_id: episode.episode_id, name: episode.name, status: episode.status,
     persona_id: episode.persona_id, destination_id: episode.destination_id,
     created_at: episode.created_at, credits_used: episode.credits_used,
-    render: { title: episode.render.title }, shot_count: episode.shots.length,
+    render: { title: episode.render.title }, season: episode.brief.season, shot_count: episode.shots.length,
     approved_shot_count: episode.shots.filter((item) => item.status === "approved").length,
     any_shot_started: episode.shots.some((item) => item.status !== "draft"),
     all_keyframes_selected: episode.shots.length > 0 && episode.shots.every((item) => !!item.kf_selected),
