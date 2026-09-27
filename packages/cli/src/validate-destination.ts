@@ -65,6 +65,12 @@ export function validateDestination(input: unknown): ValidationResult {
   }
   if (!isNonEmptyString(d.name)) errors.push("name: 缺失或为空");
   if (!isNonEmptyString(d.city)) errors.push("city: 缺失或为空");
+  if ("country_code" in d && (typeof d.country_code !== "string" || !/^[A-Z]{2}$/.test(d.country_code))) {
+    errors.push("country_code: 必须是两位大写英文字母国家代码");
+  }
+  for (const field of ["province", "description"] as const) {
+    if (field in d && !isNonEmptyString(d[field])) errors.push(`${field}: 必须是非空字符串`);
+  }
   if (!isNonEmptyString(d.transport)) errors.push("transport: 缺失或为空");
   if (!isNonEmptyString(d.stay)) errors.push("stay: 缺失或为空");
 
@@ -85,5 +91,9 @@ export function validateDestination(input: unknown): ValidationResult {
   if (errors.length > 0) {
     return { valid: false, errors };
   }
-  return { valid: true, value: d as Destination };
+  return { valid: true, value: {
+    ...d,
+    ...(typeof d.province === "string" ? { province: d.province.trim() } : {}),
+    ...(typeof d.description === "string" ? { description: d.description.trim() } : {}),
+  } as Destination };
 }

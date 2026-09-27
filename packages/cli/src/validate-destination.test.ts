@@ -84,3 +84,40 @@ describe("validateDestination", () => {
     }
   });
 });
+
+
+test("accepts explicit destination metadata and trims descriptive text", () => {
+  const result = validateDestination({ ...validDestination(), country_code: "CN",
+    province: " 江苏 ", description: " 湖畔佛教文化景区 " });
+  expect(result.valid).toBe(true);
+  if (result.valid) {
+    expect(result.value).toMatchObject({ country_code: "CN", province: "江苏",
+      description: "湖畔佛教文化景区" });
+  }
+});
+
+test("legacy destinations retain absent metadata without guessing from city", () => {
+  const result = validateDestination(validDestination());
+  expect(result.valid).toBe(true);
+  if (result.valid) {
+    for (const field of ["country_code", "province", "description"]) {
+      expect(Object.hasOwn(result.value, field)).toBe(false);
+    }
+  }
+});
+
+for (const field of ["country_code", "province", "description"]) {
+  for (const value of [null, 42, [], {}, "", "   "]) {
+    test(`rejects invalid ${field}: ${JSON.stringify(value)}`, () => {
+      const result = validateDestination({ ...validDestination(), [field]: value });
+      expect(result.valid).toBe(false);
+      if (!result.valid) expect(result.errors.some((error) => error.startsWith(`${field}:`))).toBe(true);
+    });
+  }
+}
+
+for (const country_code of ["cn", "CHN", "C", "12", " CN ", "中国"]) {
+  test(`rejects country_code outside uppercase two-letter shape: ${country_code}`, () => {
+    expect(validateDestination({ ...validDestination(), country_code }).valid).toBe(false);
+  });
+}
