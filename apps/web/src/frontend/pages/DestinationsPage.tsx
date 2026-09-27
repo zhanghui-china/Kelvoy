@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { LibraryFilters } from "./LibraryFilters";
+import { filterDestinations, type LibraryType } from "./resource-library";
 import { AssetImage } from "../AssetImage";
 import { GuideTip } from "../GuideTip";
 import { Link } from "react-router-dom";
@@ -7,19 +10,22 @@ import { useApiResource } from "../hooks/useApiResource";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 
 export default function DestinationsPage() {
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<LibraryType>("all");
   const { loading, data, error } = useApiResource(listDestinations, []);
 
   if (loading) return <p className="k-empty">加载中…</p>;
   if (error) return <p className="k-error">加载失败：{error}</p>;
-  const destinations = data?.destinations ?? [];
+  const destinations = filterDestinations(data?.destinations ?? [], query, type);
 
   return (
     <div>
       <div className="k-eyebrow">官方维护 · 实景为准</div>
       <h1>目的地库</h1>
       <GuideTip section="destinations">目的地由平台维护，地标以实景参考图为准。选好地方后可在<Link to="/episodes/new">新建一期</Link>中使用。</GuideTip>
+      <LibraryFilters label="目的地" query={query} type={type} onQuery={setQuery} onType={setType} count={destinations.length} />
       {destinations.length === 0 ? (
-        <p className="k-empty">还没有目的地。</p>
+        <p className="k-empty">{query || type !== "all" ? "没有匹配的目的地，试试其他关键词或清除筛选。" : "还没有目的地。"}</p>
       ) : (
         <div className="k-dest-lib-list">
           {destinations.map((d) => (
@@ -35,6 +41,8 @@ export default function DestinationsPage() {
                   </span>
                 ))}
               </div>
+              {(d.country_code || d.province) && <p className="k-card-meta">{[d.country_code, d.province, d.city].filter(Boolean).join(" · ")}</p>}
+              {d.description && <p className="k-card-meta">{d.description}</p>}
               <Link to={`/episodes/new?destination=${encodeURIComponent(d.destination_id)}`} className="k-btn k-btn-secondary">用这个目的地新建一期 →</Link>
               {d.route.length > 0 && <div className="k-card-meta">动线：{d.route.join(" → ")}</div>}
 
