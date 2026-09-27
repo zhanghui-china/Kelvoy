@@ -180,10 +180,16 @@ flowchart LR
 }
 
 // 目的地（景区级，共享资产，官方维护）——结构示例；首批实际条目以 assets/demo/catalog.json 为准
+// country_code / province / description 均可省略；旧数据缺失时保持缺失，不从 city 猜测或自动地理编码。
+// country_code 只校验 ISO 3166-1 alpha-2 的两位大写英文字母形状，不维护国家名单；不自动纠正大小写。
+// province / description 提供时必须为去除首尾空白后非空的字符串，导入时保存去除首尾空白的值。
+// 与现有目的地文本字段一致，不另设长度上限；null / 数字 / 数组不代表省略。
+// 元数据随目的地版本保存；更新已有条目须提升 version，历史版本保留原值。
 {
   "destination_id": "d_wuxi_lingshan",
   "version": 1,
   "name": "灵山大佛", "city": "无锡", "type": "scenic_area",
+  "country_code": "CN", "province": "江苏", "description": "灵山大佛所在的文化景区",
   "season_best": ["春", "秋"],
   "landmarks": [
     { "id": "lingshan_view", "name": "灵山大佛", "refs": ["dest/lingshan/01.jpg", "dest/lingshan/02.jpg", "dest/lingshan/03.jpg"],

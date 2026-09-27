@@ -74,3 +74,18 @@ test("public image route refuses personas, unlisted files, and traversal", async
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+
+test("public catalog preserves explicit metadata and leaves legacy fields absent", async () => {
+  const enriched = { ...fixture("d_enriched"), country_code: "CN", province: "江苏", description: "景区简介" };
+  const legacy = fixture("d_legacy");
+  await upsertDestination(enriched);
+  await upsertDestination(legacy);
+  const response = await buildApp().request("/api/destinations");
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.destinations).toEqual([enriched, legacy]);
+  for (const field of ["country_code", "province", "description"]) {
+    expect(Object.hasOwn(body.destinations[1], field)).toBe(false);
+  }
+});
