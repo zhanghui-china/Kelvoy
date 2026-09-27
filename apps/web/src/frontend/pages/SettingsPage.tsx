@@ -120,13 +120,15 @@ export default function SettingsPage() {
             <Field label="默认语气">
               <input
                 value={tone}
-                onChange={(e) => setTone(e.target.value)}
+                onChange={(e) => { setTone(e.target.value); setDefaultsSaved(false); }}
+                disabled={savingDefaults}
                 placeholder="例如：松弛（留空表示不预填）"
               />
             </Field>
 
             <Field label="传统方式默认每镜候选数">
-              <select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>
+              <select value={candidates} disabled={savingDefaults}
+                onChange={(e) => { setCandidates(Number(e.target.value)); setDefaultsSaved(false); }}>
                 {CANDIDATE_OPTIONS.map((n) => (
                   <option key={n} value={n}>
                     {n}
@@ -164,7 +166,8 @@ export default function SettingsPage() {
                 type="password"
                 autoComplete="current-password"
                 value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
+                onChange={(e) => { setCurrentPassword(e.target.value); setPasswordSaved(false); }}
+                disabled={savingPassword}
               />
             </Field>
 
@@ -173,7 +176,8 @@ export default function SettingsPage() {
                 type="password"
                 autoComplete="new-password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e) => { setNewPassword(e.target.value); setPasswordSaved(false); }}
+                disabled={savingPassword}
               />
             </Field>
 
@@ -182,7 +186,8 @@ export default function SettingsPage() {
                 type="password"
                 autoComplete="new-password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => { setConfirmPassword(e.target.value); setPasswordSaved(false); }}
+                disabled={savingPassword}
               />
             </Field>
 
