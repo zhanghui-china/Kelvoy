@@ -16,6 +16,7 @@ import {
   getDestinationVersion,
   getDestinationVersionInfo,
   getEpisode,
+  getUsageSummary,
   getLatestFailedTask,
   getPersona,
   getPersonaVersion,
@@ -43,6 +44,10 @@ episodes.get("/", async (c) => {
 
 episodes.get("/overview", async (c) => {
   return c.json({ ok: true, episodes: await listEpisodeOverviews(c.get("ownerId")) });
+});
+
+episodes.get("/usage", async (c) => {
+  return c.json({ ok: true, usage: await getUsageSummary(c.get("ownerId")) });
 });
 
 episodes.post("/", async (c) => {

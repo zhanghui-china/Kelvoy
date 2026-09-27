@@ -17,6 +17,7 @@ import type {
   UserSettings,
 } from "@kelvoy/engine";
 import type { EpisodeOverview } from "../../shared/episode-overview";
+import type { UsageSummary } from "../../shared/usage";
 
 // Typed wrapper around the /api/* routes apps/web/src/server/routes/*.ts
 // actually serve. M2-7 scoped this to read-only pages (auth +
@@ -171,6 +172,10 @@ export function listEpisodes() {
 
 export function listEpisodeOverviews() {
   return apiFetch<{ episodes: EpisodeOverview[] }>("/api/episodes/overview");
+}
+
+export function getUsageSummary() {
+  return apiFetch<{ usage: UsageSummary }>("/api/episodes/usage");
 }
 
 export function getEpisode(episodeId: string) {

@@ -2,8 +2,10 @@ import {
   type Episode,
   type EpisodePatch,
   type ShotPatch,
+  type ProviderTally,
   isLegalEpisodeStatusChange,
   isLegalShotStatusChange,
+  tally,
 } from "@kelvoy/engine";
 import { getDb } from "./db";
 import { decodeEpisode } from "./episode-codec";
@@ -58,6 +60,56 @@ export async function listEpisodes(ownerId: string): Promise<Episode[]> {
     )
     .all(ownerId);
   return rows.map((row) => decodeEpisode(row.doc));
+}
+
+/** Account usage projection: only aggregate costs and table fields leave the server. */
+export async function getUsageSummary(ownerId: string): Promise<{
+  periods: { episode_id: string; destination_name: string; persona_name: string;
+    created_at: string; shot_count: number; credits_used: number; cost_usd: number }[];
+  providers: ProviderTally[];
+  totals: { episodes: number; credits_used: number; cost_usd: number };
+}> {
+  const rows = getDb().query<{
+    episode_id: string; destination_name: string | null; persona_name: string | null;
+    destination_id: string; persona_id: string; created_at: string;
+    credits_used: number | null; shots: string | null;
+  }, [string]>(`select e.episode_id,
+    json_extract(e.doc, '$.destination_id') as destination_id,
+    json_extract(e.doc, '$.persona_id') as persona_id,
+    json_extract(d.doc, '$.name') as destination_name,
+    json_extract(p.doc, '$.name') as persona_name,
+    json_extract(e.doc, '$.created_at') as created_at,
+    json_extract(e.doc, '$.credits_used') as credits_used,
+    json_extract(e.doc, '$.shots') as shots
+    from episodes e
+    left join destinations d on d.destination_id = json_extract(e.doc, '$.destination_id')
+    left join personas p on p.persona_id = json_extract(e.doc, '$.persona_id')
+    where e.owner_id = ? order by created_at desc, e.episode_id desc`).all(ownerId);
+  const providers = new Map<string, ProviderTally>();
+  let credits = 0;
+  let cost = 0;
+  const periods = rows.map((row) => {
+    const shots = JSON.parse(row.shots ?? "[]") as Episode["shots"];
+    const cost_usd = tally({ shots }).reduce((sum, item) => {
+      const key = `${item.provider}/${item.model}`;
+      const current = providers.get(key) ?? { provider: item.provider, model: item.model,
+        shots: 0, attempts: 0, costUsd: 0 };
+      current.shots += item.shots;
+      current.attempts += item.attempts;
+      current.costUsd += item.costUsd;
+      providers.set(key, current);
+      return sum + item.costUsd;
+    }, 0);
+    credits += row.credits_used ?? 0;
+    cost += cost_usd;
+    return { episode_id: row.episode_id,
+      destination_name: row.destination_name ?? row.destination_id,
+      persona_name: row.persona_name ?? row.persona_id,
+      created_at: row.created_at, shot_count: shots.length,
+      credits_used: row.credits_used ?? 0, cost_usd };
+  });
+  return { periods, providers: [...providers.values()].sort((a, b) => b.costUsd - a.costUsd),
+    totals: { episodes: periods.length, credits_used: credits, cost_usd: cost } };
 }
 
 /** Small list projection: no prompts, candidate paths, or model provenance leave the DB. */

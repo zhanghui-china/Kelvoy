@@ -69,6 +69,36 @@ test("overview list preserves review counts without sending prompts or media key
   expect((await app.request("/api/episodes/overview")).status).toBe(401);
 });
 
+test("usage aggregates owned episodes without sending prompts or media keys", async () => {
+  const { cookie, ownerId } = await login("usage-owner");
+  await upsertDestination(destinationFixture("d_test"));
+  await insertPersona(personaFixture("c_test", ownerId));
+  const model = { provider: "kling" as const, model: "kling-v1", version: "1",
+    seed: 7, prompt: "secret prompt", ref_hashes: ["private hash"],
+    attempts: 2, cost_usd: 0.25 };
+  await insertEpisode({ ...fixture("e_usage", ownerId), credits_used: 3,
+    shots: [shotFixture(1, { candidates: ["kf/private.png"], model: { image: model } })] });
+  await insertEpisode({ ...fixture("e_usage_second", ownerId), credits_used: 2,
+    shots: [shotFixture(1, { model: { video: { ...model, attempts: 1, cost_usd: 0.1 } } })] });
+  await insertEpisode({ ...fixture("e_not_owned", "someone-else"), credits_used: 100 });
+  const response = await buildApp().request("/api/episodes/usage", { headers: { cookie } });
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.usage.totals.episodes).toBe(2);
+  expect(body.usage.totals.credits_used).toBe(5);
+  expect(body.usage.totals.cost_usd).toBeCloseTo(0.35);
+  expect(body.usage.periods.find((period: { episode_id: string }) => period.episode_id === "e_usage"))
+    .toMatchObject({ episode_id: "e_usage", shot_count: 1,
+    destination_name: "灵山大佛", persona_name: "小岛", cost_usd: 0.25 });
+  expect(body.usage.providers[0]).toMatchObject({ provider: "kling", model: "kling-v1",
+    shots: 2, attempts: 3 });
+  expect(body.usage.providers[0].costUsd).toBeCloseTo(0.35);
+  expect(JSON.stringify(body)).not.toContain("secret prompt");
+  expect(JSON.stringify(body)).not.toContain("private hash");
+  expect(JSON.stringify(body)).not.toContain("kf/private.png");
+  expect((await buildApp().request("/api/episodes/usage")).status).toBe(401);
+});
+
 test("gets one episode by id with its row_version, for owner", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertEpisode(fixture("e_1", ownerId));

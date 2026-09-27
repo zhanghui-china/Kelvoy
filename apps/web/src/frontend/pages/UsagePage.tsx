@@ -1,8 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
-import { listDestinations, listEpisodes, listPersonas } from "../api/client";
+import { getUsageSummary } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
-import type { ProviderTally } from "../review/tally";
-import { tally } from "../review/tally";
 import "../review/review.css";
 import "./UsagePage.css";
 import CreditPanel from "./CreditPanel";
@@ -16,45 +14,18 @@ function formatDate(iso: string): string {
   return iso.slice(0, 10);
 }
 
-// 跨期把每期的 tally() 结果按 provider+model 再合并一遍（M2-16, #44）。
-// 这是展示聚合，不是业务规则，所以留在 frontend 里，不下沉到 engine。
-function mergeTally(perEpisodeRows: ProviderTally[][]): ProviderTally[] {
-  const merged = new Map<string, ProviderTally>();
-  for (const rows of perEpisodeRows) {
-    for (const row of rows) {
-      const key = `${row.provider}/${row.model}`;
-      const existing = merged.get(key) ?? {
-        provider: row.provider,
-        model: row.model,
-        shots: 0,
-        attempts: 0,
-        costUsd: 0,
-      };
-      existing.shots += row.shots;
-      existing.attempts += row.attempts;
-      existing.costUsd += row.costUsd;
-      merged.set(key, existing);
-    }
-  }
-  return [...merged.values()].sort((a, b) => b.costUsd - a.costUsd);
-}
-
 export default function UsagePage() {
   const navigate = useNavigate();
-  const episodesRes = useApiResource(listEpisodes, []);
-  const personasRes = useApiResource(listPersonas, []);
-  const destinationsRes = useApiResource(listDestinations, []);
+  const usageRes = useApiResource(getUsageSummary, []);
 
-  if (episodesRes.loading) return <p className="k-empty">加载中…</p>;
-  if (episodesRes.error) return <p className="k-error">加载失败：{episodesRes.error}</p>;
+  if (usageRes.loading) return <p className="k-empty">加载中…</p>;
+  if (usageRes.error) return <p className="k-error">加载失败：{usageRes.error}</p>;
 
-  const episodes = episodesRes.data?.episodes ?? [];
-  const personaById = new Map((personasRes.data?.personas ?? []).map((p) => [p.persona_id, p]));
-  const destinationById = new Map(
-    (destinationsRes.data?.destinations ?? []).map((d) => [d.destination_id, d]),
-  );
+  const usage = usageRes.data?.usage;
+  const periods = usage?.periods ?? [];
+  const providerRows = usage?.providers ?? [];
 
-  if (episodes.length === 0) {
+  if (periods.length === 0) {
     return (
       <div>
         <div className="k-eyebrow">账号级成本聚合</div>
@@ -66,21 +37,6 @@ export default function UsagePage() {
     );
   }
 
-  // 按期：一期算一次 tally()，行内附带这期的 API 费用小计；按 created_at
-  // 倒序，跟首页"我的作品"同一个排序口径。
-  const periods = episodes
-    .map((episode) => {
-      const rows = tally(episode);
-      const costUsd = rows.reduce((sum, row) => sum + row.costUsd, 0);
-      return { episode, rows, costUsd };
-    })
-    .sort((a, b) => b.episode.created_at.localeCompare(a.episode.created_at));
-
-  const providerRows = mergeTally(periods.map((p) => p.rows));
-
-  const totalCredits = episodes.reduce((sum, e) => sum + e.credits_used, 0);
-  const totalCost = periods.reduce((sum, p) => sum + p.costUsd, 0);
-
   return (
     <div>
       <div className="k-eyebrow">账号级成本聚合</div>
@@ -91,15 +47,15 @@ export default function UsagePage() {
 
       <div className="k-usage-totals">
         <div className="k-card">
-          <div className="k-usage-total-value k-mono">{totalCredits}</div>
+          <div className="k-usage-total-value k-mono">{usage?.totals.credits_used ?? 0}</div>
           <div className="k-card-meta">已用积分</div>
         </div>
         <div className="k-card">
-          <div className="k-usage-total-value k-mono">{totalCost.toFixed(4)}</div>
+          <div className="k-usage-total-value k-mono">{(usage?.totals.cost_usd ?? 0).toFixed(4)}</div>
           <div className="k-card-meta">总 API 费用 (USD)</div>
         </div>
         <div className="k-card">
-          <div className="k-usage-total-value k-mono">{episodes.length}</div>
+          <div className="k-usage-total-value k-mono">{usage?.totals.episodes ?? 0}</div>
           <div className="k-card-meta">总期数</div>
         </div>
       </div>
@@ -119,22 +75,22 @@ export default function UsagePage() {
               </tr>
             </thead>
             <tbody>
-              {periods.map(({ episode, costUsd }) => (
+              {periods.map((period) => (
                 <tr
-                  key={episode.episode_id}
+                  key={period.episode_id}
                   className="k-usage-table-row"
-                  onClick={() => navigate(`/episodes/${episode.episode_id}`)}
+                  onClick={() => navigate(`/episodes/${period.episode_id}`)}
                 >
                   <td>
-                    <Link to={`/episodes/${episode.episode_id}`} onClick={(e) => e.stopPropagation()}>
-                      {destinationById.get(episode.destination_id)?.name ?? episode.destination_id}
+                    <Link to={`/episodes/${period.episode_id}`} onClick={(e) => e.stopPropagation()}>
+                      {period.destination_name}
                     </Link>
                   </td>
-                  <td>{personaById.get(episode.persona_id)?.name ?? episode.persona_id}</td>
-                  <td>{formatDate(episode.created_at)}</td>
-                  <td className="k-mono">{episode.shots.length}</td>
-                  <td className="k-mono">{episode.credits_used}</td>
-                  <td className="k-mono">{costUsd.toFixed(4)}</td>
+                  <td>{period.persona_name}</td>
+                  <td>{formatDate(period.created_at)}</td>
+                  <td className="k-mono">{period.shot_count}</td>
+                  <td className="k-mono">{period.credits_used}</td>
+                  <td className="k-mono">{period.cost_usd.toFixed(4)}</td>
                 </tr>
               ))}
             </tbody>
