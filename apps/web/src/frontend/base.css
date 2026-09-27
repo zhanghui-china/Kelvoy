@@ -1,21 +1,36 @@
 /* 2026-09-26 工作台视觉基础；各页面复用语义色与尺寸变量。 */
 :root {
-  --color-bg: #f3f7fc;
+  --color-bg: #f8fafc;
   --color-card: #ffffff;
-  --color-panel: #f7faff;
-  --color-ink: #111827;
-  --color-ink-soft: #38455a;
-  --color-muted: #637188;
-  --color-border: #e3eaf4;
-  --color-border-strong: #ccd8e8;
-  --color-accent: #2563ff;
-  --color-accent-dark: #174ecb;
-  --color-brand: #2563ff;
+  --color-panel: #f8fafc;
+  --color-ink: #0f172a;
+  --color-ink-soft: #475569;
+  --color-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-accent: #2563eb;
+  --color-accent-dark: #1d4ed8;
+  --color-brand: #2563eb;
   --color-danger: #bb3440;
-  --color-primary: #1b2434;
-  --font-display: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-body: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --color-primary: #2563eb;
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --color-info-bg: #eff6ff;
+  --color-success: #047857;
+  --color-success-bg: #ecfdf5;
+  --color-warning: #92400e;
+  --color-warning-bg: #fffbeb;
+  --color-danger-bg: #fef2f2;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 4%);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 6%);
   --radius-panel: 16px;
   --radius-card: 12px;
   --radius-control: 8px;
@@ -60,7 +75,7 @@ a:hover {
   background: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-  padding: 1.25rem 1.5rem;
+  padding: var(--space-5) var(--space-6);
 }
 
 .k-card-list {
@@ -280,9 +295,23 @@ button, input, select, textarea { font: inherit; }
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 h1 { font-size: clamp(1.7rem, 2.4vw, 2.15rem); letter-spacing: -0.035em; }
 h2 { letter-spacing: -0.025em; }
-.k-card { box-shadow: 0 8px 30px rgba(30, 68, 120, 0.035); }
-.k-btn-primary { background: var(--color-primary); }
-.k-btn-primary:hover:not(:disabled) { background: #303f57; color: #fff; }
+.k-card { box-shadow: var(--shadow-sm); }
+
 .k-field input, .k-field select { height: 44px; }
 .k-pill { background: #edf3fb; }
 .k-empty { padding: 1rem 0; }
+
+.k-btn-primary:hover { color: #fff; }
+.k-btn-ghost { background: transparent; color: var(--color-muted); }
+.k-btn-ghost:hover:not(:disabled) { background: var(--color-info-bg); color: var(--color-accent); }
+.k-btn-secondary { background: var(--color-card); }
+.k-status-info { color: var(--color-accent); background: var(--color-info-bg); }
+.k-status-success { color: var(--color-success); background: var(--color-success-bg); }
+.k-status-warning { color: var(--color-warning); background: var(--color-warning-bg); }
+.k-status-danger { color: var(--color-danger); background: var(--color-danger-bg); }
+.k-status-neutral { color: var(--color-muted); background: var(--color-panel); }
+.k-page-heading { margin-bottom: var(--space-4); }
+.k-page-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.k-error-state { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-card); }
+.k-error-state .k-error { margin: 0 0 var(--space-3); }
+.k-field :is(input, select, textarea):focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }

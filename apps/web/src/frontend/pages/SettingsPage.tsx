@@ -8,6 +8,7 @@ import { changePassword, getMySettings, updateMySettings } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
 import { GuideTip } from "../GuideTip";
 import "./SettingsPage.css";
+import { Button, Field } from "../ui";
 
 /*
  * M2-15（#43）设置页：只有两块——出片默认值、账号与安全。设计稿上的成员
@@ -115,17 +116,15 @@ export default function SettingsPage() {
           <GuideTip section="settings">默认值仅影响之后新建的作品。候选数仅用于传统关键帧方式；人物与场景直出视频不会生成候选图。提交时请看预估积分。</GuideTip>
 
           <form className="k-settings-form" onSubmit={handleSaveDefaults}>
-            <label className="k-field">
-              默认语气
+            <Field label="默认语气">
               <input
                 value={tone}
                 onChange={(e) => setTone(e.target.value)}
                 placeholder="例如：松弛（留空表示不预填）"
               />
-            </label>
+            </Field>
 
-            <label className="k-field">
-              传统方式默认每镜候选数
+            <Field label="传统方式默认每镜候选数">
               <select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>
                 {CANDIDATE_OPTIONS.map((n) => (
                   <option key={n} value={n}>
@@ -133,7 +132,7 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
 
             {defaultsErrors && (
               <ul className="k-error" role="alert">
@@ -144,9 +143,9 @@ export default function SettingsPage() {
             )}
 
             <div className="k-settings-actions">
-              <button type="submit" className="k-btn k-btn-primary" disabled={savingDefaults}>
+              <Button type="submit" disabled={savingDefaults}>
                 {savingDefaults ? "保存中…" : "保存默认值"}
-              </button>
+              </Button>
               {defaultsSaved && <span className="k-card-meta">已保存</span>}
             </div>
           </form>
@@ -159,35 +158,32 @@ export default function SettingsPage() {
           </p>
 
           <form className="k-settings-form" onSubmit={handleChangePassword}>
-            <label className="k-field">
-              当前密码
+            <Field label="当前密码">
               <input
                 type="password"
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
               />
-            </label>
+            </Field>
 
-            <label className="k-field">
-              新密码
+            <Field label="新密码">
               <input
                 type="password"
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
-            </label>
+            </Field>
 
-            <label className="k-field">
-              确认新密码
+            <Field label="确认新密码">
               <input
                 type="password"
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
-            </label>
+            </Field>
 
             {passwordErrors && (
               <ul className="k-error" role="alert">
@@ -198,9 +194,9 @@ export default function SettingsPage() {
             )}
 
             <div className="k-settings-actions">
-              <button type="submit" className="k-btn k-btn-primary" disabled={savingPassword}>
+              <Button type="submit" disabled={savingPassword}>
                 {savingPassword ? "修改中…" : "修改密码"}
-              </button>
+              </Button>
               {passwordSaved && <span className="k-card-meta">密码已更新</span>}
             </div>
           </form>
