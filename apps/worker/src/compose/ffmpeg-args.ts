@@ -19,6 +19,9 @@ export interface ComposeInputPaths {
   output: string;
   /** CJK 字体文件；plan 需要 drawtext（标题或 AI 标识）时必须有。 */
   font: string | null;
+  /** Pre-rendered ASS overlay when this ffmpeg build lacks drawtext. */
+  overlay_ass?: string | null;
+  overlay_images?: { path: string; start_s: number; end_s: number }[];
   /** ffprobe 量出来的片头/片尾时长，没有片头片尾时为 0。 */
   intro_duration_s: number;
   outro_duration_s: number;
@@ -88,6 +91,20 @@ function aiLabelDrawtext(plan: ComposePlan, font: string): string {
   ].join(":");
 }
 
+function captionDrawtext(plan: ComposePlan, caption: string, font: string): string {
+  return [
+    `drawtext=fontfile=${escapeFilterValue(font)}`,
+    `text=${escapeFilterValue(caption)}`,
+    "expansion=none",
+    `fontsize=${Math.round(plan.res.w / 25)}`,
+    "fontcolor=white",
+    "borderw=3",
+    "bordercolor=black@0.75",
+    "x=(w-text_w)/2",
+    `y=h-text_h-${Math.round(plan.res.h * 0.1)}`,
+  ].join(":");
+}
+
 export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): string[] {
   if (plan.cuts.length === 0) {
     throw new Error("没有镜头可以合成");
@@ -95,8 +112,9 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
   if (plan.cuts.length !== paths.clips.length) {
     throw new Error(`片段路径数量（${paths.clips.length}）与切割表（${plan.cuts.length}）对不上`);
   }
-  const needsText = plan.title !== "" || plan.ai_label;
-  if (needsText && !paths.font) {
+  const needsText = plan.title !== "" || plan.ai_label ||
+    (plan.subtitles_enabled === true && plan.cuts.some((cut) => Boolean(cut.caption)));
+  if (needsText && !paths.font && !paths.overlay_ass && !paths.overlay_images?.length) {
     throw new Error(
       "合成需要 drawtext 渲染中文（标题 / AI 标识），请把环境变量 KELVOY_FONT_FILE 指向一个 CJK 字体文件",
     );
@@ -118,9 +136,24 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
   // 把品牌色带偏（PRD FR-07 说的是"账号级统一 LUT"，指的是生成内容）。
   const lutChain = paths.lut !== null ? `,lut3d=file=${escapeFilterValue(paths.lut)}` : "";
   plan.cuts.forEach((cut, i) => {
-    // -ss/-t 放在 -i 前面：让 ffmpeg 只解码这一段，避免整片解码。
-    args.push("-ss", String(cut.trim_start_s), "-t", String(cut.duration_s), "-i", paths.clips[i]!);
-    filters.push(`[${inputIndex}:v]${normalizeChain(plan)}${lutChain}[vcut${i}]`);
+    let chain = normalizeChain(plan);
+    if (cut.trim_start_frame !== undefined && cut.frame_count !== undefined) {
+      // Normalize to the output frame rate first, then take exactly one
+      // integer-frame window. Input-side -ss/-t can yield 29/31 frames.
+      args.push("-i", paths.clips[i]!);
+      chain += `,trim=start_frame=${cut.trim_start_frame}:end_frame=${cut.trim_start_frame + cut.frame_count},setpts=PTS-STARTPTS`;
+    } else {
+      // Legacy beat-aligned projects retain their original trim policy.
+      args.push("-ss", String(cut.trim_start_s), "-t", String(cut.duration_s), "-i", paths.clips[i]!);
+    }
+    chain += lutChain;
+    if (plan.subtitles_enabled && cut.caption && !paths.overlay_ass && !paths.overlay_images?.length)
+      chain += `,${captionDrawtext(plan, cut.caption, paths.font!)}`;
+    if (plan.transitions_enabled && cut.frame_count !== undefined) {
+      if (i > 0) chain += ",fade=t=in:s=0:n=2";
+      if (i < plan.cuts.length - 1) chain += `,fade=t=out:s=${cut.frame_count - 2}:n=2`;
+    }
+    filters.push(`[${inputIndex}:v]${chain}[vcut${i}]`);
     concatLabels.push(`[vcut${i}]`);
     inputIndex += 1;
   });
@@ -140,18 +173,33 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
     inputIndex += 1;
   }
 
+  const imageInputs = (paths.overlay_images ?? []).map((event) => {
+    const index = inputIndex++;
+    args.push("-loop", "1", "-framerate", String(plan.fps), "-i", event.path);
+    return { ...event, index };
+  });
+
   filters.push(`${concatLabels.join("")}concat=n=${concatLabels.length}:v=1:a=0[vcat]`);
 
   // 标题和 AI 标识加在拼接**之后**：标识要覆盖全片（片头片尾也算 AI 生成内容）。
   let videoLabel = "[vcat]";
-  if (plan.title !== "") {
+  if (paths.overlay_ass) {
+    filters.push(`${videoLabel}ass=filename=${escapeFilterValue(paths.overlay_ass)}[vtext]`);
+    videoLabel = "[vtext]";
+  }
+  if (!paths.overlay_ass && imageInputs.length === 0 && plan.title !== "") {
     filters.push(`${videoLabel}${titleDrawtext(plan, paths.font!)}[vtitle]`);
     videoLabel = "[vtitle]";
   }
-  if (plan.ai_label) {
+  if (!paths.overlay_ass && imageInputs.length === 0 && plan.ai_label) {
     filters.push(`${videoLabel}${aiLabelDrawtext(plan, paths.font!)}[vlabel]`);
     videoLabel = "[vlabel]";
   }
+  imageInputs.forEach((event, index) => {
+    const next = `[vimage${index}]`;
+    filters.push(`${videoLabel}[${event.index}:v]overlay=0:0:shortest=1:format=auto:enable=gte(t\\,${event.start_s})*lt(t\\,${event.end_s})${next}`);
+    videoLabel = next;
+  });
 
   const totalDurationS = roundMs(
     paths.intro_duration_s +

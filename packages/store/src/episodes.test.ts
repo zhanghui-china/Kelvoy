@@ -14,7 +14,7 @@ import {
 
 function fixtureEpisode(id: string, ownerId = "u_test"): Episode {
   return {
-    episode_id: id,
+    name: "测试期", episode_id: id,
     owner_id: ownerId,
     persona_id: "c_test",
     persona_version: 1,
@@ -23,7 +23,7 @@ function fixtureEpisode(id: string, ownerId = "u_test"): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status: "draft",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-23T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
@@ -31,6 +31,7 @@ function fixtureEpisode(id: string, ownerId = "u_test"): Episode {
     brief: {
       season: "秋",
       aspect: "9:16",
+      requirements: "",
       duration_s: 30,
       tone: "松弛",
       outfit_override: null,
@@ -81,6 +82,22 @@ afterEach(() => {
 });
 
 describe("getEpisode / insertEpisode", () => {
+  test("legacy JSON resolves portrait aspect, two candidates and empty requirements", async () => {
+    const legacy = fixtureEpisode("e_legacy");
+    delete (legacy as Partial<Episode>).name;
+    delete (legacy as Partial<Episode>).candidate_count;
+    delete (legacy.brief as Partial<Episode["brief"]>).requirements;
+    delete (legacy.brief as Partial<Episode["brief"]>).aspect;
+    await insertEpisode(legacy);
+    const got = await getEpisode("e_legacy");
+    expect(got.ok).toBe(true);
+    if (got.ok) {
+      expect(got.episode.candidate_count).toBe(2);
+      expect(got.episode.name).toBe("d_test");
+      expect(got.episode.brief.requirements).toBe("");
+      expect(got.episode.brief.aspect).toBe("9:16");
+    }
+  });
   test("returns not_found for a missing episode", async () => {
     const result = await getEpisode("e_missing");
     expect(result.ok).toBe(false);

@@ -1,0 +1,221 @@
+{
+  "personas": [
+    {
+      "persona_id": "c_official_aching",
+      "owner_id": null,
+      "version": 1,
+      "name": "阿澄",
+      "desc": "虚构的年轻旅行记录者，深色中长发，亲切自然。",
+      "locked": [
+        "脸型",
+        "发型",
+        "体态"
+      ],
+      "default_outfit": "浅色休闲外套与舒适步行鞋",
+      "refs": [
+        "persona/c_official_aching/front.jpg",
+        "persona/c_official_aching/side.jpg",
+        "persona/c_official_aching/full.jpg"
+      ],
+      "style": {
+        "lut": "warm_natural",
+        "title_style": "clean_center"
+      }
+    },
+    {
+      "persona_id": "c_official_alan",
+      "owner_id": null,
+      "version": 1,
+      "name": "阿岚",
+      "desc": "虚构的年轻旅行记录者，短发，沉稳开朗。",
+      "locked": [
+        "脸型",
+        "发型",
+        "体态"
+      ],
+      "default_outfit": "素色衬衫与舒适步行鞋",
+      "refs": [
+        "persona/c_official_alan/front.jpg",
+        "persona/c_official_alan/side.jpg",
+        "persona/c_official_alan/full.jpg"
+      ],
+      "style": {
+        "lut": "warm_natural",
+        "title_style": "clean_center"
+      }
+    }
+  ],
+  "destinations": [
+    {
+      "destination_id": "d_official_nanchang",
+      "version": 1,
+      "name": "无锡南长街",
+      "city": "无锡",
+      "type": "city_night",
+      "season_best": [
+        "春",
+        "秋"
+      ],
+      "landmarks": [
+        {
+          "id": "nanchang_view",
+          "name": "南长街街区",
+          "refs": [
+            "dest/nanchang/01.jpg",
+            "dest/nanchang/02.jpg",
+            "dest/nanchang/03.jpg"
+          ],
+          "best_time": "以实拍光照与开放时间为准",
+          "must_keep": [
+            "历史街区的真实街景"
+          ]
+        }
+      ],
+      "route": [
+        "南长街步行游览"
+      ],
+      "food": [
+        "无锡小笼",
+        "酱排骨"
+      ],
+      "transport": "出行前以景区与当地交通公告为准",
+      "stay": "选择周边正规住宿，出行前核实营业情况"
+    },
+    {
+      "destination_id": "d_official_nianhua",
+      "version": 1,
+      "name": "无锡拈花湾",
+      "city": "无锡",
+      "type": "theme_town",
+      "season_best": [
+        "春",
+        "秋"
+      ],
+      "landmarks": [
+        {
+          "id": "nianhua_view",
+          "name": "拈花湾小镇",
+          "refs": [
+            "dest/nianhua/01.jpg",
+            "dest/nianhua/02.jpg",
+            "dest/nianhua/03.jpg"
+          ],
+          "best_time": "以实拍光照与开放时间为准",
+          "must_keep": [
+            "景区内真实小镇建筑与街景"
+          ]
+        }
+      ],
+      "route": [
+        "小镇街巷步行游览"
+      ],
+      "food": [
+        "无锡小笼"
+      ],
+      "transport": "出行前以景区与当地交通公告为准",
+      "stay": "选择周边正规住宿，出行前核实营业情况"
+    },
+    {
+      "destination_id": "d_official_lingshan",
+      "version": 1,
+      "name": "无锡灵山大佛",
+      "city": "无锡",
+      "type": "scenic_area",
+      "season_best": [
+        "春",
+        "秋"
+      ],
+      "landmarks": [
+        {
+          "id": "lingshan_view",
+          "name": "灵山大佛",
+          "refs": [
+            "dest/lingshan/01.jpg",
+            "dest/lingshan/02.jpg",
+            "dest/lingshan/03.jpg"
+          ],
+          "best_time": "以实拍光照与开放时间为准",
+          "must_keep": [
+            "佛像外形与实景比例"
+          ]
+        }
+      ],
+      "route": [
+        "景区内步行游览"
+      ],
+      "food": [
+        "无锡小笼"
+      ],
+      "transport": "出行前以景区与当地交通公告为准",
+      "stay": "选择周边正规住宿，出行前核实营业情况"
+    },
+    {
+      "destination_id": "d_official_mount_tai",
+      "version": 1,
+      "name": "泰山",
+      "city": "泰安",
+      "type": "mountain_summit",
+      "season_best": [
+        "春",
+        "秋"
+      ],
+      "landmarks": [
+        {
+          "id": "mount-tai_view",
+          "name": "泰山山景",
+          "refs": [
+            "dest/mount-tai/01.jpg",
+            "dest/mount-tai/02.jpg",
+            "dest/mount-tai/03.jpg"
+          ],
+          "best_time": "以实拍光照与开放时间为准",
+          "must_keep": [
+            "真实山体与登山环境"
+          ]
+        }
+      ],
+      "route": [
+        "按开放登山线路游览"
+      ],
+      "food": [
+        "泰安煎饼"
+      ],
+      "transport": "出行前以景区与当地交通公告为准",
+      "stay": "选择周边正规住宿，出行前核实营业情况"
+    },
+    {
+      "destination_id": "d_official_huangshan",
+      "version": 1,
+      "name": "黄山",
+      "city": "黄山",
+      "type": "mountain_summit",
+      "season_best": [
+        "春",
+        "秋"
+      ],
+      "landmarks": [
+        {
+          "id": "huangshan_view",
+          "name": "黄山山景",
+          "refs": [
+            "dest/huangshan/01.jpg",
+            "dest/huangshan/02.jpg",
+            "dest/huangshan/03.jpg"
+          ],
+          "best_time": "以实拍光照与开放时间为准",
+          "must_keep": [
+            "真实花岗岩山峰与山景"
+          ]
+        }
+      ],
+      "route": [
+        "按开放游览线路游览"
+      ],
+      "food": [
+        "黄山烧饼"
+      ],
+      "transport": "出行前以景区与当地交通公告为准",
+      "stay": "选择周边正规住宿，出行前核实营业情况"
+    }
+  ]
+}

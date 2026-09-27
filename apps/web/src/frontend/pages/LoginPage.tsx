@@ -2,6 +2,8 @@ import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../api/client";
 import { LogoMark } from "../icons";
+import { clearDraft, readDraft } from "./episode-draft";
+import "./LoginPage.css";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -20,20 +22,17 @@ export default function LoginPage() {
       setError(result.error === "invalid_credentials" ? "用户名或密码不对" : (result.error ?? "登录失败"));
       return;
     }
-    // 仅用于侧栏展示当前账号，不是鉴权凭据——鉴权靠 httpOnly session cookie。
-    try {
-      localStorage.setItem("kelvoy_username", result.user.username);
-    } catch {
-      // 隐私模式等场景下 localStorage 可能不可用，不影响登录本身。
-    }
+    if (!readDraft(result.user.user_id)) clearDraft();
     navigate("/episodes");
   }
 
   return (
     <div className="k-auth-shell">
+      <div className="k-auth-visual"><div className="k-auth-visual-inner"><LogoMark size={42} /><span>Kelvoy · 可旅</span><h2>每一段旅程，<br />都值得被讲述。</h2><p>用一致的虚拟角色和真实目的地，创作有记忆点的旅行内容。</p></div></div>
       <div className="k-auth-card">
         <LogoMark size={36} />
         <h1>登录 Kelvoy</h1>
+        <p className="k-card-meta">登录后选角色与目的地，审核脚本和视频片段即可出片。</p>
         <form onSubmit={handleSubmit}>
           <label className="k-field">
             用户名

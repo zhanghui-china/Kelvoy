@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "services/inference/**"
+      - "comfyui-bridge/*_api.json"
+      - "scripts/**"
       - ".github/workflows/inference-ci.yml"
 
 jobs:
@@ -14,7 +16,9 @@ jobs:
         working-directory: services/inference
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
+      - run: uv run python -c 'from PIL import Image'
       - run: uv run ruff check .
       - run: uv run pytest tests/ -q

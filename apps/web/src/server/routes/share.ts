@@ -9,7 +9,7 @@ const share = new Hono();
 
 share.get("/:slug", async (c) => {
   const episode = await getEpisodeBySlug(c.req.param("slug"));
-  if (!episode || !episode.share.enabled) {
+  if (!episode || !episode.share.enabled || episode.status !== "done") {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 
@@ -22,6 +22,7 @@ share.get("/:slug", async (c) => {
       shots: episode.shots,
       music: episode.music,
       render: episode.render,
+      final: episode.final ?? null,
     },
   });
 });
@@ -30,11 +31,12 @@ share.get("/:slug", async (c) => {
 // 前端/这里都不 import engine 的运行时代码，两处手抄同一个字符串。
 share.get("/:slug/final.mp4", async (c) => {
   const episode = await getEpisodeBySlug(c.req.param("slug"));
-  if (!episode || !episode.share.enabled) {
+  if (!episode || !episode.share.enabled || episode.status !== "done") {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 
-  const filePath = resolveArtifactPath(episode.episode_id, `final/${episode.episode_id}.mp4`);
+  const filePath = resolveArtifactPath(episode.episode_id,
+    episode.final?.key ?? `final/${episode.episode_id}.mp4`);
   if (!filePath) return c.json({ ok: false, error: "invalid_path" }, 400);
 
   const file = Bun.file(filePath);

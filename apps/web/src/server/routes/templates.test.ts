@@ -1,4 +1,4 @@
-import { close, createSession, createUser, open, upsertTemplate } from "@kelvoy/store";
+import { close, createSession, createUser, getTemplate, open, upsertTemplate } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Template } from "@kelvoy/engine";
 import { Hono } from "hono";
@@ -93,6 +93,28 @@ test("POST / creates a private template owned by the caller", async () => {
   const listRes = await app.request("/api/templates", { headers: { cookie } });
   const listBody = (await listRes.json()) as { templates: Template[] };
   expect(listBody.templates.map((t) => t.template_id)).toContain(body.template.template_id);
+});
+
+test("POST / rejects client identity fields without changing an official template", async () => {
+  const { cookie } = await login("template-spoof");
+  await upsertTemplate(fixture("t_official", null));
+  const response = await buildApp().request("/api/templates", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ ...validCreateBody(), name: "overwritten", template_id: "t_official", owner_id: null }),
+  });
+  expect(response.status).toBe(400);
+  expect((await getTemplate("t_official"))?.name).toBe("模板 t_official");
+});
+
+test("POST / rejects undeclared fields", async () => {
+  const { cookie } = await login("template-extra");
+  const response = await buildApp().request("/api/templates", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ ...validCreateBody(), status: "official" }),
+  });
+  expect(response.status).toBe(400);
 });
 
 test("POST / rejects an invalid body", async () => {

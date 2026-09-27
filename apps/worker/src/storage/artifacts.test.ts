@@ -1,32 +1,72 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { artifactPath, saveArtifact } from "./artifacts";
+import { artifactPath, saveArtifact, sharedAssetPath } from "./artifacts";
 
-let tmpRoot: string;
-let sourceFile: string;
-
-beforeEach(async () => {
-  tmpRoot = await mkdtemp(join(tmpdir(), "kelvoy-artifacts-"));
-  process.env.KELVOY_PROJECTS_ROOT = join(tmpRoot, "projects");
-  sourceFile = join(tmpRoot, "source.png");
-  await writeFile(sourceFile, "fake-image-bytes");
+test("episode artifact paths reject traversal in ids and keys", () => {
+  expect(() => artifactPath("../other", "clip/a.mp4")).toThrow();
+  expect(() => artifactPath("e_safe", "../../secret.mp4")).toThrow();
+  expect(() => artifactPath("e_safe", "/etc/passwd")).toThrow();
 });
 
-afterEach(async () => {
-  delete process.env.KELVOY_PROJECTS_ROOT;
-  await rm(tmpRoot, { recursive: true, force: true });
+test("artifact publication refuses an existing directory symlink outside root", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "kelvoy-artifact-"));
+  const prior = process.env.KELVOY_PROJECTS_ROOT;
+  try {
+    mkdirSync(join(temp, "projects", "e_safe"), { recursive: true });
+    mkdirSync(join(temp, "outside"));
+    symlinkSync(join(temp, "outside"), join(temp, "projects", "e_safe", "clip"));
+    writeFileSync(join(temp, "source.mp4"), "video");
+    process.env.KELVOY_PROJECTS_ROOT = join(temp, "projects");
+    await expect(saveArtifact("e_safe", "clip/a.mp4", join(temp, "source.mp4"))).rejects.toThrow();
+  } finally {
+    if (prior === undefined) delete process.env.KELVOY_PROJECTS_ROOT;
+    else process.env.KELVOY_PROJECTS_ROOT = prior;
+    rmSync(temp, { recursive: true, force: true });
+  }
 });
 
-test("saveArtifact copies the file under <root>/<episode_id>/<key>", async () => {
-  const dest = await saveArtifact("e_1", "kf/07_a.png", sourceFile);
-  expect(dest).toBe(join(tmpRoot, "projects", "e_1", "kf", "07_a.png"));
-
-  const content = await Bun.file(dest).text();
-  expect(content).toBe("fake-image-bytes");
+test("publishing an existing artifact key never overwrites its bytes", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "kelvoy-immutable-artifact-"));
+  const prior = process.env.KELVOY_PROJECTS_ROOT;
+  try {
+    process.env.KELVOY_PROJECTS_ROOT = join(temp, "projects");
+    writeFileSync(join(temp, "first.png"), "first");
+    writeFileSync(join(temp, "second.png"), "second");
+    const path = await saveArtifact("e_1", "kf/a.png", join(temp, "first.png"));
+    await expect(saveArtifact("e_1", "kf/a.png", join(temp, "second.png"))).rejects.toThrow();
+    expect(await Bun.file(path).text()).toBe("first");
+  } finally {
+    if (prior === undefined) delete process.env.KELVOY_PROJECTS_ROOT;
+    else process.env.KELVOY_PROJECTS_ROOT = prior;
+    rmSync(temp, { recursive: true, force: true });
+  }
 });
 
-test("artifactPath resolves without touching disk", () => {
-  expect(artifactPath("e_1", "clip/07.mp4")).toBe(join(tmpRoot, "projects", "e_1", "clip", "07.mp4"));
+test("shared asset keys cannot escape projects root", () => {
+  expect(() => sharedAssetPath("../../etc/passwd")).toThrow();
+  expect(() => sharedAssetPath("/etc/passwd")).toThrow();
+  expect(() => sharedAssetPath("music/../secrets.txt")).toThrow();
+});
+
+test("shared asset key cannot follow a symlink outside projects root", () => {
+  const temp = mkdtempSync(join(tmpdir(), "kelvoy-assets-"));
+  const prior = process.env.KELVOY_PROJECTS_ROOT;
+  try {
+    mkdirSync(join(temp, "projects"));
+    writeFileSync(join(temp, "secret.mp3"), "private");
+    symlinkSync(temp, join(temp, "projects", "music"));
+    process.env.KELVOY_PROJECTS_ROOT = join(temp, "projects");
+    expect(() => sharedAssetPath("music/secret.mp3")).toThrow("escapes projects root");
+  } finally {
+    if (prior === undefined) delete process.env.KELVOY_PROJECTS_ROOT;
+    else process.env.KELVOY_PROJECTS_ROOT = prior;
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("legacy official LUT name resolves to the packaged shared file", () => {
+  expect(sharedAssetPath("warm_natural").endsWith("projects/lut/warm_film.cube")).toBe(true);
+  expect(sharedAssetPath("music/city_walk.mp3").endsWith("projects/music/city_walk.mp3")).toBe(true);
 });

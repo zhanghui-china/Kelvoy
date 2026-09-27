@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ApiResult } from "../api/client";
+import { singleFlight } from "./singleFlight";
 
 interface State<T> {
   loading: boolean;
@@ -52,6 +53,7 @@ const POLL_INTERVAL_MS = 3000;
 export function usePolledApiResource<T>(
   fetcher: () => Promise<ApiResult<T>>,
   deps: unknown[],
+  shouldPoll: (data: T) => boolean = () => true,
 ): State<T> & { refresh: () => void } {
   const [state, setState] = useState<State<T>>({ loading: true, data: null, error: null });
   const navigate = useNavigate();
@@ -61,9 +63,8 @@ export function usePolledApiResource<T>(
 
   useEffect(() => {
     let cancelled = false;
-
-    async function tick() {
-      const result = await fetcherRef.current();
+    let active = true;
+    const poll = singleFlight(() => fetcherRef.current(), (result) => {
       if (cancelled) return;
       if (!result.ok) {
         if (result.error === "unauthorized") {
@@ -73,18 +74,24 @@ export function usePolledApiResource<T>(
         setState((prev) => ({ loading: false, data: prev.data, error: result.error ?? "unknown_error" }));
         return;
       }
+      active = shouldPoll(result);
       setState({ loading: false, data: result, error: null });
-    }
+    });
+
+    const pollWhenVisible = () => {
+      if (!document.hidden && active) poll.trigger();
+    };
 
     setState({ loading: true, data: null, error: null });
-    tickRef.current = () => {
-      void tick();
-    };
-    tick();
-    const id = setInterval(tick, POLL_INTERVAL_MS);
+    tickRef.current = poll.trigger;
+    poll.trigger();
+    const id = setInterval(pollWhenVisible, POLL_INTERVAL_MS);
+    document.addEventListener("visibilitychange", pollWhenVisible);
     return () => {
       cancelled = true;
+      poll.stop();
       clearInterval(id);
+      document.removeEventListener("visibilitychange", pollWhenVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);

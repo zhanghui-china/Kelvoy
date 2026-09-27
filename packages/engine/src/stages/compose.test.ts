@@ -43,7 +43,7 @@ function personaFixture(): Persona {
 
 function episodeFixture(overrides: Partial<Episode> = {}): Episode {
   return {
-    episode_id: "e_1",
+    name: "测试期", episode_id: "e_1",
     owner_id: "u_1",
     persona_id: "c_1",
     persona_version: 3,
@@ -52,12 +52,12 @@ function episodeFixture(overrides: Partial<Episode> = {}): Episode {
     series_id: "s_1",
     template_id: "t_1",
     status: "composing",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-24T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
     share: { enabled: false, slug: "" },
-    brief: { season: "秋", aspect: "9:16", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
+    brief: { season: "秋", aspect: "9:16", requirements: "", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
     grid_refs: [],
     scenes: [],
     shots: [shotFixture(1), shotFixture(2)],
@@ -81,19 +81,31 @@ function fakeComposeProvider(): ComposeProvider & { calls: ComposePlan[] } {
     calls,
     async compose({ plan }) {
       calls.push(plan);
-      return { output_key: plan.output_key };
+      return { output_key: plan.output_key,
+        probe: { duration_s: 2, width: plan.res.w, height: plan.res.h,
+          fps: plan.fps, size_bytes: 2048 } };
     },
   };
 }
 
-test("finalOutputKey is a derived convention, not a schema field", () => {
-  expect(finalOutputKey("e_42")).toBe("final/e_42.mp4");
+test("finalOutputKey includes a delivery version", () => {
+  expect(finalOutputKey("e_42")).toBe("final/e_42_v1.mp4");
+  expect(finalOutputKey("e_42", 2)).toBe("final/e_42_v2.mp4");
+});
+
+test("separate execution leases use separate files for the same delivery version", async () => {
+  const old = await buildComposePlan(episodeFixture(),
+    { persona: personaFixture(), execution_id: "lease_old" });
+  const current = await buildComposePlan(episodeFixture(),
+    { persona: personaFixture(), execution_id: "lease_new" });
+  expect(old.output_key).toBe("final/e_1_v1_lease_old.mp4");
+  expect(current.output_key).toBe("final/e_1_v1_lease_new.mp4");
 });
 
 test("buildComposePlan compiles an episode into a backend-agnostic plan", async () => {
   const plan = await buildComposePlan(episodeFixture(), { persona: personaFixture() });
 
-  expect(plan.output_key).toBe("final/e_1.mp4");
+  expect(plan.output_key).toBe("final/e_1_v1.mp4");
   expect(plan.res).toEqual({ w: 1080, h: 1920 });
   expect(plan.fps).toBe(30);
   expect(plan.lut_key).toBe("lut/warm_film.cube");
@@ -141,6 +153,15 @@ test("buildComposePlan keeps a track the user already picked instead of re-selec
   expect(plan.cuts[0]?.duration_s).toBe(1);
 });
 
+test("new fixed-cut projects keep 30 frames per shot when music changes", async () => {
+  const episode = episodeFixture({ cut_policy: "fixed_1s", shots: [shotFixture(1, { trim_start_s: 0.06 }), shotFixture(2)] });
+  const slow = await buildComposePlan(episode, { persona: personaFixture() });
+  const fast = await buildComposePlan({ ...episode, music: { file: "music/fast.mp3", bpm: 160, license: "自有" } }, { persona: personaFixture() });
+  expect(slow.cuts).toEqual(fast.cuts);
+  expect(slow.cuts.map((cut) => cut.frame_count)).toEqual([30, 30]);
+  expect(totalCutDurationS(slow.cuts)).toBe(2);
+});
+
 test("buildComposePlan refuses an episode with a shot that isn't approved", async () => {
   const episode = episodeFixture({ shots: [shotFixture(1), shotFixture(2, { status: "clip_ready" })] });
   await expect(buildComposePlan(episode, { persona: personaFixture() })).rejects.toThrow("第 2 镜未 approved");
@@ -155,12 +176,26 @@ test("runCompose hands the plan to the injected provider and advances composing 
   const updated = await runCompose(episodeFixture(), undefined, { persona: personaFixture(), compose: provider });
 
   expect(provider.calls).toHaveLength(1);
-  expect(provider.calls[0]?.output_key).toBe("final/e_1.mp4");
+  expect(provider.calls[0]?.output_key).toBe("final/e_1_v1.mp4");
   expect(updated.status).toBe("done");
+  expect(updated.final).toMatchObject({ version: 1, key: "final/e_1_v1.mp4",
+    duration_s: 2, width: 1080, height: 1920, fps: 30, size_bytes: 2048 });
   // 选中的曲子回写进期记录（license 留痕、bpm 供重新合成复用同一套切点）。
-  expect(updated.music).toEqual({ file: "music/calm_morning.mp3", bpm: 84, license: "CC0-1.0" });
+  expect(updated.music).toEqual({ file: "music/calm_morning.mp3", bpm: 84, license: "Kelvoy original" });
   // 重新合成不动任何镜（PRD §4）。
   expect(updated.shots).toEqual(episodeFixture().shots);
+});
+
+test("recompose writes a new version and leaves the previous artifact reference intact until success", async () => {
+  const previous = { version: 1, key: "final/e_1_v1.mp4", duration_s: 2,
+    width: 1080, height: 1920, fps: 30, size_bytes: 1000,
+    completed_at: "2026-09-25T00:00:00Z" };
+  const episode = episodeFixture({ final: previous });
+  const provider = fakeComposeProvider();
+  const updated = await runCompose(episode, undefined, { persona: personaFixture(), compose: provider });
+  expect(provider.calls[0]?.output_key).toBe("final/e_1_v2.mp4");
+  expect(updated.final?.version).toBe(2);
+  expect(episode.final).toEqual(previous);
 });
 
 test("runCompose refuses to run without a ComposeProvider (engine never touches ffmpeg)", async () => {

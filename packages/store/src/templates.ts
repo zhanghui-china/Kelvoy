@@ -47,6 +47,13 @@ export async function upsertTemplate(template: Template): Promise<void> {
     .run(template.template_id, template.owner_id, JSON.stringify(template));
 }
 
+/** Browser-created templates must not replace an existing ID or its owner. */
+export function insertTemplate(template: Template): void {
+  getDb().query(
+    "insert into templates (template_id, owner_id, doc, updated_at) values (?, ?, ?, datetime('now'))",
+  ).run(template.template_id, template.owner_id, JSON.stringify(template));
+}
+
 /**
  * Deletes a template, scoped to `ownerId` in the SQL itself (not a
  * fetch-then-check) so an official template (owner_id null) or someone

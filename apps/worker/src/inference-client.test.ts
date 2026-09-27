@@ -66,6 +66,15 @@ test("maps a response slower than the configured timeout to timeout", async () =
   expect(result).toEqual({ ok: false, error: { type: "timeout" } });
 });
 
+test("caller abort cancels an in-flight inference request separately from timeout", async () => {
+  handler = async () => { await Bun.sleep(200); return Response.json({}); };
+  const controller = new AbortController();
+  const call = callInference("/image/", { prompt: "test" },
+    { timeoutMs: 1000, signal: controller.signal });
+  setTimeout(() => controller.abort(), 10);
+  expect(await call).toEqual({ ok: false, error: { type: "cancelled" } });
+});
+
 test("maps a connection failure (nothing listening) to network", async () => {
   process.env.INFERENCE_BASE_URL = "http://127.0.0.1:59999";
 

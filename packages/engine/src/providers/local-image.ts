@@ -1,12 +1,10 @@
-import type { KeyframeProvider } from "./types";
+import type { InferenceRequest } from "./inference-types";
+import type { EpisodeAspect } from "../schema/episode";
 
 /**
- * 关键帧 (PRD §7): text + persona ref + landmark ref -> image 9:16.
- * Self-hosted via Qwen-Image/FLUX.1/HunyuanImage, called through
- * services/inference's /image endpoint.
+ * Pure wire mapping. The worker performs HTTP and file IO, keeping engine
+ * within the CLAUDE.md boundary.
  */
-export const localImageProvider: KeyframeProvider = {
-  async generateCandidates(_input) {
-    throw new Error("not implemented");
-  },
-};
+export function localImageRequest(input: { prompt: string; refs: string[]; seed: number; aspect?: EpisodeAspect }): InferenceRequest {
+  return { prompt: input.prompt, refs: input.refs, seed: input.seed, size: input.aspect ?? "9:16", count: 1 };
+}

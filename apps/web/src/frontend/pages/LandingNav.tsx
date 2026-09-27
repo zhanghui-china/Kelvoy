@@ -1,15 +1,11 @@
 import type { MouseEvent } from "react";
 import { Link } from "react-router-dom";
-import { LogoMark } from "../icons";
 
-// 六个锚点，顺序即导航顺序（#45 M2-17）。id 对应各 section 的锚点，label 是
-// 导航展示文案——跟 section 大标题不同字，导航要短。
 const NAV_ANCHORS: { id: string; label: string }[] = [
-  { id: "top", label: "首页" },
-  { id: "solutions", label: "为什么" },
-  { id: "features", label: "护城河" },
-  { id: "how", label: "怎么做" },
-  { id: "destinations", label: "目的地库" },
+  { id: "solutions", label: "适合谁" },
+  { id: "features", label: "产品优势" },
+  { id: "how", label: "创作流程" },
+  { id: "destinations", label: "目的地" },
   { id: "faq", label: "常见问题" },
 ];
 
@@ -21,16 +17,16 @@ function handleAnchorClick(e: MouseEvent<HTMLAnchorElement>, id: string) {
   const target = document.getElementById(id);
   if (!target) return;
   e.preventDefault();
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  target.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
   window.history.pushState(null, "", `#${id}`);
 }
 
 export default function LandingNav() {
   return (
-    <nav className="k-lp-nav">
+    <nav className="k-lp-nav" aria-label="官网导航">
       <a href="#top" className="k-lp-nav-brand" onClick={(e) => handleAnchorClick(e, "top")}>
-        <LogoMark size={24} />
-        Kelvoy
+        <span className="k-lp-logo-mark" aria-hidden="true">旅</span>
+        <span>可旅<span className="k-lp-brand-en">Kelvoy</span></span>
       </a>
       <div className="k-lp-nav-links">
         {NAV_ANCHORS.map((a) => (
@@ -39,8 +35,8 @@ export default function LandingNav() {
           </a>
         ))}
       </div>
-      <Link to="/login" className="k-btn k-btn-primary k-lp-nav-cta">
-        登录
+      <Link to="/login" className="k-lp-button k-lp-nav-cta">
+        登录 / 开始创作 <span aria-hidden="true">→</span>
       </Link>
     </nav>
   );

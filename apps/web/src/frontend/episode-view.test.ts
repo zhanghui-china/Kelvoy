@@ -1,6 +1,7 @@
 import type { Episode, Shot, ShotStatus } from "@kelvoy/engine";
 import { expect, test } from "bun:test";
 import { episodeLabel, weekRange, weekStats } from "./episode-view";
+import type { EpisodeOverview } from "../shared/episode-overview";
 
 function shot(no: number, status: ShotStatus): Shot {
   return {
@@ -31,9 +32,10 @@ function fixture(p: {
   credits_used?: number;
   shots?: Shot[];
   title?: string;
+  name?: string;
 }): Episode {
   return {
-    episode_id: p.id,
+    name: p.name ?? "测试期", episode_id: p.id,
     owner_id: "u_owner",
     persona_id: "c_test",
     persona_version: 1,
@@ -42,12 +44,12 @@ function fixture(p: {
     series_id: "s_test",
     template_id: "t_test",
     status: p.status ?? "draft",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: p.created_at,
     estimated_credits: 0,
     credits_used: p.credits_used ?? 0,
     share: { enabled: false, slug: "" },
-    brief: { season: "秋", aspect: "9:16", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
+    brief: { season: "秋", aspect: "9:16", requirements: "", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
     grid_refs: [],
     scenes: [],
     shots: p.shots ?? [],
@@ -57,11 +59,14 @@ function fixture(p: {
   };
 }
 
-test("episodeLabel falls back to the episode id when there is no title", () => {
-  expect(episodeLabel(fixture({ id: "e_1", created_at: "2026-09-23T10:00:00", title: "无锡三日" }))).toBe(
-    "无锡三日",
-  );
-  expect(episodeLabel(fixture({ id: "e_1", created_at: "2026-09-23T10:00:00" }))).toBe("e_1");
+test("episodeLabel uses the episode name independently of the film title", () => {
+  expect(episodeLabel(fixture({ id: "e_1", created_at: "2026-09-23T10:00:00",
+    name: "我的旅行", title: "无锡三日" }))).toBe("我的旅行");
+  const legacy = fixture({ id: "e_2", created_at: "2026-09-23T10:00:00", title: "旧标题" });
+  delete (legacy as Partial<Episode>).name;
+  expect(episodeLabel(legacy)).toBe("旧标题");
+  legacy.render.title = "";
+  expect(episodeLabel(legacy)).toBe("e_2");
 });
 
 test("weekRange starts on the local Monday and ends on the next Monday", () => {
@@ -103,6 +108,17 @@ test("weekStats counts only episodes created inside the current week", () => {
   ];
 
   expect(weekStats(episodes, now)).toEqual({ doneEpisodes: 1, gpuMinutes: 17, approvedShots: 3 });
+  const overviews: EpisodeOverview[] = episodes.map((episode) => ({
+    episode_id: episode.episode_id, name: episode.name, status: episode.status,
+    persona_id: episode.persona_id, destination_id: episode.destination_id,
+    created_at: episode.created_at, credits_used: episode.credits_used,
+    render: { title: episode.render.title }, shot_count: episode.shots.length,
+    approved_shot_count: episode.shots.filter((item) => item.status === "approved").length,
+    any_shot_started: episode.shots.some((item) => item.status !== "draft"),
+    all_keyframes_selected: episode.shots.length > 0 && episode.shots.every((item) => !!item.kf_selected),
+    all_shots_approved: episode.shots.length > 0 && episode.shots.every((item) => item.status === "approved"),
+  }));
+  expect(weekStats(overviews, now)).toEqual(weekStats(episodes, now));
 });
 
 test("weekStats returns zeros with no episodes, and skips unparseable created_at", () => {

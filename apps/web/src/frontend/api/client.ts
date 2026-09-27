@@ -11,10 +11,13 @@ import type {
   PersonaPatch,
   RegenStage,
   ScriptRuleViolation,
+  StageName,
   ShotPatch,
   Template,
   UserSettings,
 } from "@kelvoy/engine";
+import type { EpisodeOverview } from "../../shared/episode-overview";
+import type { UsageSummary } from "../../shared/usage";
 
 // Typed wrapper around the /api/* routes apps/web/src/server/routes/*.ts
 // actually serve. M2-7 scoped this to read-only pages (auth +
@@ -23,6 +26,7 @@ import type {
 // M2-13 (#41) adds the persona create/patch/refs-upload functions below.
 
 export type ApiOk<T> = { ok: true } & T;
+export type FailedTaskSummary = { stage: StageName; shot_no: number | null };
 
 // content_blocked(#29) 带的是关键词违规，script_rule_violation(FR-02) 带的
 // 是结构规则违规，两个后端路由用的都是 `violations` 这个键名，所以这里是个
@@ -93,11 +97,22 @@ export function logout() {
   return apiFetch<Record<string, never>>("/api/auth/logout", { method: "POST" });
 }
 
+export function getMe() {
+  return apiFetch<{ user: AuthedUser; balance: { available: number; reserved: number } }>("/api/me");
+}
+
 // M2-15 (#43) 设置页：当前登录账号自己的出片默认值 + 改密码。路由前缀
 // /api/me/* 都在 requireOwner 后面，改的永远是 cookie 对应的那个账号。
 
 export function getMySettings() {
   return apiFetch<{ settings: UserSettings }>("/api/me/settings");
+}
+
+export function getMyCredits() {
+  return apiFetch<{ balance: { available: number; reserved: number }; ledger: {
+    entry_id: string; action_id: string; kind: string;
+    available_delta: number; reserved_delta: number; created_at: string;
+  }[] }>("/api/me/credits");
 }
 
 /** 合并式更新：只传要改的项，没传的保持原值（服务端 json_patch）。 */
@@ -155,14 +170,23 @@ export function listEpisodes() {
   return apiFetch<{ episodes: Episode[] }>("/api/episodes");
 }
 
+export function listEpisodeOverviews() {
+  return apiFetch<{ episodes: EpisodeOverview[] }>("/api/episodes/overview");
+}
+
+export function getUsageSummary() {
+  return apiFetch<{ usage: UsageSummary }>("/api/episodes/usage");
+}
+
 export function getEpisode(episodeId: string) {
-  return apiFetch<{ episode: Episode; row_version: number }>(
+  return apiFetch<{ episode: Episode; persona: Persona | null; destination: Destination | null;
+    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
   );
 }
 
 /** FR-12 分享页看到的字段——服务端只挑这几个，见 share.ts，不含账号信息。 */
-export type SharedEpisode = Pick<Episode, "episode_id" | "status" | "scenes" | "shots" | "music" | "render">;
+export type SharedEpisode = Pick<Episode, "episode_id" | "status" | "scenes" | "shots" | "music" | "render" | "final">;
 
 /** 公开路由，不带 cookie 也能拿到——分享页不要求登录。 */
 export function getShare(slug: string) {
@@ -211,9 +235,10 @@ export function createEpisode(body: CreateEpisodeRequest) {
   });
 }
 
-export function getEstimate(mode: EpisodeMode, candidates: number) {
-  return apiFetch<{ estimate: EstimateCostResult }>(
-    `/api/episodes/estimate?mode=${encodeURIComponent(mode)}&candidates=${encodeURIComponent(candidates)}`,
+export function getEstimate(mode: EpisodeMode, candidates: number,
+  videoSource: "keyframe" | "references" = "references") {
+  return apiFetch<{ estimate: EstimateCostResult; credit_quote: number }>(
+    `/api/episodes/estimate?mode=${encodeURIComponent(mode)}&candidates=${encodeURIComponent(candidates)}&video_source=${videoSource}`,
   );
 }
 
@@ -250,6 +275,22 @@ export function patchShot(episodeId: string, shotNo: number, rowVersion: number,
 
 export function continueEpisode(episodeId: string, rowVersion: number) {
   return post(episodePath(episodeId, "/continue"), { row_version: rowVersion });
+}
+
+export function retryFailedTask(episodeId: string, rowVersion: number) {
+  return post(episodePath(episodeId, "/retry"), { row_version: rowVersion });
+}
+
+export function convertLegacyCuts(episodeId: string, rowVersion: number) {
+  return post(episodePath(episodeId, "/convert-cuts"), { row_version: rowVersion });
+}
+
+export function regenerateScript(episodeId: string, rowVersion: number) {
+  return post(episodePath(episodeId, "/script/regenerate"), { row_version: rowVersion });
+}
+
+export function optimizeScript(episodeId: string, rowVersion: number, instruction: string) {
+  return post(episodePath(episodeId, "/script/optimize"), { row_version: rowVersion, instruction });
 }
 
 export function recompose(episodeId: string, rowVersion: number) {

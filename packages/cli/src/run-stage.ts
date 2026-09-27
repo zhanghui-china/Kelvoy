@@ -1,5 +1,5 @@
-import { type StageName, runStage, transitionEpisode } from "@kelvoy/engine";
-import { getDestination, getEpisode, patchEpisode, replaceEpisode } from "@kelvoy/store";
+import { type StageName, isStageEntryStatus, isStageName, runStage, transitionEpisode } from "@kelvoy/engine";
+import { getDestinationVersion, getEpisode, getPersonaVersion, patchEpisode, replaceEpisode } from "@kelvoy/store";
 
 /**
  * 已知限制（M1-13, #28）：`run compose` 在 CLI 里跑不通，会拿到 engine 的
@@ -25,6 +25,7 @@ function errorMessage(err: unknown): string {
  * here (unlike the worker) since a human re-runs `run` by hand.
  */
 export async function runEpisodeStage(episodeId: string, stage: StageName): Promise<RunStageResult> {
+  if (!isStageName(stage)) return { ok: false, error: `未知阶段：${stage}` };
   const result = await getEpisode(episodeId);
   if (!result.ok) {
     return { ok: false, error: `期不存在：${episodeId}` };
@@ -40,13 +41,19 @@ export async function runEpisodeStage(episodeId: string, stage: StageName): Prom
       error: `当前状态 "${result.episode.status}" 无法推进，不会运行阶段 ${stage}`,
     };
   }
+  if (!isStageEntryStatus(stage, result.episode.status)) {
+    return { ok: false, error: `阶段 ${stage} 失败：当前状态不允许运行该阶段` };
+  }
 
   try {
     // Engine stages don't touch @kelvoy/store (CLAUDE.md directory table) —
     // "script" needs the destination record, so it's fetched here and
     // threaded through as context. Other stages ignore it for now.
-    const destination = await getDestination(result.episode.destination_id);
-    const updated = await runStage(stage, result.episode, undefined, destination ? { destination } : undefined);
+    const destination = await getDestinationVersion(result.episode.destination_id, result.episode.destination_version);
+    const persona = await getPersonaVersion(result.episode.persona_id, result.episode.persona_version);
+    const updated = await runStage(stage, result.episode, undefined, {
+      ...(destination ? { destination } : {}), ...(persona ? { persona } : {}),
+    });
     const written = await replaceEpisode(episodeId, result.row_version, updated);
     if (!written.ok) {
       return { ok: false, error: `写回失败：${written.error}` };

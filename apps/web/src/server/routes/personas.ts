@@ -1,8 +1,8 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { validateCreatePersonaRequest, validatePersonaPatchRequest } from "@kelvoy/engine";
 import type { Persona } from "@kelvoy/engine";
-import { getPersona, insertPersona, listPersonas, updatePersona } from "@kelvoy/store";
+import { appendPersonaRefs, getPersona, insertPersona, listPersonas, updatePersona } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 
@@ -58,6 +58,41 @@ function projectsRoot(): string {
 const MIN_REFS = 3;
 const MAX_REFS = 7;
 const MAX_REF_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = MAX_REFS * MAX_REF_BYTES + 1024 * 1024;
+
+/** Bound the entire multipart body before FormData parsing allocates File objects. */
+export async function parseBoundedMultipart(request: Request, maxBytes: number): Promise<
+  { ok: true; form: FormData } | { ok: false; error: "upload_too_large" | "invalid_form" }
+> {
+  const claimed = Number(request.headers.get("content-length"));
+  if (Number.isFinite(claimed) && claimed > maxBytes) {
+    return { ok: false, error: "upload_too_large" };
+  }
+  const reader = request.body?.getReader();
+  if (!reader) return { ok: false, error: "invalid_form" };
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        return { ok: false, error: "upload_too_large" };
+      }
+      chunks.push(value);
+    }
+    const response = new Response(Buffer.concat(chunks), {
+      headers: { "content-type": request.headers.get("content-type") ?? "" },
+    });
+    return { ok: true, form: await response.formData() };
+  } catch {
+    return { ok: false, error: "invalid_form" };
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 const EXT_BY_MIME: Record<string, string> = {
   "image/png": ".png",
@@ -72,8 +107,10 @@ personas.post("/:id/refs", async (c) => {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 
-  const form = await c.req.formData().catch(() => null);
-  const files = form?.getAll("files").filter((f): f is File => f instanceof File) ?? [];
+  const parsed = await parseBoundedMultipart(c.req.raw, MAX_UPLOAD_BYTES);
+  if (!parsed.ok) return c.json({ ok: false, error: parsed.error },
+    parsed.error === "upload_too_large" ? 413 : 400);
+  const files = parsed.form.getAll("files").filter((f): f is File => f instanceof File);
   if (files.length === 0) {
     return c.json({ ok: false, error: "no_files" }, 400);
   }
@@ -106,15 +143,23 @@ personas.post("/:id/refs", async (c) => {
   await mkdir(dir, { recursive: true });
 
   const newRefs: string[] = [];
-  for (const file of files) {
-    const relPath = join("persona", personaId, `${crypto.randomUUID()}${EXT_BY_MIME[file.type]}`);
-    await Bun.write(join(projectsRoot(), relPath), file);
-    newRefs.push(relPath);
+  try {
+    for (const file of files) {
+      const relPath = join("persona", personaId, `${crypto.randomUUID()}${EXT_BY_MIME[file.type]}`);
+      newRefs.push(relPath);
+      await Bun.write(join(projectsRoot(), relPath), file);
+    }
+    const updated = appendPersonaRefs({ persona_id: personaId, owner_id: c.get("ownerId"),
+      refs: newRefs, min: MIN_REFS, max: MAX_REFS });
+    if (!updated.ok) {
+      await Promise.all(newRefs.map((ref) => rm(join(projectsRoot(), ref), { force: true })));
+      return c.json({ ok: false, error: updated.error }, updated.error === "not_found" ? 404 : 400);
+    }
+    return c.json({ ok: true, persona: updated.persona }, 201);
+  } catch (error) {
+    await Promise.allSettled(newRefs.map((ref) => rm(join(projectsRoot(), ref), { force: true })));
+    throw error;
   }
-
-  const updated = await updatePersona(personaId, { refs: [...current.refs, ...newRefs] });
-  if (!updated.ok) return c.json({ ok: false, error: updated.error }, 404);
-  return c.json({ ok: true, persona: updated.persona }, 201);
 });
 
 export default personas;

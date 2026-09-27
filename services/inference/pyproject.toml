@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings",
     "httpx",
+    "pillow>=12,<13",
 ]
 
 [dependency-groups]

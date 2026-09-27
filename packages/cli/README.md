@@ -33,3 +33,14 @@ bun run packages/cli/src/index.ts import-template <path.json>
 ```
 
 模板校验(`@kelvoy/engine` 的 `validateTemplate`)后写库,同款失败即报错不写库的规矩。`owner_id: null` 是官方模板,写非空字符串是用户私有模板。存在则覆盖(upsert,不像 destination/episode 那样报重复)。
+
+## 官方角色与首批目录
+
+```bash
+bun run packages/cli/src/index.ts import-persona <path.json>
+bun run packages/cli/src/index.ts seed-catalog
+```
+
+`import-persona` 只接收 `owner_id: null` 的完整角色 JSON，参考图必须有 3–7 张且路径在 `persona/<persona_id>/` 下。`version` 可省略；即使提供也由 store 决定，内容未变不升级，有变更才保存新版本。导入不会写图片文件；更新参考图时先以新文件名放到 `KELVOY_PROJECTS_ROOT`（默认 `projects`），旧文件保留供已有期使用。浏览器无官方角色写权限。
+
+`seed-catalog` 将 `assets/demo/` 中的 21 张演示参考图复制到项目素材根目录，导入两位官方虚构角色和五个真实目的地。不创建账号或期。重复运行跳过相同文件与记录；文件内容冲突、目的地 ID 冲突、角色初始版本 ID 冲突会报错，不覆盖现有内容。运营后续更新官方角色由 `import-persona` 完成，重跑 seed 不会撤销更新。照片来源、作者与许可见 `assets/demo/README.md`。

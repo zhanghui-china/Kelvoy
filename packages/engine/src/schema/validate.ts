@@ -1,18 +1,8 @@
-import type {
-  ChangePasswordRequest,
-  CreateEpisodeRequest,
-  CreatePersonaRequest,
-  CreateTemplateRequest,
-  LoginRequest,
-  PatchEpisodeRequest,
-  PatchShotRequest,
-  PersonaPatch,
-} from "./api";
-import type { DestinationType } from "./destination";
+import { isBoolean, isFiniteNumber, isNonEmptyString, isOneOf, isPlainObject, isStringArray } from "./validation-primitives";
+import type { PatchEpisodeRequest, PatchShotRequest } from "./api";
 import type {
   Episode,
   EpisodeBrief,
-  EpisodeMode,
   EpisodeMusic,
   EpisodeRender,
   EpisodeShare,
@@ -26,13 +16,6 @@ import type {
   ShotSize,
   ShotStatus,
 } from "./episode";
-import type { Persona, PersonaStyle } from "./persona";
-import type { Template } from "./template";
-import {
-  SETTINGS_CANDIDATES_MAX,
-  SETTINGS_CANDIDATES_MIN,
-  type UserSettings,
-} from "./user";
 
 /**
  * Runtime type guards for the request boundary — used by apps/web's
@@ -55,6 +38,7 @@ const EPISODE_STATUSES: EpisodeStatus[] = [
   "kf_review",
   "clipping",
   "clip_review",
+  "compose_ready",
   "composing",
   "done",
   "failed",
@@ -71,44 +55,6 @@ const SHOT_STATUSES: ShotStatus[] = [
   "failed",
 ];
 const REGEN_STAGES: RegenStage[] = ["keyframe", "video"];
-const EPISODE_MODES: EpisodeMode[] = ["per_shot", "grid"];
-// Also duplicated in packages/cli/src/validate-destination.ts — that one
-// validates the full Destination pack (M0 recon-and-import path), this one
-// only needs the enum for Template.skeleton. Not worth a shared package for
-// six string literals; keep both in sync by hand if the enum ever changes.
-const DESTINATION_TYPES: DestinationType[] = [
-  "mountain_summit",
-  "city_night",
-  "theme_town",
-  "scenic_area",
-  "water_town",
-  "island",
-];
-
-function isNonEmptyString(v: unknown): v is string {
-  return typeof v === "string" && v.trim().length > 0;
-}
-
-function isStringArray(v: unknown): v is string[] {
-  return Array.isArray(v) && v.every((x) => typeof x === "string");
-}
-
-function isBoolean(v: unknown): v is boolean {
-  return typeof v === "boolean";
-}
-
-function isFiniteNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function isOneOf<T extends string>(v: unknown, allowed: readonly T[]): v is T {
-  return typeof v === "string" && (allowed as readonly string[]).includes(v);
-}
-
 // ---- nested object validators (append to `errors`, return void) ----
 
 function validateShotModelRecord(input: unknown, path: string, errors: string[]): void {
@@ -166,6 +112,9 @@ export function validateShot(input: unknown): ValidationResult<Shot> {
   if (!isNonEmptyString(s.scene)) errors.push("scene: 缺失或为空");
   if (!isOneOf(s.size, SHOT_SIZES)) errors.push(`size: 必须是 ${SHOT_SIZES.join(" / ")} 之一`);
   if (typeof s.beat !== "string") errors.push("beat: 必须是字符串");
+  if (s.caption !== undefined && (typeof s.caption !== "string" || s.caption.length > 120)) {
+    errors.push("caption: 必须是 120 字以内的字符串");
+  }
   if (!isOneOf(s.camera, SHOT_CAMERAS)) {
     errors.push(`camera: 必须是 ${SHOT_CAMERAS.join(" / ")} 之一`);
   }
@@ -182,8 +131,8 @@ export function validateShot(input: unknown): ValidationResult<Shot> {
     errors.push("kf_selected: 必须是字符串或 null");
   }
   if (s.clip !== null && !isNonEmptyString(s.clip)) errors.push("clip: 必须是字符串或 null");
-  if (s.trim_start_s !== null && !isFiniteNumber(s.trim_start_s)) {
-    errors.push("trim_start_s: 必须是数字或 null");
+  if (s.trim_start_s !== null && (!isFiniteNumber(s.trim_start_s) || s.trim_start_s < 0)) {
+    errors.push("trim_start_s: 必须是非负数字或 null");
   }
   if (!isOneOf(s.status, SHOT_STATUSES)) {
     errors.push(`status: 必须是 ${SHOT_STATUSES.join(" / ")} 之一`);
@@ -206,7 +155,8 @@ function validateBrief(input: unknown, errors: string[]): void {
   }
   const b = input as Partial<EpisodeBrief>;
   if (!isNonEmptyString(b.season)) errors.push("brief.season: 缺失或为空");
-  if (!isNonEmptyString(b.aspect)) errors.push("brief.aspect: 缺失或为空");
+  if (b.aspect !== "9:16" && b.aspect !== "16:9") errors.push("brief.aspect: 必须是 9:16 / 16:9 之一");
+  if (b.requirements !== undefined && typeof b.requirements !== "string") errors.push("brief.requirements: 必须是字符串");
   if (!isFiniteNumber(b.duration_s) || b.duration_s <= 0) {
     errors.push("brief.duration_s: 必须是正数");
   }
@@ -235,7 +185,9 @@ export function validateMusic(input: unknown, path = "music"): string[] {
     return errors;
   }
   const m = input as Partial<EpisodeMusic>;
-  if (!isNonEmptyString(m.file)) errors.push(`${path}.file: 缺失或为空`);
+  if (m.file !== "" && !isNonEmptyString(m.file)) {
+    errors.push(`${path}.file: 必须是非空路径或空字符串`);
+  }
   if (!isFiniteNumber(m.bpm) || m.bpm < 0) errors.push(`${path}.bpm: 必须是 ≥0 的数字`);
   if (typeof m.license !== "string") errors.push(`${path}.license: 必须是字符串`);
   return errors;
@@ -259,6 +211,8 @@ export function validateRender(input: unknown, path = "render"): string[] {
     errors.push(`${path}.outro: 必须是字符串或 null`);
   }
   if (!isBoolean(r.ai_label)) errors.push(`${path}.ai_label: 必须是布尔值`);
+  if (r.subtitles_enabled !== undefined && !isBoolean(r.subtitles_enabled)) errors.push(`${path}.subtitles_enabled: 必须是布尔值`);
+  if (r.transitions_enabled !== undefined && !isBoolean(r.transitions_enabled)) errors.push(`${path}.transitions_enabled: 必须是布尔值`);
   return errors;
 }
 
@@ -276,6 +230,9 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
   const e = input as Partial<Episode>;
 
   if (!isNonEmptyString(e.episode_id)) errors.push("episode_id: 缺失或为空");
+  if (e.name !== undefined && !isNonEmptyString(e.name)) errors.push("name: 必须是非空字符串");
+  if (e.candidate_count !== undefined && (!Number.isInteger(e.candidate_count) || e.candidate_count < 1 || e.candidate_count > 3)) errors.push("candidate_count: 必须是 1–3 的整数");
+  if (e.video_source !== undefined && e.video_source !== "keyframe" && e.video_source !== "references") errors.push("video_source: 必须是 keyframe / references 之一");
   if (!isNonEmptyString(e.owner_id)) errors.push("owner_id: 缺失或为空");
   if (!isNonEmptyString(e.persona_id)) errors.push("persona_id: 缺失或为空");
   if (!isFiniteNumber(e.persona_version)) errors.push("persona_version: 必须是数字");
@@ -287,12 +244,25 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
     errors.push(`status: 必须是 ${EPISODE_STATUSES.join(" / ")} 之一`);
   }
   if (e.mode !== "per_shot" && e.mode !== "grid") errors.push("mode: 必须是 per_shot / grid 之一");
+  if (e.cut_policy !== undefined && e.cut_policy !== "fixed_1s" && e.cut_policy !== "beat_aligned") {
+    errors.push("cut_policy: 必须是 fixed_1s / beat_aligned 之一");
+  }
   if (!isNonEmptyString(e.created_at)) errors.push("created_at: 缺失或为空");
   if (!isFiniteNumber(e.estimated_credits) || e.estimated_credits < 0) {
     errors.push("estimated_credits: 必须是 ≥0 的数字");
   }
   if (!isFiniteNumber(e.credits_used) || e.credits_used < 0) {
     errors.push("credits_used: 必须是 ≥0 的数字");
+  }
+  if (e.final !== undefined && e.final !== null) {
+    if (!isPlainObject(e.final) || !Number.isInteger(e.final.version) || e.final.version < 1 ||
+        !isNonEmptyString(e.final.key) || !e.final.key.startsWith("final/") ||
+        !isFiniteNumber(e.final.duration_s) || e.final.duration_s <= 0 ||
+        !Number.isInteger(e.final.width) || e.final.width <= 0 ||
+        !Number.isInteger(e.final.height) || e.final.height <= 0 ||
+        !isFiniteNumber(e.final.fps) || e.final.fps <= 0 ||
+        !Number.isSafeInteger(e.final.size_bytes) || e.final.size_bytes <= 0 ||
+        !isNonEmptyString(e.final.completed_at)) errors.push("final: 成片参数不合法");
   }
   if (e.share !== undefined) validateShare(e.share, errors);
   else errors.push("share: 缺失");
@@ -315,6 +285,26 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
         for (const err of result.errors) errors.push(`shots[${i}].${err}`);
       }
     });
+  }
+
+  if (Array.isArray(e.scenes) && Array.isArray(e.shots)) {
+    const sceneIds = new Set<string>();
+    for (const [index, scene] of e.scenes.entries()) {
+      if (!isPlainObject(scene) || typeof scene.id !== "string") continue;
+      if (sceneIds.has(scene.id)) errors.push(`scenes[${index}].id: 重复`);
+      sceneIds.add(scene.id);
+    }
+    const shotNumbers = new Set<number>();
+    for (const [index, shot] of e.shots.entries()) {
+      if (!isPlainObject(shot)) continue;
+      if (typeof shot.no === "number") {
+        if (shotNumbers.has(shot.no)) errors.push(`shots[${index}].no: 重复`);
+        shotNumbers.add(shot.no);
+      }
+      if (typeof shot.scene === "string" && !sceneIds.has(shot.scene)) {
+        errors.push(`shots[${index}].scene: 引用的场景不存在`);
+      }
+    }
   }
 
   if (!Array.isArray(e.removed_shots)) {
@@ -352,6 +342,10 @@ export function validatePatchEpisodeRequest(input: unknown): ValidationResult<Pa
     return { valid: false, errors };
   }
   const patch = input.patch;
+  const allowedFields = new Set(["status", "credits_used", "grid_refs", "render", "music"]);
+  for (const field of Object.keys(patch)) {
+    if (!allowedFields.has(field)) errors.push(`patch.${field}: 不支持修改`);
+  }
 
   if ("status" in patch && !isOneOf(patch.status, EPISODE_STATUSES)) {
     errors.push(`patch.status: 必须是 ${EPISODE_STATUSES.join(" / ")} 之一`);
@@ -397,8 +391,9 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
   if ("clip" in patch && patch.clip !== null && !isNonEmptyString(patch.clip)) {
     errors.push("patch.clip: 必须是字符串或 null");
   }
-  if ("trim_start_s" in patch && patch.trim_start_s !== null && !isFiniteNumber(patch.trim_start_s)) {
-    errors.push("patch.trim_start_s: 必须是数字或 null");
+  if ("trim_start_s" in patch && patch.trim_start_s !== null &&
+      (!isFiniteNumber(patch.trim_start_s) || (patch.trim_start_s as number) < 0)) {
+    errors.push("patch.trim_start_s: 必须是非负数字或 null");
   }
   if (
     "regen_stage" in patch &&
@@ -417,6 +412,9 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
   // （apps/web 的 PATCH shot 路由）用 rules/script.ts 同一条规则去查。
   if ("beat" in patch && !isNonEmptyString(patch.beat)) {
     errors.push("patch.beat: 必须是非空字符串");
+  }
+  if ("caption" in patch && (typeof patch.caption !== "string" || patch.caption.length > 120)) {
+    errors.push("patch.caption: 必须是 120 字以内的字符串");
   }
   if ("size" in patch && !isOneOf(patch.size, SHOT_SIZES)) {
     errors.push(`patch.size: 必须是 ${SHOT_SIZES.join(" / ")} 之一`);
@@ -439,242 +437,5 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
   return { valid: true, value: input as unknown as PatchShotRequest };
 }
 
-/** Validates a LoginRequest (apps/web's POST /api/auth/login). */
-export function validateLoginRequest(input: unknown): ValidationResult<LoginRequest> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const r = input as Partial<LoginRequest>;
 
-  if (!isNonEmptyString(r.username)) errors.push("username: 缺失或为空");
-  if (!isNonEmptyString(r.password)) errors.push("password: 缺失或为空");
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: r as LoginRequest };
-}
-
-function validatePersonaStyle(input: unknown, errors: string[]): void {
-  if (!isPlainObject(input)) {
-    errors.push("style: 不是对象");
-    return;
-  }
-  const s = input as Partial<PersonaStyle>;
-  if (!isNonEmptyString(s.lut)) errors.push("style.lut: 缺失或为空");
-  if (!isNonEmptyString(s.title_style)) errors.push("style.title_style: 缺失或为空");
-}
-
-/** Validates a whole persona document (used by future import/create paths). */
-export function validatePersona(input: unknown): ValidationResult<Persona> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const p = input as Partial<Persona>;
-
-  if (!isNonEmptyString(p.persona_id)) errors.push("persona_id: 缺失或为空");
-  if (!isNonEmptyString(p.owner_id)) errors.push("owner_id: 缺失或为空");
-  if (!isFiniteNumber(p.version) || !Number.isInteger(p.version) || p.version < 1) {
-    errors.push("version: 必须是 ≥1 的整数");
-  }
-  if (!isNonEmptyString(p.name)) errors.push("name: 缺失或为空");
-  if (typeof p.desc !== "string") errors.push("desc: 必须是字符串");
-  if (!isStringArray(p.locked)) errors.push("locked: 必须是字符串数组");
-  if (!isNonEmptyString(p.default_outfit)) errors.push("default_outfit: 缺失或为空");
-  if (!isStringArray(p.refs) || p.refs.length < 3 || p.refs.length > 7) {
-    errors.push("refs: 必须是 3–7 张参考图路径的数组（FR-03）");
-  }
-  if (p.style !== undefined) validatePersonaStyle(p.style, errors);
-  else errors.push("style: 缺失");
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: p as Persona };
-}
-
-/**
- * Validates apps/web's POST /api/personas request body. Deliberately
- * excludes refs — a persona can be created with zero reference images and
- * filled in afterwards via POST /api/personas/:id/refs, which is where the
- * FR-03 3–7 张 count is actually enforced (see M2-4 commit for why: forcing
- * the count at creation would make the two-step "create, then upload"
- * flow impossible).
- */
-export function validateCreatePersonaRequest(input: unknown): ValidationResult<CreatePersonaRequest> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const r = input as Partial<CreatePersonaRequest>;
-
-  if (!isNonEmptyString(r.name)) errors.push("name: 缺失或为空");
-  if (!isNonEmptyString(r.desc)) errors.push("desc: 缺失或为空");
-  if (!isStringArray(r.locked)) errors.push("locked: 必须是字符串数组");
-  if (!isNonEmptyString(r.default_outfit)) errors.push("default_outfit: 缺失或为空");
-  if (r.style !== undefined) validatePersonaStyle(r.style, errors);
-  else errors.push("style: 缺失");
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: r as CreatePersonaRequest };
-}
-
-/**
- * Validates apps/web's PATCH /api/personas/:id request body. refs isn't
- * patchable here on purpose — only through POST /api/personas/:id/refs, so
- * the 3–7 张 count check lives in exactly one place.
- */
-export function validatePersonaPatchRequest(input: unknown): ValidationResult<PersonaPatch> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const p = input as PersonaPatch & { refs?: unknown };
-
-  if ("name" in p && !isNonEmptyString(p.name)) errors.push("name: 必须是非空字符串");
-  if ("desc" in p && typeof p.desc !== "string") errors.push("desc: 必须是字符串");
-  if ("locked" in p && !isStringArray(p.locked)) errors.push("locked: 必须是字符串数组");
-  if ("default_outfit" in p && !isNonEmptyString(p.default_outfit)) {
-    errors.push("default_outfit: 必须是非空字符串");
-  }
-  if ("style" in p) validatePersonaStyle(p.style, errors);
-  if ("refs" in p) errors.push("refs: 不支持通过 PATCH 修改，走 POST /api/personas/:id/refs");
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: p as PersonaPatch };
-}
-
-// Shared by validateTemplate (whole document) and validateCreateTemplateRequest
-// (POST /api/templates body) — both need the same name/skeleton/lut/intro/
-// outro/title_style checks, they only differ on template_id/owner_id.
-function validateTemplateFields(t: Partial<Template>, errors: string[]): void {
-  if (!isNonEmptyString(t.name)) errors.push("name: 缺失或为空");
-  if (!t.skeleton || !DESTINATION_TYPES.includes(t.skeleton as DestinationType)) {
-    errors.push(
-      `skeleton: 必须是 ${DESTINATION_TYPES.join(" / ")} 之一，实际是 ${JSON.stringify(t.skeleton)}`,
-    );
-  }
-  if (!isNonEmptyString(t.lut)) errors.push("lut: 缺失或为空");
-  if (t.intro !== null && !isNonEmptyString(t.intro)) errors.push("intro: 必须是字符串或 null");
-  if (t.outro !== null && !isNonEmptyString(t.outro)) errors.push("outro: 必须是字符串或 null");
-  if (!isNonEmptyString(t.title_style)) errors.push("title_style: 缺失或为空");
-}
-
-/** Validates a whole template document (used by `import-template`). */
-export function validateTemplate(input: unknown): ValidationResult<Template> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const t = input as Partial<Template>;
-
-  if (!isNonEmptyString(t.template_id)) errors.push("template_id: 缺失或为空");
-  if (t.owner_id !== null && !isNonEmptyString(t.owner_id)) {
-    errors.push("owner_id: 必须是字符串或 null（null = 官方模板）");
-  }
-  validateTemplateFields(t, errors);
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: t as Template };
-}
-
-/**
- * Validates apps/web's POST /api/templates request body (M2-10, FR-10).
- * template_id/owner_id 都不在请求体里——服务端生成 template_id、owner_id
- * 从会话取，和 validateCreatePersonaRequest 排除 persona_id/owner_id 同理。
- */
-export function validateCreateTemplateRequest(input: unknown): ValidationResult<CreateTemplateRequest> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const t = input as Partial<Template>;
-  validateTemplateFields(t, errors);
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: t as CreateTemplateRequest };
-}
-
-/**
- * Validates apps/web's POST /api/episodes request body (M2-5). Only the
- * three foreign keys are required — season/tone/banned/mode/series_id are
- * all optional here, the route fills defaults for whichever are missing
- * (FR-01"缺字段给默认值"), so validation only rejects fields that are
- * *present but the wrong shape*, never a merely-absent optional field.
- */
-export function validateCreateEpisodeRequest(input: unknown): ValidationResult<CreateEpisodeRequest> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const r = input as Partial<CreateEpisodeRequest>;
-
-  if (!isNonEmptyString(r.persona_id)) errors.push("persona_id: 缺失或为空");
-  if (!isNonEmptyString(r.destination_id)) errors.push("destination_id: 缺失或为空");
-  if (!isNonEmptyString(r.template_id)) errors.push("template_id: 缺失或为空");
-  if ("series_id" in r && !isNonEmptyString(r.series_id)) errors.push("series_id: 必须是非空字符串");
-  if ("season" in r && !isNonEmptyString(r.season)) errors.push("season: 必须是非空字符串");
-  if ("tone" in r && !isNonEmptyString(r.tone)) errors.push("tone: 必须是非空字符串");
-  if ("banned" in r && !isStringArray(r.banned)) errors.push("banned: 必须是字符串数组");
-  if ("mode" in r && !EPISODE_MODES.includes(r.mode as EpisodeMode)) {
-    errors.push(`mode: 必须是 ${EPISODE_MODES.join(" / ")} 之一`);
-  }
-  if ("outfit_override" in r && !isNonEmptyString(r.outfit_override)) {
-    errors.push("outfit_override: 必须是非空字符串");
-  }
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: r as CreateEpisodeRequest };
-}
-
-/**
- * Validates apps/web's POST /api/me/password request body (M2-15). 新密码
- * 的强度要求跟 `packages/cli create-user` 保持一致——那条命令只要求非空，
- * 这里不自己多发明一条长度下限，否则同一个账号体系会有两套口径。
- */
-export function validateChangePasswordRequest(input: unknown): ValidationResult<ChangePasswordRequest> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const r = input as Partial<ChangePasswordRequest>;
-
-  if (!isNonEmptyString(r.current_password)) errors.push("current_password: 缺失或为空");
-  if (!isNonEmptyString(r.new_password)) errors.push("new_password: 缺失或为空");
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: r as ChangePasswordRequest };
-}
-
-/**
- * Validates apps/web's PATCH /api/me/settings request body (M2-15). 是个
- * patch：只校验出现了的字段，没出现的字段保持原值（合并在
- * packages/store 的 updateUserSettings 里做）。default_tone 允许空字符串
- * ——那是"清空默认语气"的表达方式，不是缺失。
- */
-export function validateUserSettingsPatch(input: unknown): ValidationResult<UserSettings> {
-  const errors: string[] = [];
-  if (!isPlainObject(input)) {
-    return { valid: false, errors: ["不是一个 JSON 对象"] };
-  }
-  const s = input as UserSettings;
-
-  if ("default_tone" in s && typeof s.default_tone !== "string") {
-    errors.push("default_tone: 必须是字符串");
-  }
-  if (
-    "default_candidates" in s &&
-    (!isFiniteNumber(s.default_candidates) ||
-      !Number.isInteger(s.default_candidates) ||
-      s.default_candidates < SETTINGS_CANDIDATES_MIN ||
-      s.default_candidates > SETTINGS_CANDIDATES_MAX)
-  ) {
-    errors.push(
-      `default_candidates: 必须是 ${SETTINGS_CANDIDATES_MIN}–${SETTINGS_CANDIDATES_MAX} 的整数`,
-    );
-  }
-  if ("default_mode" in s && !isOneOf(s.default_mode, EPISODE_MODES)) {
-    errors.push(`default_mode: 必须是 ${EPISODE_MODES.join(" / ")} 之一`);
-  }
-
-  if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: s };
-}
+export { validateLoginRequest, validatePersona, validateCreatePersonaRequest, validatePersonaPatchRequest, validateTemplate, validateCreateTemplateRequest, validateCreateEpisodeRequest, validateChangePasswordRequest, validateUserSettingsPatch } from "./validate-catalog";

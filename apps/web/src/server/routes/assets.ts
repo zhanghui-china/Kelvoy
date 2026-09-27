@@ -1,7 +1,8 @@
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { getPersona } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
+import { staysOnDiskPath } from "./file-path";
 
 /**
  * FR-05 审片台要的共享参考图：地标实景图（Destination.landmarks[].refs，
@@ -28,9 +29,10 @@ const DESTINATION_PREFIX = "dest/";
 const PERSONA_PREFIX = "persona/";
 
 /**
- * 同 episodes.ts 的 resolveArtifactPath：真实 HTTP 上 ".." 早被 URL 解析
- * 规范化掉了，这道检查是给绕过 URL 解析的调用方（未来的非 HTTP 入口、别的
- * runtime）留的兜底，也因此单独导出给测试直接打。
+ * Authorize only a canonical asset key. URL parsers normalize literal dot
+ * segments, but encoded slashes can reach this route as ".." segments after
+ * Hono decodes the parameter. Checking the original prefix while resolving
+ * a different file would expose another account's persona asset.
  */
 export function resolveAssetPath(relativeKey: string | undefined): string | null {
   if (!relativeKey) return null;
@@ -40,6 +42,8 @@ export function resolveAssetPath(relativeKey: string | undefined): string | null
   const root = resolve(projectsRoot());
   const filePath = resolve(join(root, relativeKey));
   if (!filePath.startsWith(root + sep)) return null;
+  if (relative(root, filePath) !== relativeKey) return null;
+  if (!staysOnDiskPath(root, filePath)) return null;
   return filePath;
 }
 
@@ -55,7 +59,7 @@ assets.get("/:path{.+}", async (c) => {
   if (key.startsWith(PERSONA_PREFIX)) {
     const personaId = key.slice(PERSONA_PREFIX.length).split("/")[0];
     const persona = personaId ? await getPersona(personaId) : null;
-    if (!persona || persona.owner_id !== c.get("ownerId")) {
+    if (!persona || (persona.owner_id !== null && persona.owner_id !== c.get("ownerId"))) {
       return c.json({ ok: false, error: "not_found" }, 404);
     }
   }

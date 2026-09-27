@@ -6,7 +6,8 @@ import { illegalTransition } from "./errors";
  * mutation of the input. Mirrors the review-gate pipeline:
  * draft → scripting → script_review → assets → keyframing → kf_review →
  * clipping → clip_review → composing → done, with any generating state
- * able to fail, and done able to re-enter composing (重新合成).
+ * able to fail, and a reviewed episode able to reopen a review gate for
+ * shot regeneration.
  */
 
 export type GeneratingEpisodeStatus = "scripting" | "assets" | "keyframing" | "clipping" | "composing";
@@ -29,14 +30,18 @@ const ADVANCE: Partial<Record<EpisodeStatus, EpisodeStatus>> = {
   kf_review: "clipping",
   clipping: "clip_review",
   clip_review: "composing",
+  compose_ready: "composing",
   composing: "done",
 };
 
 export type EpisodeEvent =
   | { type: "advance" }
+  | { type: "skip_keyframes" }
   | { type: "fail" }
   | { type: "retry"; into: GeneratingEpisodeStatus }
-  | { type: "recompose" };
+  | { type: "recompose" }
+  | { type: "prepare_compose" }
+  | { type: "reopen_review"; into: "kf_review" | "clip_review" };
 
 export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): EpisodeStatus {
   switch (event.type) {
@@ -44,6 +49,10 @@ export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): 
       const next = ADVANCE[current];
       if (!next) throw illegalTransition(current, event.type);
       return next;
+    }
+    case "skip_keyframes": {
+      if (current !== "assets") throw illegalTransition(current, event.type);
+      return "clipping";
     }
     case "fail": {
       if (!GENERATING_STATES.has(current)) throw illegalTransition(current, event.type);
@@ -56,6 +65,16 @@ export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): 
     case "recompose": {
       if (current !== "done") throw illegalTransition(current, event.type);
       return "composing";
+    }
+    case "prepare_compose": {
+      if (current !== "clip_review") throw illegalTransition(current, event.type);
+      return "compose_ready";
+    }
+    case "reopen_review": {
+      if (current === "done" || (current === "clip_review" && event.into === "kf_review")) {
+        return event.into;
+      }
+      throw illegalTransition(current, event.type);
     }
   }
 }
@@ -78,8 +97,12 @@ const RETRY_TARGETS: GeneratingEpisodeStatus[] = [
 export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatus): boolean {
   const events: EpisodeEvent[] = [
     { type: "advance" },
+    { type: "skip_keyframes" },
     { type: "fail" },
     { type: "recompose" },
+    { type: "prepare_compose" },
+    { type: "reopen_review", into: "kf_review" },
+    { type: "reopen_review", into: "clip_review" },
     ...RETRY_TARGETS.map((into): EpisodeEvent => ({ type: "retry", into })),
   ];
   return events.some((event) => {
@@ -100,6 +123,9 @@ export const MIN_SHOTS = 24;
  * Returns a new Episode; does not mutate the input.
  */
 export function removeShot(episode: Episode, shotNo: number): Episode {
+  if (episode.status !== "script_review") {
+    throw illegalTransition(episode.status, "remove_shot");
+  }
   const shot = episode.shots.find((s) => s.no === shotNo);
   if (!shot) {
     throw new Error(`shot ${shotNo} not found in episode ${episode.episode_id}`);

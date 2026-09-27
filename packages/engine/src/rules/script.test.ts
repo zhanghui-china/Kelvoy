@@ -106,6 +106,7 @@ describe("checkScriptRules", () => {
 
   test("re-running after removeShot still validates (review-1 delete flow)", () => {
     const episode = {
+      status: "script_review",
       shots: wellFormedShots(),
       removed_shots: [],
     } as unknown as Episode;

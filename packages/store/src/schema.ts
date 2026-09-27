@@ -17,12 +17,33 @@ create table if not exists destinations (
   updated_at text not null default (datetime('now'))
 );
 
+create table if not exists destination_versions (
+  destination_id text not null,
+  version integer not null,
+  doc text not null,
+  compatibility_approximation integer not null default 0,
+  primary key (destination_id, version)
+);
+
+create table if not exists schema_migrations (
+  migration_id text primary key,
+  applied_at text not null default (datetime('now'))
+);
+
 create table if not exists personas (
   persona_id text primary key,
-  owner_id text not null,
+  owner_id text,
   version integer not null default 1,
   doc text not null,
   updated_at text not null default (datetime('now'))
+);
+
+create table if not exists persona_versions (
+  persona_id text not null,
+  version integer not null,
+  doc text not null,
+  compatibility_approximation integer not null default 0,
+  primary key (persona_id, version)
 );
 
 create table if not exists templates (
@@ -52,10 +73,53 @@ create table if not exists tasks (
   stage text not null,
   shot_no integer,
   attempt integer not null default 1,
+  operation text,
+  instruction text,
+  generation_id text,
+  lease_until integer,
+  lease_token text,
   status text not null default 'pending',
   created_at text not null default (datetime('now')),
   updated_at text not null default (datetime('now'))
 );
+
+create table if not exists credit_accounts (
+  user_id text primary key,
+  available integer not null default 0 check (available >= 0),
+  reserved integer not null default 0 check (reserved >= 0)
+);
+
+create table if not exists credit_actions (
+  action_id text primary key,
+  user_id text not null,
+  episode_id text,
+  task_id text,
+  kind text not null,
+  units integer not null check (units > 0),
+  price integer not null check (price >= 0),
+  status text not null check (status in ('reserved', 'settled', 'released')),
+  created_at text not null default (datetime('now')),
+  updated_at text not null default (datetime('now'))
+);
+
+create table if not exists credit_ledger (
+  entry_id text primary key,
+  user_id text not null,
+  action_id text not null,
+  kind text not null,
+  available_delta integer not null,
+  reserved_delta integer not null,
+  created_at text not null default (datetime('now')),
+  unique (action_id, kind)
+);
+
+create table if not exists credit_prices (
+  kind text primary key,
+  price integer not null check (price >= 0)
+);
+
+insert or ignore into credit_prices (kind, price) values
+  ('script', 1), ('image', 1), ('video', 10), ('compose', 1);
 `;
 
 /**
@@ -65,6 +129,11 @@ create table if not exists tasks (
  * 无副作用（每次 open() 都会跑一遍）。
  */
 export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
+  { table: "tasks", column: "operation", ddl: "alter table tasks add column operation text" },
+  { table: "tasks", column: "instruction", ddl: "alter table tasks add column instruction text" },
+  { table: "tasks", column: "generation_id", ddl: "alter table tasks add column generation_id text" },
+  { table: "tasks", column: "lease_until", ddl: "alter table tasks add column lease_until integer" },
+  { table: "tasks", column: "lease_token", ddl: "alter table tasks add column lease_token text" },
   {
     table: "users",
     column: "settings",

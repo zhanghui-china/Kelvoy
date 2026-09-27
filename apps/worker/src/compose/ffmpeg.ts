@@ -1,8 +1,9 @@
-import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import type { ComposePlan, ComposeProvider } from "@kelvoy/engine";
 import { artifactPath, sharedAssetPath } from "../storage/artifacts";
 import { buildFfmpegArgs, type ComposeInputPaths } from "./ffmpeg-args";
+import { buildAssOverlay, textOverlayEvents } from "./ass-overlay";
 
 /**
  * 合成 provider（PRD §9, M1-13）：整个系统里唯一调用 ffmpeg 的地方，只在
@@ -24,14 +25,25 @@ async function requireFile(path: string, what: string): Promise<string> {
   return path;
 }
 
-async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+export async function runCommand(cmd: string[], signal?: AbortSignal): Promise<{
+  code: number; stdout: string; stderr: string;
+}> {
+  signal?.throwIfAborted();
   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return { code, stdout, stderr };
+  const onAbort = () => proc.kill();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    if (signal?.aborted) proc.kill();
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    signal?.throwIfAborted();
+    return { code, stdout, stderr };
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
 
 /** 片头片尾的时长是素材属性，engine 量不到——这里用 ffprobe 读。 */
@@ -53,16 +65,92 @@ async function probeDurationS(path: string): Promise<number> {
   return seconds;
 }
 
+async function probeVideoDurationS(path: string): Promise<number> {
+  const { code, stdout, stderr } = await runCommand([
+    "ffprobe", "-v", "error", "-select_streams", "v:0",
+    "-show_entries", "stream=duration", "-of", "default=noprint_wrappers=1:nokey=1", path,
+  ]);
+  const seconds = Number(stdout.trim());
+  if (code !== 0 || !Number.isFinite(seconds)) {
+    throw new Error(`ffprobe 读不出视频时长：${path}\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+  }
+  return seconds;
+}
+
+async function probeOutput(path: string): Promise<{
+  duration_s: number; width: number; height: number; fps: number; size_bytes: number;
+}> {
+  const { code, stdout, stderr } = await runCommand([
+    "ffprobe", "-v", "error", "-select_streams", "v:0",
+    "-show_entries", "stream=width,height,avg_frame_rate:format=duration,size", "-of", "json", path,
+  ]);
+  if (code !== 0) throw new Error(`ffprobe 验证成片失败：${stderr.slice(-STDERR_TAIL_CHARS)}`);
+  const data = JSON.parse(stdout) as {
+    streams?: { width?: number; height?: number; avg_frame_rate?: string }[];
+    format?: { duration?: string; size?: string };
+  };
+  const stream = data.streams?.[0];
+  const [numerator, denominator] = (stream?.avg_frame_rate ?? "").split("/").map(Number);
+  const fps = denominator ? numerator! / denominator : Number(stream?.avg_frame_rate);
+  const duration = Number(data.format?.duration);
+  const size = Number(data.format?.size);
+  if (!stream?.width || !stream.height || !Number.isFinite(fps) || fps <= 0 ||
+      !Number.isFinite(duration) || duration <= 0 || !Number.isSafeInteger(size) || size <= 0) {
+    throw new Error("ffprobe 返回了无效的成片参数");
+  }
+  return { duration_s: duration, width: stream.width, height: stream.height,
+    fps, size_bytes: size };
+}
+
 async function ffmpegVersionLine(): Promise<string> {
   const { code, stdout } = await runCommand(["ffmpeg", "-version"]);
   if (code !== 0) return "ffmpeg";
   return stdout.split("\n")[0]?.trim() ?? "ffmpeg";
 }
 
+async function supportsAssFilter(): Promise<boolean> {
+  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"]);
+  return code === 0 && /^\s*[.A-Z|]+\s+ass\s+/m.test(stdout);
+}
+
+async function supportsDrawtextFilter(): Promise<boolean> {
+  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"]);
+  return code === 0 && /^\s*[.A-Z|]+\s+drawtext\s+/m.test(stdout);
+}
+
+async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths,
+  signal?: AbortSignal): Promise<void> {
+  const events = textOverlayEvents(plan, paths.intro_duration_s, paths.outro_duration_s);
+  if (!events.length) return;
+  const overlayImages = events.map((event, index) => ({
+    ...event,
+    path: `${paths.output}.overlay-${index}.png`,
+  }));
+  const manifestPath = `${paths.output}.overlay.json`;
+  await writeFile(manifestPath, JSON.stringify({ width: plan.res.w, height: plan.res.h, events: overlayImages }));
+  const script = resolve(import.meta.dir, "../../../../scripts/render-text-overlays.py");
+  const python = resolve(import.meta.dir, "../../../../services/inference/.venv/bin/python");
+  if (!(await Bun.file(python).exists())) {
+    throw new Error("合成文字图层需要受管理的 Python 环境；先运行 make install");
+  }
+  const { code, stderr } = await runCommand([python, script, manifestPath], signal);
+  if (code !== 0) {
+    throw new Error(`无法绘制成片文字图层：${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+  }
+  paths.overlay_images = overlayImages;
+}
+
 async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
   const clips = await Promise.all(
     plan.cuts.map((cut) => requireFile(artifactPath(plan.episode_id, cut.clip_key), `第 ${cut.no} 镜的片段`)),
   );
+  for (const [index, cut] of plan.cuts.entries()) {
+    if (cut.frame_count === undefined) continue;
+    const duration = await probeVideoDurationS(clips[index]!);
+    if (cut.trim_start_s + cut.duration_s > duration + 1e-6) {
+      throw new Error(`第 ${cut.no} 镜选段超出片段尾部：需要 ${cut.trim_start_s + cut.duration_s} 秒，实际 ${duration} 秒`);
+    }
+  }
 
   // 跨期共享素材（曲库、LUT、片头片尾）挂在 projects 根下，不在期目录里。
   const intro = plan.intro_key !== null ? await requireFile(sharedAssetPath(plan.intro_key), "片头") : null;
@@ -88,9 +176,26 @@ async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
 }
 
 export const ffmpegComposeProvider: ComposeProvider = {
-  async compose({ plan }) {
+  async compose({ plan, signal }) {
+    signal?.throwIfAborted();
     const paths = await resolvePaths(plan);
+    signal?.throwIfAborted();
     await mkdir(dirname(paths.output), { recursive: true });
+    const needsText = Boolean(plan.title) || plan.ai_label ||
+      (plan.subtitles_enabled && plan.cuts.some((cut) => Boolean(cut.caption)));
+    if (needsText && await supportsAssFilter()) {
+      const overlayPath = `${paths.output}.ass`;
+      const tempPath = `${overlayPath}.tmp-${crypto.randomUUID()}`;
+      try {
+        await writeFile(tempPath, buildAssOverlay(plan, paths.intro_duration_s, paths.outro_duration_s));
+        await rename(tempPath, overlayPath);
+      } finally {
+        await rm(tempPath, { force: true });
+      }
+      paths.overlay_ass = overlayPath;
+    } else if (needsText && !(paths.font && await supportsDrawtextFilter())) {
+      await renderPngOverlays(plan, paths, signal);
+    }
 
     const stamped: ComposePlan = {
       ...plan,
@@ -102,10 +207,14 @@ export const ffmpegComposeProvider: ComposeProvider = {
     };
 
     const args = buildFfmpegArgs(stamped, paths);
-    const { code, stderr } = await runCommand(["ffmpeg", ...args]);
+    const { code, stderr } = await runCommand(["ffmpeg", ...args], signal);
     if (code !== 0) {
       throw new Error(`ffmpeg 合成失败（退出码 ${code}）：\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
     }
-    return { output_key: plan.output_key };
+    const probe = await probeOutput(paths.output);
+    if (probe.width !== plan.res.w || probe.height !== plan.res.h || Math.abs(probe.fps - plan.fps) > 0.01) {
+      throw new Error(`成片参数不匹配：${probe.width}x${probe.height} ${probe.fps}fps`);
+    }
+    return { output_key: plan.output_key, probe };
   },
 };

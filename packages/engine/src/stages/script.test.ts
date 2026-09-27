@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Destination } from "../schema/destination";
 import type { Episode } from "../schema/episode";
 import { ContentBlockedError } from "../rules/content";
-import { runScript } from "./script";
+import { runScript, runScriptRevision } from "./script";
 
 const destination: Destination = {
   destination_id: "d_test",
@@ -20,7 +20,7 @@ const destination: Destination = {
 
 function fixtureEpisode(): Episode {
   return {
-    episode_id: "e_test",
+    name: "测试期", episode_id: "e_test",
     owner_id: "u_test",
     persona_id: "c_test",
     persona_version: 1,
@@ -29,12 +29,12 @@ function fixtureEpisode(): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status: "scripting",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-24T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
     share: { enabled: false, slug: "" },
-    brief: { season: "秋", aspect: "9:16", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
+    brief: { season: "秋", aspect: "9:16", requirements: "", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
     grid_refs: [],
     scenes: [],
     shots: [],
@@ -87,6 +87,33 @@ test("advances scripting -> script_review and fills shots/scenes", async () => {
   expect(updated.status).toBe("script_review");
   expect(updated.shots).toHaveLength(26);
   expect(updated.scenes).toHaveLength(1);
+});
+
+test("new projects get one-second shots and editable generated captions", async () => {
+  const updated = await runScript({ ...fixtureEpisode(), cut_policy: "fixed_1s" }, undefined, { destination });
+  expect(updated.shots).toHaveLength(26);
+  expect(updated.shots.every((shot) => shot.duration_s === 1)).toBe(true);
+  expect(updated.shots[0]?.caption).toBe("动作 1");
+});
+
+test("script revision keeps review state and replaces the full draft after success", async () => {
+  const original = { ...fixtureEpisode(), status: "script_review" as const,
+    cut_policy: "fixed_1s" as const, shots: [{ beat: "原稿" } as Episode["shots"][number]],
+    script_pending_task_id: "tk_revision" };
+  const updated = await runScriptRevision(original, "增加美食镜头", { destination });
+  expect(updated.status).toBe("script_review");
+  expect(updated.shots).toHaveLength(26);
+  expect(updated.shots[0]?.duration_s).toBe(1);
+  expect(updated.script_pending_task_id).toBeNull();
+  expect(original.shots[0]?.beat).toBe("原稿");
+});
+
+test("blocked revision instruction leaves the original draft untouched", async () => {
+  const original = { ...fixtureEpisode(), status: "script_review" as const,
+    shots: [{ beat: "原稿" } as Episode["shots"][number]] };
+  await expect(runScriptRevision(original, "加入血腥内容", { destination }))
+    .rejects.toBeInstanceOf(ContentBlockedError);
+  expect(original.shots[0]?.beat).toBe("原稿");
 });
 
 test("throws ContentBlockedError before calling the provider when brief.banned hits the blocklist", async () => {

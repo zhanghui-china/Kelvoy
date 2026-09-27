@@ -2,10 +2,13 @@ import {
   type Episode,
   type EpisodePatch,
   type ShotPatch,
+  type ProviderTally,
   isLegalEpisodeStatusChange,
   isLegalShotStatusChange,
+  tally,
 } from "@kelvoy/engine";
 import { getDb } from "./db";
+import { decodeEpisode } from "./episode-codec";
 
 /**
  * Episode storage (ADR-0004): the one place that owns SQLite access for
@@ -47,7 +50,7 @@ export async function insertEpisode(episode: Episode): Promise<void> {
 export async function getEpisode(episodeId: string): Promise<GetEpisodeResult> {
   const row = readRow(episodeId);
   if (!row) return { ok: false, error: "not_found" };
-  return { ok: true, episode: JSON.parse(row.doc) as Episode, row_version: row.row_version };
+  return { ok: true, episode: decodeEpisode(row.doc), row_version: row.row_version };
 }
 
 export async function listEpisodes(ownerId: string): Promise<Episode[]> {
@@ -56,7 +59,94 @@ export async function listEpisodes(ownerId: string): Promise<Episode[]> {
       "select doc from episodes where owner_id = ? order by episode_id",
     )
     .all(ownerId);
-  return rows.map((row) => JSON.parse(row.doc) as Episode);
+  return rows.map((row) => decodeEpisode(row.doc));
+}
+
+/** Account usage projection: only aggregate costs and table fields leave the server. */
+export async function getUsageSummary(ownerId: string): Promise<{
+  periods: { episode_id: string; destination_name: string; persona_name: string;
+    created_at: string; shot_count: number; credits_used: number; cost_usd: number }[];
+  providers: ProviderTally[];
+  totals: { episodes: number; credits_used: number; cost_usd: number };
+}> {
+  const rows = getDb().query<{
+    episode_id: string; destination_name: string | null; persona_name: string | null;
+    destination_id: string; persona_id: string; created_at: string;
+    credits_used: number | null; shots: string | null;
+  }, [string]>(`select e.episode_id,
+    json_extract(e.doc, '$.destination_id') as destination_id,
+    json_extract(e.doc, '$.persona_id') as persona_id,
+    json_extract(d.doc, '$.name') as destination_name,
+    json_extract(p.doc, '$.name') as persona_name,
+    json_extract(e.doc, '$.created_at') as created_at,
+    json_extract(e.doc, '$.credits_used') as credits_used,
+    json_extract(e.doc, '$.shots') as shots
+    from episodes e
+    left join destinations d on d.destination_id = json_extract(e.doc, '$.destination_id')
+    left join personas p on p.persona_id = json_extract(e.doc, '$.persona_id')
+    where e.owner_id = ? order by created_at desc, e.episode_id desc`).all(ownerId);
+  const providers = new Map<string, ProviderTally>();
+  let credits = 0;
+  let cost = 0;
+  const periods = rows.map((row) => {
+    const shots = JSON.parse(row.shots ?? "[]") as Episode["shots"];
+    const cost_usd = tally({ shots }).reduce((sum, item) => {
+      const key = `${item.provider}/${item.model}`;
+      const current = providers.get(key) ?? { provider: item.provider, model: item.model,
+        shots: 0, attempts: 0, costUsd: 0 };
+      current.shots += item.shots;
+      current.attempts += item.attempts;
+      current.costUsd += item.costUsd;
+      providers.set(key, current);
+      return sum + item.costUsd;
+    }, 0);
+    credits += row.credits_used ?? 0;
+    cost += cost_usd;
+    return { episode_id: row.episode_id,
+      destination_name: row.destination_name ?? row.destination_id,
+      persona_name: row.persona_name ?? row.persona_id,
+      created_at: row.created_at, shot_count: shots.length,
+      credits_used: row.credits_used ?? 0, cost_usd };
+  });
+  return { periods, providers: [...providers.values()].sort((a, b) => b.costUsd - a.costUsd),
+    totals: { episodes: periods.length, credits_used: credits, cost_usd: cost } };
+}
+
+/** Small list projection: no prompts, candidate paths, or model provenance leave the DB. */
+export async function listEpisodeOverviews(ownerId: string): Promise<{
+  episode_id: string; name: string; status: Episode["status"]; persona_id: string;
+  destination_id: string; created_at: string; credits_used: number;
+  render: { title: string }; shot_count: number; approved_shot_count: number;
+  any_shot_started: boolean; all_keyframes_selected: boolean; all_shots_approved: boolean;
+}[]> {
+  const rows = getDb().query<{
+    episode_id: string; name: string | null; status: Episode["status"];
+    persona_id: string; destination_id: string; created_at: string;
+    credits_used: number | null; title: string | null; shots: string;
+  }, [string]>(`select episode_id,
+    json_extract(doc, '$.name') as name,
+    json_extract(doc, '$.status') as status,
+    json_extract(doc, '$.persona_id') as persona_id,
+    json_extract(doc, '$.destination_id') as destination_id,
+    json_extract(doc, '$.created_at') as created_at,
+    json_extract(doc, '$.credits_used') as credits_used,
+    json_extract(doc, '$.render.title') as title,
+    json_extract(doc, '$.shots') as shots
+    from episodes where owner_id = ? order by episode_id`).all(ownerId);
+  return rows.map((row) => {
+    const shots = JSON.parse(row.shots ?? "[]") as Episode["shots"];
+    return {
+      episode_id: row.episode_id, name: row.name ?? row.title ?? row.destination_id,
+      status: row.status, persona_id: row.persona_id, destination_id: row.destination_id,
+      created_at: row.created_at, credits_used: row.credits_used ?? 0,
+      render: { title: row.title ?? "" },
+      shot_count: shots.length,
+      approved_shot_count: shots.filter((shot) => shot.status === "approved").length,
+      any_shot_started: shots.some((shot) => shot.status !== "draft"),
+      all_keyframes_selected: shots.length > 0 && shots.every((shot) => !!shot.kf_selected),
+      all_shots_approved: shots.length > 0 && shots.every((shot) => shot.status === "approved"),
+    };
+  });
 }
 
 /**
@@ -70,7 +160,7 @@ export async function getEpisodeBySlug(slug: string): Promise<Episode | null> {
       "select doc from episodes where json_extract(doc, '$.share.slug') = ?",
     )
     .get(slug);
-  return row ? (JSON.parse(row.doc) as Episode) : null;
+  return row ? decodeEpisode(row.doc) : null;
 }
 
 export type SetShareResult = Extract<PatchResult, { ok: false }> | { ok: true; row_version: number; slug: string };
@@ -91,7 +181,7 @@ export async function setShare(
     return { ok: false, error: "version_conflict", current_row_version: row.row_version };
   }
 
-  const episode = JSON.parse(row.doc) as Episode;
+  const episode = decodeEpisode(row.doc);
   const slug = episode.share.slug || crypto.randomUUID().slice(0, 8);
   const result = commit(episodeId, clientRowVersion, { ...episode, share: { enabled, slug } }, row.row_version);
   if (!result.ok) return result;
@@ -110,7 +200,7 @@ export async function patchEpisode(
     return { ok: false, error: "version_conflict", current_row_version: row.row_version };
   }
 
-  const episode = JSON.parse(row.doc) as Episode;
+  const episode = decodeEpisode(row.doc);
   if (patch.status && !isLegalEpisodeStatusChange(episode.status, patch.status)) {
     return { ok: false, error: "illegal_transition" };
   }
@@ -128,7 +218,7 @@ export async function patchShot(
   const row = readRow(episodeId);
   if (!row) return { ok: false, error: "not_found" };
 
-  const episode = JSON.parse(row.doc) as Episode;
+  const episode = decodeEpisode(row.doc);
   const shotIndex = episode.shots.findIndex((s) => s.no === shotNo);
   if (shotIndex === -1) return { ok: false, error: "not_found" };
 
@@ -166,7 +256,7 @@ export async function replaceEpisode(
     return { ok: false, error: "version_conflict", current_row_version: row.row_version };
   }
 
-  const before = JSON.parse(row.doc) as Episode;
+  const before = decodeEpisode(row.doc);
   if (episode.status !== before.status && !isLegalEpisodeStatusChange(before.status, episode.status)) {
     return { ok: false, error: "illegal_transition" };
   }

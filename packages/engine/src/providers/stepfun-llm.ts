@@ -25,6 +25,7 @@ interface RawShot {
   time: SceneTime;
   size: ShotSize;
   beat: string;
+  caption?: string;
   camera: ShotCamera;
   landmark: string | null;
   kf_prompt: string;
@@ -39,8 +40,12 @@ function buildPrompt(input: {
   food: string[];
   season: string;
   tone: string;
+  requirements: string;
+  aspect: string;
   banned: string[];
   feedback?: string;
+  instruction?: string;
+  previousShots?: Shot[];
 }): string {
   const skeleton = SKELETONS[input.destinationType];
   const landmarkList = input.landmarks
@@ -54,6 +59,10 @@ function buildPrompt(input: {
 地标（landmark 字段必须填这里的 id，原样引用，不许编造新地标）：${landmarkList || "无"}
 地方饮食：${input.food.join("、") || "无"}
 季节：${input.season}　语气：${input.tone}
+画幅：${input.aspect}
+创作要求：${input.requirements || "无"}
+${input.previousShots ? `这是本期现有分镜，保留目的地与角色设定，重新创作一份符合硬规则的完整分镜：${JSON.stringify(input.previousShots.map((shot) => ({ no: shot.no, beat: shot.beat, caption: shot.caption, landmark: shot.landmark })))}` : ""}
+${input.instruction ? `本次优化指令：${input.instruction}` : ""}
 禁止出现：${input.banned.join("、") || "无"}
 
 叙事骨架（段落顺序参考，不用照抄段落名，用于把握节奏）：${skeleton.segments.join(" → ")}
@@ -70,7 +79,8 @@ ${skeleton.notes}
 - 不得出现政治、色情、暴力、违法、歧视内容及他人商标
 - scene 字段填这一镜所属的段落名（同一段落内的镜头用完全相同的字符串，用于后续分组）
 
-每个元素字段：scene, time, size, beat, camera, landmark, kf_prompt, motion_prompt。
+每个元素字段：scene, time, size, beat, caption, camera, landmark, kf_prompt, motion_prompt。
+caption 是可以直接烧录到成片的一句简短中文字幕，不能重复冗长镜头描述。
 kf_prompt 是关键帧图片生成的描述（中文，一句话，含光线/机位/动作，不含角色外貌细节）。
 motion_prompt 是给视频阶段的运动提示（中文，一句话，只描述一个动作）。
 ${input.feedback ? `\n上一轮生成有以下问题，这一轮改正：\n${input.feedback}` : ""}`;
@@ -103,6 +113,7 @@ function parseRawShots(data: unknown): RawShot[] {
       time: r.time as SceneTime,
       size: r.size as ShotSize,
       beat: r.beat,
+      caption: typeof r.caption === "string" && r.caption.trim() ? r.caption.trim() : r.beat,
       camera: r.camera as ShotCamera,
       landmark: (r.landmark as string | null) ?? null,
       kf_prompt: r.kf_prompt,
@@ -139,6 +150,7 @@ function buildScenesAndShots(raw: RawShot[], durationTotal: number): { shots: Sh
     scene: sceneIdByName.get(r.scene) as string,
     size: r.size,
     beat: r.beat,
+    caption: r.caption,
     camera: r.camera,
     landmark: r.landmark,
     kf_prompt: r.kf_prompt,
@@ -162,6 +174,7 @@ function buildScenesAndShots(raw: RawShot[], durationTotal: number): { shots: Sh
 function checkShotsContent(shots: Shot[]) {
   const inputs = shots.flatMap((shot) => [
     { field: `第 ${shot.no} 镜 beat`, text: shot.beat },
+    { field: `第 ${shot.no} 镜 caption`, text: shot.caption ?? "" },
     { field: `第 ${shot.no} 镜 kf_prompt`, text: shot.kf_prompt },
     { field: `第 ${shot.no} 镜 motion_prompt`, text: shot.motion_prompt },
   ]);
@@ -193,7 +206,7 @@ async function callChatCompletion(prompt: string): Promise<string> {
 }
 
 export const stepfunScriptProvider: ScriptProvider = {
-  async generateShots({ brief, destination }) {
+  async generateShots({ brief, destination, instruction, previousShots }) {
     let feedback: string | undefined;
     let contentViolations: ReturnType<typeof checkShotsContent> = [];
 
@@ -206,8 +219,12 @@ export const stepfunScriptProvider: ScriptProvider = {
         food: destination.food,
         season: brief.season,
         tone: brief.tone,
+        requirements: brief.requirements ?? "",
+        aspect: brief.aspect,
         banned: brief.banned,
         feedback,
+        instruction,
+        previousShots,
       });
 
       const content = await callChatCompletion(prompt);

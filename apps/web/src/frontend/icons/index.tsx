@@ -110,10 +110,18 @@ export function LogoutIcon({ size, className }: IconProps) {
   );
 }
 
+export function HelpIcon({ size, className }: IconProps) {
+  return (
+    <svg {...icon(size, className)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.4 9a2.8 2.8 0 0 1 5.2 1.4c0 1.9-2.6 2.2-2.6 4" />
+      <circle cx="12" cy="17.5" r=".6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 /**
- * 品牌标志（新设计稿第二版）——抽象山形，呼应 PRD 的旅行主题，颜色固定用
- * `--color-brand`（品牌红），跟错误态的 `--color-danger` 是两个独立变量，
- * 即使当前两者同值也不共用同一个 token 名字。落在侧栏顶部和登录页。
+ * 品牌标志——抽象山形，呼应旅行主题。颜色独立于错误态。
  */
 export function LogoMark({ size = 28, className }: IconProps) {
   return (

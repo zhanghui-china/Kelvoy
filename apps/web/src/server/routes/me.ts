@@ -1,5 +1,5 @@
 import { validateChangePasswordRequest, validateUserSettingsPatch } from "@kelvoy/engine";
-import { getUserById, setPasswordById, updateUserSettings } from "@kelvoy/store";
+import { getCreditBalance, getUserById, listCreditLedger, setPasswordById, updateUserSettings } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 
@@ -10,12 +10,24 @@ const me = new Hono();
 
 me.use("*", requireOwner);
 
+me.get("/", async (c) => {
+  const user = await getUserById(c.get("ownerId"));
+  if (!user) return c.json({ ok: false, error: "unauthorized" }, 401);
+  return c.json({ ok: true, user: { user_id: user.user_id, username: user.username },
+    balance: getCreditBalance(user.user_id) });
+});
+
 me.get("/settings", async (c) => {
   const user = await getUserById(c.get("ownerId"));
   // session 有效但账号没了（被删号）——当成未登录，让前端回登录页。
   if (!user) return c.json({ ok: false, error: "unauthorized" }, 401);
   return c.json({ ok: true, settings: user.settings });
 });
+
+me.get("/credits", (c) => c.json({ ok: true,
+  balance: getCreditBalance(c.get("ownerId")),
+  ledger: listCreditLedger(c.get("ownerId")),
+}));
 
 me.patch("/settings", async (c) => {
   const body = await c.req.json().catch(() => null);

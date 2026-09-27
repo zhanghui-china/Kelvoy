@@ -1,4 +1,4 @@
-import { close, createUser, getUserByUsername, open } from "@kelvoy/store";
+import { close, createUser, getUserByUsername, grantCredits, open } from "@kelvoy/store";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import auth from "./auth";
@@ -47,7 +47,65 @@ afterEach(() => {
   close();
 });
 
+test("credit balance and ledger belong only to the signed-in account", async () => {
+  const app = buildApp();
+  await seedUser("first", "hunter2");
+  await seedUser("second", "hunter2");
+  const first = await getUserByUsername("first");
+  grantCredits(first!.user_id, 7, "grant-first");
+  expect((await app.request("/api/me/credits")).status).toBe(401);
+  const secondCookie = await loginCookie(app, "second", "hunter2");
+  const second = await (await app.request("/api/me/credits", { headers: { cookie: secondCookie } })).json() as {
+    balance: { available: number }; ledger: unknown[];
+  };
+  expect(second.balance.available).toBe(0);
+  expect(second.ledger).toHaveLength(0);
+  const firstCookie = await loginCookie(app, "first", "hunter2");
+  const mine = await (await app.request("/api/me/credits", { headers: { cookie: firstCookie } })).json() as {
+    balance: { available: number }; ledger: unknown[];
+  };
+  expect(mine.balance.available).toBe(7);
+  expect(mine.ledger).toHaveLength(1);
+});
+
 describe("GET/PATCH /api/me/settings", () => {
+  test("persists onboarding dismissal for this account and can reopen it", async () => {
+    const app = buildApp();
+    await seedUser("onboarding", "hunter2");
+    await seedUser("neighbor", "hunter2");
+    const mine = await loginCookie(app, "onboarding", "hunter2");
+    const theirs = await loginCookie(app, "neighbor", "hunter2");
+    expect((await send(app, "PATCH", "/api/me/settings", { onboarding_dismissed_version: 2 }, mine)).status).toBe(400);
+    expect((await send(app, "PATCH", "/api/me/settings", { onboarding_dismissed_version: 1 }, mine)).status).toBe(200);
+    expect(await (await app.request("/api/me/settings", { headers: { cookie: mine } })).json()).toEqual({ ok: true, settings: { onboarding_dismissed_version: 1 } });
+    expect(await (await app.request("/api/me/settings", { headers: { cookie: theirs } })).json()).toEqual({ ok: true, settings: {} });
+    expect((await send(app, "PATCH", "/api/me/settings", { onboarding_dismissed_version: 0 }, mine)).status).toBe(200);
+    expect(await (await app.request("/api/me/settings", { headers: { cookie: mine } })).json()).toEqual({ ok: true, settings: { onboarding_dismissed_version: 0 } });
+  });
+  test("returns only the authenticated account identity for draft isolation", async () => {
+    const app = buildApp();
+    await seedUser("first", "hunter2");
+    await seedUser("second", "hunter2");
+    const firstUser = await getUserByUsername("first");
+    grantCredits(firstUser!.user_id, 100_000, "sidebar-first");
+    expect((await app.request("/api/me")).status).toBe(401);
+    const firstCookie = await loginCookie(app, "first", "hunter2");
+    const secondCookie = await loginCookie(app, "second", "hunter2");
+    const first = await (await app.request("/api/me", { headers: { cookie: firstCookie } })).json() as { user: { user_id: string; username: string }; balance: { available: number; reserved: number } };
+    const second = await (await app.request("/api/me", { headers: { cookie: secondCookie } })).json() as { user: { user_id: string; username: string }; balance: { available: number; reserved: number } };
+    expect(first.user.username).toBe("first");
+    expect(second.user.username).toBe("second");
+    expect(first.user.user_id).not.toBe(second.user.user_id);
+    expect(first.balance).toEqual({ available: 100_000, reserved: 0 });
+    expect(second.balance).toEqual({ available: 0, reserved: 0 });
+  });
+  test("rejects grid as a newly saved default mode", async () => {
+    const app = buildApp();
+    await seedUser("grid-default", "hunter2");
+    const cookie = await loginCookie(app, "grid-default", "hunter2");
+    const res = await send(app, "PATCH", "/api/me/settings", { default_mode: "grid" }, cookie);
+    expect(res.status).toBe(400);
+  });
   test("refuses both without a session", async () => {
     const app = buildApp();
     expect((await app.request("/api/me/settings")).status).toBe(401);
@@ -69,12 +127,12 @@ describe("GET/PATCH /api/me/settings", () => {
     await seedUser("dannei", "hunter2");
     const cookie = await loginCookie(app, "dannei", "hunter2");
 
-    await send(app, "PATCH", "/api/me/settings", { default_tone: "松弛", default_mode: "grid" }, cookie);
+    await send(app, "PATCH", "/api/me/settings", { default_tone: "松弛", default_mode: "per_shot" }, cookie);
     const res = await send(app, "PATCH", "/api/me/settings", { default_candidates: 3 }, cookie);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
-      settings: { default_tone: "松弛", default_mode: "grid", default_candidates: 3 },
+      settings: { default_tone: "松弛", default_mode: "per_shot", default_candidates: 3 },
     });
   });
 

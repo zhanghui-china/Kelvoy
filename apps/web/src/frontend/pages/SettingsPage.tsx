@@ -1,12 +1,12 @@
 import { type FormEvent, useEffect, useState } from "react";
 import {
   DEFAULT_CANDIDATES,
-  type EpisodeMode,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
 } from "@kelvoy/engine";
 import { changePassword, getMySettings, updateMySettings } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
+import { GuideTip } from "../GuideTip";
 import "./SettingsPage.css";
 
 /*
@@ -25,7 +25,6 @@ export default function SettingsPage() {
 
   const [tone, setTone] = useState("");
   const [candidates, setCandidates] = useState<number>(DEFAULT_CANDIDATES);
-  const [mode, setMode] = useState<EpisodeMode>("per_shot");
   const [savingDefaults, setSavingDefaults] = useState(false);
   const [defaultsErrors, setDefaultsErrors] = useState<string[] | null>(null);
   const [defaultsSaved, setDefaultsSaved] = useState(false);
@@ -44,7 +43,6 @@ export default function SettingsPage() {
     if (!settings) return;
     if (settings.default_tone !== undefined) setTone(settings.default_tone);
     if (settings.default_candidates !== undefined) setCandidates(settings.default_candidates);
-    if (settings.default_mode !== undefined) setMode(settings.default_mode);
   }, [settings]);
 
   async function handleSaveDefaults(e: FormEvent) {
@@ -53,11 +51,10 @@ export default function SettingsPage() {
     setDefaultsErrors(null);
     setDefaultsSaved(false);
 
-    // 三项一起提交：语气留空就是空字符串，表示"没有默认语气"，不是不改。
+    // 语气留空就是空字符串，表示"没有默认语气"，不是不改。
     const result = await updateMySettings({
       default_tone: tone.trim(),
       default_candidates: candidates,
-      default_mode: mode,
     });
     setSavingDefaults(false);
 
@@ -115,6 +112,7 @@ export default function SettingsPage() {
         <section className="k-card">
           <h2>出片默认值</h2>
           <p className="k-card-meta">新建一期时预填这几项，每一期都还能当场改。</p>
+          <GuideTip section="settings">默认值仅影响之后新建的作品。候选数仅用于传统关键帧方式；人物与场景直出视频不会生成候选图。提交时请看预估积分。</GuideTip>
 
           <form className="k-settings-form" onSubmit={handleSaveDefaults}>
             <label className="k-field">
@@ -127,7 +125,7 @@ export default function SettingsPage() {
             </label>
 
             <label className="k-field">
-              默认每镜候选数
+              传统方式默认每镜候选数
               <select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>
                 {CANDIDATE_OPTIONS.map((n) => (
                   <option key={n} value={n}>
@@ -136,30 +134,6 @@ export default function SettingsPage() {
                 ))}
               </select>
             </label>
-
-            <fieldset className="k-field k-settings-fieldset">
-              <legend>默认关键帧模式</legend>
-              <label className="k-settings-radio">
-                <input
-                  type="radio"
-                  name="default_mode"
-                  value="per_shot"
-                  checked={mode === "per_shot"}
-                  onChange={() => setMode("per_shot")}
-                />
-                逐镜生成 —— 质量高、可控，图片调用量 ×2
-              </label>
-              <label className="k-settings-radio">
-                <input
-                  type="radio"
-                  name="default_mode"
-                  value="grid"
-                  checked={mode === "grid"}
-                  onChange={() => setMode("grid")}
-                />
-                网格直出 —— 省一步、更便宜，分辨率受限
-              </label>
-            </fieldset>
 
             {defaultsErrors && (
               <ul className="k-error" role="alert">

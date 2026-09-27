@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Template } from "@kelvoy/engine";
 import { close, open } from "./db";
-import { deleteTemplate, getTemplate, listTemplates, upsertTemplate } from "./templates";
+import { deleteTemplate, getTemplate, insertTemplate, listTemplates, upsertTemplate } from "./templates";
 
 function fixture(id: string, ownerId: string | null): Template {
   return {
@@ -39,6 +39,12 @@ test("upserting the same id again overwrites in place", async () => {
   await upsertTemplate({ ...fixture("t_1", null), name: "改名了" });
   const result = await getTemplate("t_1");
   expect(result?.name).toBe("改名了");
+});
+
+test("insertTemplate never overwrites an existing template", async () => {
+  await upsertTemplate(fixture("t_official", null));
+  expect(() => insertTemplate({ ...fixture("t_official", "u_other"), name: "overwritten" })).toThrow();
+  expect(await getTemplate("t_official")).toEqual(fixture("t_official", null));
 });
 
 test("listTemplates with no ownerId returns only official templates", async () => {

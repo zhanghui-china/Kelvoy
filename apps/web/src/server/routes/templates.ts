@@ -1,6 +1,6 @@
 import type { Template } from "@kelvoy/engine";
 import { validateCreateTemplateRequest } from "@kelvoy/engine";
-import { deleteTemplate, listTemplates, upsertTemplate } from "@kelvoy/store";
+import { deleteTemplate, insertTemplate, listTemplates } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 
@@ -25,7 +25,7 @@ templates.post("/", async (c) => {
     owner_id: c.get("ownerId"),
     ...result.value,
   };
-  await upsertTemplate(template);
+  insertTemplate(template);
   return c.json({ ok: true, template }, 201);
 });
 

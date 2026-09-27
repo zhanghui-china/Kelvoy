@@ -30,6 +30,7 @@ export const EPISODE_STATUS_LABELS: Record<EpisodeStatus, string> = {
   kf_review: "待审关键帧",
   clipping: "生成片段中",
   clip_review: "待审片段",
+  compose_ready: "合成设置",
   composing: "合成中",
   done: "已完成",
   failed: "失败",

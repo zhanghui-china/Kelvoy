@@ -52,6 +52,32 @@ test("buildFfmpegArgs cuts each shot with -ss/-t before its input", () => {
   expect(args[args.length - 1]).toBe("/p/e_1/final/e_1.mp4");
 });
 
+test("fixed one-second cuts use exact normalized frame windows", () => {
+  const fixed = planFixture({
+    cuts: [{ no: 1, clip_key: "clip/01.mp4", trim_start_s: 2 / 30, duration_s: 1,
+      trim_start_frame: 2, frame_count: 30 }],
+  });
+  const args = buildFfmpegArgs(fixed, pathsFixture({ clips: ["/p/e_1/clip/01.mp4"] }));
+  expect(args.join(" ")).not.toContain("-ss ");
+  expect(filterGraph(args)).toContain("fps=30,setsar=1,trim=start_frame=2:end_frame=32,setpts=PTS-STARTPTS");
+});
+
+test("new-cut subtitles and two-frame transitions stay inside each 30-frame shot", () => {
+  const fixed = planFixture({
+    cuts: [
+      { no: 1, clip_key: "clip/01.mp4", trim_start_s: 0, duration_s: 1, trim_start_frame: 0, frame_count: 30, caption: "到达无锡" },
+      { no: 2, clip_key: "clip/02.mp4", trim_start_s: 0, duration_s: 1, trim_start_frame: 0, frame_count: 30, caption: "开始旅程" },
+    ],
+    subtitles_enabled: true,
+    transitions_enabled: true,
+  });
+  const graph = filterGraph(buildFfmpegArgs(fixed, pathsFixture()));
+  expect(graph).toContain("text=到达无锡");
+  expect(graph).toContain("text=开始旅程");
+  expect(graph).toContain("fade=t=out:s=28:n=2[vcut0]");
+  expect(graph).toContain("fade=t=in:s=0:n=2[vcut1]");
+});
+
 test("buildFfmpegArgs normalizes every input to the plan's 9:16 target and concats intro+cuts+outro", () => {
   const graph = filterGraph(buildFfmpegArgs(planFixture(), pathsFixture()));
   expect(graph).toContain("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1");

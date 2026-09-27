@@ -1,4 +1,4 @@
-import type { Episode, EpisodeMode, Shot } from "./episode";
+import type { Episode, EpisodeAspect, Shot } from "./episode";
 import type { Persona, PersonaStyle } from "./persona";
 import type { StageName } from "../stages";
 import type { Template } from "./template";
@@ -14,6 +14,10 @@ export interface Task {
   stage: StageName;
   shot_no?: number;
   attempt: number;
+  operation?: "script_regenerate" | "script_optimize";
+  instruction?: string;
+  lease_token?: string;
+  generation_id?: string;
 }
 
 /**
@@ -52,6 +56,7 @@ export type ShotPatch = Partial<
     | "bad_shot_reported"
     | "model"
     | "beat"
+    | "caption"
     | "size"
     | "camera"
     | "landmark"
@@ -69,7 +74,7 @@ export interface PatchShotRequest {
 // and render-stage outputs). Brief/scenes/shots are not touched here —
 // shots go through PatchShotRequest.
 export type EpisodePatch = Partial<
-  Pick<Episode, "status" | "credits_used" | "grid_refs" | "render" | "music">
+  Pick<Episode, "status" | "credits_used" | "grid_refs" | "render" | "music" | "failure_reason">
 >;
 
 export interface PatchEpisodeRequest {
@@ -101,12 +106,17 @@ export type PersonaPatch = Partial<Pick<Persona, "name" | "desc" | "locked" | "d
 
 // FR-01 建期: apps/web 的 POST /api/episodes 请求体. series_id/season/
 // tone/banned/mode 都可省略——省略时由路由按 FR-01"缺字段给默认值"的验收
-// 要求补上(mode 默认 per_shot 是 PRD 原文写明的默认值,其余是本 issue 自定
+// 要求补上(mode 仅可为 per_shot,其余是本 issue 自定
 // 的合理默认,见 M2-5 commit)。persona_version/destination_version/
 // render/music/estimated_credits 等派生字段不在请求体里——那些是服务端在
 // 提交那一刻从 persona/destination/template 当前状态算出来的快照,不是
 // 客户端能直接指定的。
 export interface CreateEpisodeRequest {
+  name?: string;
+  requirements?: string;
+  aspect?: EpisodeAspect;
+  video_source?: "keyframe" | "references";
+  candidate_count?: number;
   persona_id: string;
   destination_id: string;
   template_id: string;
@@ -114,7 +124,7 @@ export interface CreateEpisodeRequest {
   season?: string;
   tone?: string;
   banned?: string[];
-  mode?: EpisodeMode;
+  mode?: "per_shot";
   outfit_override?: string;
 }
 

@@ -1,13 +1,15 @@
-import type { VideoProvider } from "./types";
+import type { InferenceRequest } from "./inference-types";
+import type { EpisodeAspect } from "../schema/episode";
 
 /**
- * 图生视频 (PRD §7): image (+prompt) -> video 3-5s. Self-hosted via Wan 2.x
- * (I2V, VACE for reference control) / HunyuanVideo I2V / CogVideoX, called
- * through services/inference's /video endpoint. Most likely long-term
- * overflow target — see kling-api.ts / jimeng-api.ts.
+ * Pure mapping for the measured 480-pixel MiniMax-H3 vertical preset.
  */
-export const localVideoProvider: VideoProvider = {
-  async generateClip(_input) {
-    throw new Error("not implemented");
-  },
-};
+export function localVideoRequest(input: {
+  prompt: string; first_frame?: string; refs?: string[]; duration_s: number; seed: number;
+  aspect?: EpisodeAspect;
+}): InferenceRequest {
+  const refs = input.refs ?? (input.first_frame ? [input.first_frame] : []);
+  if (refs.length !== 1 && refs.length !== 2) throw new Error("video needs one keyframe or two references");
+  return { prompt: input.prompt, refs, seed: input.seed,
+    size: input.aspect ?? "9:16", count: 1, params: { duration_s: input.duration_s } };
+}

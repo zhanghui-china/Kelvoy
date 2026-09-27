@@ -20,13 +20,13 @@ export interface MusicTrack {
   tones: string[];
 }
 
-// 示例目录：条目形态固定，曲子本身等团队采购授权素材后替换/补齐。
+// 这些演示音轨由 scripts/generate-demo-music.py 原创合成并随仓库交付。
 export const MUSIC_CATALOG: readonly MusicTrack[] = [
-  { file: "music/calm_morning.mp3", bpm: 84, license: "CC0-1.0", tones: ["松弛", "治愈", "清晨", "安静"] },
-  { file: "music/city_walk.mp3", bpm: 100, license: "CC0-1.0", tones: ["日常", "City Walk", "轻快"] },
-  { file: "music/bright_travel.mp3", bpm: 120, license: "CC0-1.0", tones: ["欢快", "明亮", "活力"] },
-  { file: "music/night_neon.mp3", bpm: 128, license: "CC0-1.0", tones: ["夜景", "赛博", "都市"] },
-  { file: "music/wide_nature.mp3", bpm: 92, license: "CC0-1.0", tones: ["辽阔", "自然", "史诗"] },
+  { file: "music/calm_morning.mp3", bpm: 84, license: "Kelvoy original", tones: ["松弛", "治愈", "清晨", "安静"] },
+  { file: "music/city_walk.mp3", bpm: 100, license: "Kelvoy original", tones: ["日常", "City Walk", "轻快"] },
+  { file: "music/bright_travel.mp3", bpm: 120, license: "Kelvoy original", tones: ["欢快", "明亮", "活力"] },
+  { file: "music/night_neon.mp3", bpm: 128, license: "Kelvoy original", tones: ["夜景", "赛博", "都市"] },
+  { file: "music/wide_nature.mp3", bpm: 92, license: "Kelvoy original", tones: ["辽阔", "自然", "史诗"] },
 ];
 
 /**

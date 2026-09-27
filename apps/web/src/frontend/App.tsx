@@ -3,6 +3,7 @@ import Layout from "./layout/Layout";
 import DestinationsPage from "./pages/DestinationsPage";
 import EpisodeDetailPage from "./pages/EpisodeDetailPage";
 import HomePage from "./pages/HomePage";
+import HelpPage from "./pages/HelpPage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import NewEpisodePage from "./pages/NewEpisodePage";
@@ -42,6 +43,7 @@ function App() {
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/usage" element={<UsagePage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/help" element={<HelpPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

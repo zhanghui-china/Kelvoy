@@ -3,12 +3,14 @@ import type { Episode, Shot } from "@kelvoy/engine";
 import type { WriteResult } from "../api/client";
 import {
   continueEpisode,
+  convertLegacyCuts,
   episodeFileUrl,
   patchShot,
   regenShot,
   reportBadShot,
 } from "../api/client";
 import { describeWriteError } from "./errors";
+import { GuideTip } from "../GuideTip";
 import ReviewQueue from "./ReviewQueue";
 import { MutationError, ShotHeader } from "./ShotHeader";
 import { canRegen, regenHint } from "./shot-rules";
@@ -53,7 +55,11 @@ function ClipShot({
   const [error, setError] = useState<string | null>(null);
 
   const total = clipSeconds ?? FALLBACK_CLIP_SECONDS;
-  const maxStart = Math.max(0, Number((total - shot.duration_s).toFixed(2)));
+  const fixedCut = episode.cut_policy === "fixed_1s";
+  const cutSeconds = fixedCut ? 1 : shot.duration_s;
+  const maxStart = Math.max(0, fixedCut
+    ? Math.floor((total - cutSeconds) * 30) / 30
+    : Number((total - cutSeconds).toFixed(2)));
   const allChecked = REDLINES.every((r) => checked[r.key]);
 
   // 拖动时实时预览那 1 秒（FR-05）：把播放头挪到起点，放 1 秒就停。
@@ -120,26 +126,27 @@ function ClipShot({
             />
           )}
           <label className="k-field k-desk-slider">
-            起点（目标时长 {shot.duration_s} 秒，片段长 {total.toFixed(1)} 秒）
+            起点（截取 {cutSeconds} 秒，片段长 {total.toFixed(1)} 秒）
             <input
               type="range"
               min={0}
               max={maxStart}
-              step={0.1}
+              step={fixedCut ? 1 / 30 : 0.1}
               value={Math.min(trimStart, maxStart)}
-              aria-valuetext={`起点 ${trimStart.toFixed(1)} 秒`}
+              aria-valuetext={`起点 ${trimStart.toFixed(2)} 秒`}
               disabled={mutation.pending}
               onChange={(e) => {
                 const value = Number(e.target.value);
-                setTrimStart(value);
-                preview(value);
+                const snapped = fixedCut ? Math.round(value * 30) / 30 : value;
+                setTrimStart(snapped);
+                preview(snapped);
               }}
               onPointerUp={saveTrim}
               onKeyUp={saveTrim}
               onBlur={saveTrim}
             />
             <span className="k-card-meta">
-              起点 {trimStart.toFixed(1)} 秒（已保存 {(shot.trim_start_s ?? 0).toFixed(1)} 秒）
+              起点 {trimStart.toFixed(2)} 秒（已保存 {(shot.trim_start_s ?? 0).toFixed(2)} 秒）
             </span>
           </label>
         </div>
@@ -215,7 +222,19 @@ export default function ClipReview({
         <div className="k-desk-toolbar">
           <div className="k-card-title">审核 3 · 片段</div>
         </div>
+        <GuideTip section="clips">{episode.cut_policy === "fixed_1s"
+          ? "每镜严格截取 1 秒，起点按 30 fps 帧格调整；看完动作并确认五项质量红线后再通过。坏镜可报告并免费重生成一次。"
+          : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 1 秒剪辑时，先转换并重新确认。"}</GuideTip>
         <MutationError error={mutation.error} />
+        {episode.cut_policy !== "fixed_1s" && episode.shots.every((shot) => !!shot.clip) &&
+          <div className="k-card">
+            <div className="k-card-title">旧版剪辑</div>
+            <p className="k-card-meta">可保留现有片段，改为每镜严格 1 秒。转换后需要重新确认每镜起点和质量。</p>
+            <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending}
+              onClick={() => mutation.run((rowVersion) => convertLegacyCuts(episode.episode_id, rowVersion))}>
+              使用新版 1 秒剪辑
+            </button>
+          </div>}
 
         {episode.shots.map((shot) => (
           <ClipShot
@@ -235,7 +254,7 @@ export default function ClipReview({
             disabled={mutation.pending || unapproved > 0 || episode.status !== "clip_review"}
             onClick={() => mutation.run((rowVersion) => continueEpisode(episode.episode_id, rowVersion))}
           >
-            继续 → 合成
+            {episode.cut_policy === "fixed_1s" ? "下一步：合成设置" : "继续 → 合成"}
           </button>
           {unapproved > 0 && <span className="k-card-meta">还有 {unapproved} 镜没通过。</span>}
         </div>

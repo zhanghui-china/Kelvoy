@@ -19,6 +19,7 @@ export type ShotEvent =
   | { type: "keyframe_ready" } // generating_kf -> kf_ready
   | { type: "select_keyframe" } // kf_ready -> kf_selected
   | { type: "start_clip" } // kf_selected -> generating_clip
+  | { type: "start_direct_clip" } // draft -> generating_clip, person + scene references
   | { type: "clip_ready" } // generating_clip -> clip_ready
   | { type: "approve" } // clip_ready -> approved
   | { type: "request_regen" } // kf_ready | clip_ready | approved -> rejected
@@ -41,6 +42,10 @@ export function transitionShot(current: ShotStatus, event: ShotEvent): ShotStatu
     }
     case "start_clip": {
       if (current !== "kf_selected") throw illegalTransition(current, event.type);
+      return "generating_clip";
+    }
+    case "start_direct_clip": {
+      if (current !== "draft") throw illegalTransition(current, event.type);
       return "generating_clip";
     }
     case "clip_ready": {
@@ -81,6 +86,7 @@ export function isLegalShotStatusChange(from: ShotStatus, to: ShotStatus): boole
     { type: "keyframe_ready" },
     { type: "select_keyframe" },
     { type: "start_clip" },
+    { type: "start_direct_clip" },
     { type: "clip_ready" },
     { type: "approve" },
     { type: "request_regen" },

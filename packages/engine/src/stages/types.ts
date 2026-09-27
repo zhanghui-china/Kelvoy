@@ -1,5 +1,5 @@
 import type { ComposeProvider } from "../providers/types";
-import type { Destination, Persona } from "../schema";
+import type { Destination, EpisodeAspect, Persona } from "../schema";
 
 /**
  * Extra read-only context a stage needs beyond the Episode itself.
@@ -12,9 +12,53 @@ import type { Destination, Persona } from "../schema";
 export interface StageContext {
   destination?: Destination;
   persona?: Persona;
+  generation_id?: string;
+  /** Unique lease token for this execution; generation_id stays stable for seeds. */
+  execution_id?: string;
+  signal?: AbortSignal;
+  attempt?: number;
+  keyframe?: {
+    generate(input: {
+      episode_id: string;
+      shot_no: number;
+      candidate_no: number;
+      aspect?: EpisodeAspect;
+      prompt: string;
+      refs: string[];
+      seed: number;
+      generation_id: string;
+      execution_id?: string;
+      signal?: AbortSignal;
+    }): Promise<GeneratedAsset>;
+  };
+  video?: {
+    generate(input: {
+      episode_id: string;
+      shot_no: number;
+      keyframe?: string;
+      refs?: string[];
+      aspect?: EpisodeAspect;
+      prompt: string;
+      duration_s: number;
+      seed: number;
+      generation_id: string;
+      execution_id?: string;
+      signal?: AbortSignal;
+    }): Promise<GeneratedAsset>;
+  };
   /**
    * compose 阶段专用：执行 ffmpeg 的后端。engine 只出 ComposePlan，实现由
    * apps/worker 注入（CLAUDE.md：ffmpeg 只在 worker 上跑）。
    */
   compose?: ComposeProvider;
+}
+
+export interface GeneratedAsset {
+  /** Episode-relative artifact key, already saved by the worker. */
+  key: string;
+  model: string;
+  version: string;
+  seed: number;
+  seconds: number;
+  ref_hashes: string[];
 }

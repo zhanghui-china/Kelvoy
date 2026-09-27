@@ -5,6 +5,8 @@ export interface ScriptProvider {
   generateShots(input: {
     brief: EpisodeBrief;
     destination: Destination;
+    instruction?: string;
+    previousShots?: Shot[];
   }): Promise<{ shots: Shot[]; scenes: Scene[] }>;
 }
 
@@ -51,7 +53,7 @@ export interface MusicProvider {
  */
 export interface ComposePlan {
   episode_id: string;
-  /** 成片相对 key，约定为 final/<episode_id>.mp4（不进 schema，见 stages/compose.ts）。 */
+  /** 成片相对 key，带版本号。 */
   output_key: string;
   cuts: ShotCut[];
   music: ComposePlanMusic | null;
@@ -68,6 +70,8 @@ export interface ComposePlan {
   metadata: Record<string, string>;
   res: { w: number; h: number };
   fps: number;
+  subtitles_enabled?: boolean;
+  transitions_enabled?: boolean;
 }
 
 export interface ComposePlanMusic {
@@ -77,5 +81,7 @@ export interface ComposePlanMusic {
 }
 
 export interface ComposeProvider {
-  compose(input: { plan: ComposePlan }): Promise<{ output_key: string }>;
+  compose(input: { plan: ComposePlan; signal?: AbortSignal }): Promise<{ output_key: string; probe: {
+    duration_s: number; width: number; height: number; fps: number; size_bytes: number;
+  } }>;
 }

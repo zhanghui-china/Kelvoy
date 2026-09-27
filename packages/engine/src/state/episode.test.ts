@@ -33,7 +33,7 @@ function makeShot(no: number): Shot {
 
 function makeEpisode(shotCount: number): Episode {
   return {
-    episode_id: "e_test",
+    name: "测试期", episode_id: "e_test",
     owner_id: "u_test",
     persona_id: "c_test",
     persona_version: 1,
@@ -42,7 +42,7 @@ function makeEpisode(shotCount: number): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status: "draft",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-23T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
@@ -50,6 +50,7 @@ function makeEpisode(shotCount: number): Episode {
     brief: {
       season: "秋",
       aspect: "9:16",
+      requirements: "",
       duration_s: 30,
       tone: "松弛",
       outfit_override: null,
@@ -81,6 +82,7 @@ describe("transitionEpisode: legal transitions", () => {
     ["kf_review", "clipping"],
     ["clipping", "clip_review"],
     ["clip_review", "composing"],
+    ["compose_ready", "composing"],
     ["composing", "done"],
   ];
 
@@ -89,6 +91,20 @@ describe("transitionEpisode: legal transitions", () => {
       expect(transitionEpisode(from, { type: "advance" })).toBe(to);
     });
   }
+
+  test("new projects can pause at compose settings before starting", () => {
+    expect(transitionEpisode("clip_review", { type: "prepare_compose" })).toBe("compose_ready");
+    expect(isLegalEpisodeStatusChange("clip_review", "compose_ready")).toBe(true);
+    expect(() => transitionEpisode("kf_review", { type: "prepare_compose" })).toThrow();
+  });
+
+  test("review can reopen for regeneration after clip review or completion", () => {
+    expect(transitionEpisode("clip_review", { type: "reopen_review", into: "kf_review" })).toBe("kf_review");
+    expect(transitionEpisode("done", { type: "reopen_review", into: "kf_review" })).toBe("kf_review");
+    expect(transitionEpisode("done", { type: "reopen_review", into: "clip_review" })).toBe("clip_review");
+    expect(isLegalEpisodeStatusChange("done", "clip_review")).toBe(true);
+    expect(() => transitionEpisode("script_review", { type: "reopen_review", into: "clip_review" })).toThrow();
+  });
 
   const generatingStates: GeneratingEpisodeStatus[] = [
     "scripting",
@@ -142,6 +158,7 @@ describe("transitionEpisode: illegal transitions", () => {
 describe("removeShot", () => {
   test("removes a shot into removed_shots without mutating the input", () => {
     const episode = makeEpisode(MIN_SHOTS + 1);
+    episode.status = "script_review";
     const result = removeShot(episode, 1);
 
     expect(result.shots.length).toBe(MIN_SHOTS);
@@ -155,12 +172,21 @@ describe("removeShot", () => {
 
   test("throws when removal would drop below the MIN_SHOTS floor", () => {
     const episode = makeEpisode(MIN_SHOTS);
+    episode.status = "script_review";
     expect(() => removeShot(episode, 1)).toThrow();
   });
 
   test("throws when the shot doesn't exist", () => {
     const episode = makeEpisode(MIN_SHOTS + 1);
+    episode.status = "script_review";
     expect(() => removeShot(episode, 999)).toThrow();
+  });
+
+  test("rejects removal after script review even when enough shots remain", () => {
+    const episode = makeEpisode(MIN_SHOTS + 1);
+    episode.status = "done";
+    expect(() => removeShot(episode, 1)).toThrow();
+    expect(episode.shots).toHaveLength(MIN_SHOTS + 1);
   });
 });
 

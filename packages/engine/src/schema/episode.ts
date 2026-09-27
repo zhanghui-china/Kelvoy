@@ -2,6 +2,8 @@ export type ShotSize = "wide" | "medium" | "close" | "detail" | "pov";
 export type ShotCamera = "static" | "pan" | "push" | "follow";
 export type SceneTime = "morning" | "noon" | "afternoon" | "evening" | "night";
 export type EpisodeMode = "per_shot" | "grid";
+export type EpisodeAspect = "9:16" | "16:9";
+export type VideoSource = "keyframe" | "references";
 
 // PRD v0.2 §6 期级状态机. Review states advance to the next generating state on user action.
 export type EpisodeStatus =
@@ -13,6 +15,7 @@ export type EpisodeStatus =
   | "kf_review"
   | "clipping"
   | "clip_review"
+  | "compose_ready"
   | "composing"
   | "done"
   | "failed";
@@ -62,6 +65,7 @@ export interface Shot {
   scene: string; // Scene.id
   size: ShotSize;
   beat: string;
+  caption?: string;
   camera: ShotCamera;
   landmark: string | null; // Landmark.id
   kf_prompt: string;
@@ -79,7 +83,8 @@ export interface Shot {
 
 export interface EpisodeBrief {
   season: string;
-  aspect: string; // "9:16"
+  aspect: EpisodeAspect;
+  requirements: string;
   duration_s: number;
   tone: string;
   outfit_override: string | null;
@@ -104,10 +109,24 @@ export interface EpisodeRender {
   intro: string | null; // defaults from template, overridable per episode
   outro: string | null;
   ai_label: boolean;
+  subtitles_enabled?: boolean;
+  transitions_enabled?: boolean;
+}
+
+export interface FinalArtifact {
+  version: number;
+  key: string;
+  duration_s: number;
+  width: number;
+  height: number;
+  fps: number;
+  size_bytes: number;
+  completed_at: string;
 }
 
 export interface Episode {
   episode_id: string;
+  name: string;
   owner_id: string;
   persona_id: string;
   persona_version: number;
@@ -117,6 +136,14 @@ export interface Episode {
   template_id: string;
   status: EpisodeStatus;
   mode: EpisodeMode;
+  /** Missing on older episodes; they keep the reviewed-keyframe path. */
+  video_source?: VideoSource;
+  cut_policy?: "fixed_1s" | "beat_aligned";
+  candidate_count: number;
+  script_pending_task_id?: string | null;
+  script_action_error?: string | null;
+  failure_reason?: string | null;
+  final?: FinalArtifact | null;
   created_at: string; // ISO 8601
   estimated_credits: number;
   credits_used: number;

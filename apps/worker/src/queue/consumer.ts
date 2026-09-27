@@ -1,30 +1,35 @@
 import {
   ContentBlockedError,
   type Episode,
-  type EpisodeStatus,
+  type ShotStatus,
   type StageContext,
   type StageName,
   type Task,
   runStage,
+  runScriptRevision,
 } from "@kelvoy/engine";
 import {
-  completeTask,
+  completeTaskWithEpisode,
+  completeTaskWithoutEpisode,
   dequeueTask,
   enqueueTask,
-  failTask,
-  getDestination,
+  failTaskWithCredits,
+  getDestinationVersion,
   getEpisode,
-  getPersona,
-  patchEpisode,
-  replaceEpisode,
+  getPersonaVersion,
+  hasActiveStageTasks,
+  prepareTaskShot,
+  renewTaskLease,
+  requeueTaskAfterCommitConflict,
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
+import { createLocalGenerationProviders } from "../generation/local";
 
 /**
  * Task queue consumer (ADR-0004): polls the local `tasks` table (no Redis,
  * no HTTP — worker and web share a machine and both call @kelvoy/store
- * directly). Dispatches to @kelvoy/engine's runStage and writes the result
- * back with optimistic-lock protection via replaceEpisode.
+ * directly). Dispatches to @kelvoy/engine's runStage and commits the result
+ * with the task lease, episode version and credit settlement in one transaction.
  */
 
 const POLL_INTERVAL_MS = 1000;
@@ -34,15 +39,20 @@ const POLL_INTERVAL_MS = 1000;
 // packages/engine/src/providers/overflow.ts.
 const MAX_LOCAL_ATTEMPTS = 2;
 
-// M1-15 (#39): the only stage pair in the six-stage pipeline with no human
-// review gate between them (PRD §4 flowchart: A[brief] --> B[script] direct)
-// — every other hand-off is driven by a person via apps/web's
-// REVIEW_GATE_ADVANCE (episodes.ts POST /:id/continue). Keyed by the status
-// a completed stage just landed the episode in, not by stage name, to
-// mirror that table's shape.
-const AUTO_ADVANCE: Partial<Record<EpisodeStatus, StageName>> = {
-  scripting: "script",
-};
+function failureReason(error: unknown): string {
+  if (error instanceof ContentBlockedError) return "内容未通过审核，请修改创作要求后重新提交。";
+  const message = error instanceof Error ? error.message : String(error);
+  if (/no active step plan subscription/i.test(message))
+    return "StepFun Step Plan 尚未开通，联系团队开通订阅后重试。";
+  if (/quota_exceeded|exceeded your current quota/i.test(message))
+    return "StepFun API 额度不足，联系团队补充额度后重试。";
+  if (/缺少环境变量 STEPFUN_API_KEY/.test(message))
+    return "脚本服务未配置 StepFun 密钥，请联系团队。";
+  return "生成失败。已有产物已保留，可重试或联系团队排查。";
+}
+
+// Brief-to-script enqueue commits with the episode in store. Assets still
+// fans out per-shot keyframe tasks after review 1.
 
 export async function consumeLoop(signal?: AbortSignal): Promise<void> {
   while (!signal?.aborted) {
@@ -51,68 +61,186 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
       await Bun.sleep(POLL_INTERVAL_MS);
       continue;
     }
-    await handleTask(task);
+    const execution = new AbortController();
+    const onShutdown = () => execution.abort();
+    signal?.addEventListener("abort", onShutdown, { once: true });
+    if (signal?.aborted) execution.abort();
+    const heartbeat = task.lease_token
+      ? setInterval(() => {
+        void renewTaskLease(task.task_id, task.lease_token!).then((active) => {
+          if (!active) execution.abort();
+        }).catch(() => execution.abort());
+      }, 30_000)
+      : null;
+    try {
+      await handleTask(task, { signal: execution.signal });
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+      signal?.removeEventListener("abort", onShutdown);
+    }
   }
 }
 
 /**
  * Everything a stage needs beyond the Episode itself. Engine stages never
  * touch @kelvoy/store (CLAUDE.md directory table), so the reads happen here:
- * "script" needs the destination, "compose" needs the persona (account-level
- * LUT / title style) plus the ffmpeg backend — the one provider that must be
- * injected rather than imported by engine, because ffmpeg only runs on the
- * worker.
+ * Script needs the destination; generation gets worker-owned HTTP/file
+ * adapters; compose gets the worker-owned ffmpeg backend.
  */
-export async function buildStageContext(stage: StageName, episode: Episode): Promise<StageContext> {
+export async function buildStageContext(stage: StageName, episode: Episode, task?: Task): Promise<StageContext> {
   const [destination, persona] = await Promise.all([
-    getDestination(episode.destination_id),
-    getPersona(episode.persona_id),
+    getDestinationVersion(episode.destination_id, episode.destination_version),
+    getPersonaVersion(episode.persona_id, episode.persona_version),
   ]);
   const context: StageContext = {};
+  if (task?.lease_token) context.execution_id = task.lease_token;
   if (destination) context.destination = destination;
   if (persona) context.persona = persona;
   if (stage === "compose") context.compose = ffmpegComposeProvider;
+  if ((stage === "keyframe" || stage === "video") && task) {
+    Object.assign(context, createLocalGenerationProviders(), {
+      generation_id: task.generation_id ?? task.task_id,
+      attempt: task.attempt,
+    });
+  }
   return context;
 }
 
-export async function handleTask(task: Task): Promise<void> {
+function generationStatus(stage: StageName): ShotStatus | null {
+  if (stage === "keyframe") return "generating_kf";
+  if (stage === "video") return "generating_clip";
+  return null;
+}
+
+/** Persist the first shot-state hop before the long model call. */
+async function prepareShot(task: Task, rowVersion: number, episode: Episode): Promise<
+  | { kind: "ready"; episode: Episode; row_version: number }
+  | { kind: "skip" }
+  | { kind: "lease_lost" }
+  | { kind: "conflict" }
+> {
+  const target = generationStatus(task.stage);
+  if (!target) return { kind: "ready", episode, row_version: rowVersion };
+  const shot = episode.shots.find((item) => item.no === task.shot_no);
+  if (!shot) throw new Error(`shot ${task.shot_no} not found`);
+  if (shot.status === "approved" ||
+      (task.stage === "keyframe" && shot.status === "kf_ready") ||
+      (task.stage === "video" && shot.status === "clip_ready")) return { kind: "skip" };
+  if (shot.status === target) return { kind: "ready", episode, row_version: rowVersion };
+  const expected = task.stage === "keyframe" || episode.video_source === "references"
+    ? "draft" : "kf_selected";
+  if (shot.status !== expected && shot.status !== "failed" &&
+      !(shot.status === "rejected" && shot.regen_stage === task.stage)) {
+    throw new Error(`shot ${shot.no} cannot enter ${target} from ${shot.status}`);
+  }
+  const patched = prepareTaskShot(task, rowVersion, target);
+  if (!patched.ok && patched.error === "lease_lost") return { kind: "lease_lost" };
+  if (!patched.ok) return { kind: "conflict" };
+  const updated = await getEpisode(task.episode_id);
+  if (!updated.ok) return { kind: "conflict" };
+  return { kind: "ready", episode: updated.episode, row_version: updated.row_version };
+}
+
+export async function handleTask(task: Task, overrides: Partial<StageContext> = {}): Promise<void> {
+  if (overrides.signal?.aborted) return;
+  if (task.operation === "script_regenerate" || task.operation === "script_optimize") {
+    await handleScriptActionTask(task, overrides);
+    return;
+  }
   const result = await getEpisode(task.episode_id);
   if (!result.ok) {
     // Episode vanished (shouldn't happen under normal operation) — no
     // point retrying, and nowhere to write a failure status either.
-    await failTask(task.task_id, { requeue: false });
+    failTaskWithCredits(task, false);
     return;
   }
 
+  let current = result;
   try {
+    if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
+    const prepared = await prepareShot(task, current.row_version, current.episode);
+    if (prepared.kind === "skip") {
+      completeTaskWithoutEpisode(task);
+      return;
+    }
+    if (prepared.kind === "conflict") {
+      requeueTaskAfterCommitConflict(task);
+      return;
+    }
+    if (prepared.kind === "lease_lost") return;
+    current = { ok: true, episode: prepared.episode, row_version: prepared.row_version };
+    overrides.signal?.throwIfAborted();
+    const context = { ...await buildStageContext(task.stage, current.episode, task), ...overrides };
     const updated = await runStage(
       task.stage,
-      result.episode,
+      current.episode,
       task.shot_no,
-      await buildStageContext(task.stage, result.episode),
+      context,
     );
-    const written = await replaceEpisode(task.episode_id, result.row_version, updated);
+    if (overrides.signal?.aborted) return;
+    if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
+    const written = completeTaskWithEpisode(task, current.row_version, updated, current.episode);
     if (!written.ok) {
-      // Lost a write race or the transition became illegal between our
-      // read and write — requeue so the next attempt re-reads fresh state,
-      // same MAX_LOCAL_ATTEMPTS budget as a stage failure.
-      await failTask(task.task_id, { requeue: task.attempt < MAX_LOCAL_ATTEMPTS });
+      if (written.error === "version_conflict") requeueTaskAfterCommitConflict(task);
+      else if (written.error === "illegal_transition") {
+        failTaskWithCredits(task, false, "生成期间输入发生变化，请重试。");
+      } else if (written.error === "not_found") {
+        completeTaskWithoutEpisode(task);
+      }
       return;
     }
-    await completeTask(task.task_id);
 
-    const nextStage = AUTO_ADVANCE[updated.status];
-    if (nextStage) {
-      await enqueueTask({ episode_id: task.episode_id, stage: nextStage });
+    if (task.stage === "assets" && updated.status === "keyframing" &&
+        !hasActiveStageTasks(task.episode_id, "keyframe")) {
+      for (const shot of updated.shots.filter((item) => item.status === "draft")) {
+        await enqueueTask({ episode_id: task.episode_id, stage: "keyframe", shot_no: shot.no });
+      }
     }
+
   } catch (err) {
+    if (overrides.signal?.aborted) return;
+    if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     if (err instanceof ContentBlockedError) {
-      // 内容审核拦截是确定性失败，重试也还是命中同样的词——不重试，直接
-      // 把期标成 failed（同 packages/cli/src/run-stage.ts 的失败写回方式）。
-      await failTask(task.task_id, { requeue: false });
-      await patchEpisode(task.episode_id, result.row_version, { status: "failed" });
+      failTaskWithCredits(task, false, failureReason(err));
       return;
     }
-    await failTask(task.task_id, { requeue: task.attempt < MAX_LOCAL_ATTEMPTS });
+    const retry = task.attempt < MAX_LOCAL_ATTEMPTS;
+    failTaskWithCredits(task, retry, retry ? undefined : failureReason(err));
+  }
+}
+
+async function handleScriptActionTask(task: Task, overrides: Partial<StageContext>): Promise<void> {
+  if (overrides.signal?.aborted) return;
+  const current = await getEpisode(task.episode_id);
+  if (!current.ok) {
+    failTaskWithCredits(task, false);
+    return;
+  }
+  if (current.episode.status !== "script_review" || current.episode.script_pending_task_id !== task.task_id) {
+    completeTaskWithoutEpisode(task); // already applied or cancelled
+    return;
+  }
+  try {
+    const context = { ...await buildStageContext("script", current.episode, task), ...overrides };
+    const updated = await runScriptRevision(current.episode, task.instruction ?? "", context);
+    if (overrides.signal?.aborted) return;
+    if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
+    const written = completeTaskWithEpisode(task, current.row_version, updated);
+    if (!written.ok) {
+      if (written.error === "version_conflict") requeueTaskAfterCommitConflict(task);
+      else if (written.error === "illegal_transition" || written.error === "not_found") {
+        completeTaskWithoutEpisode(task);
+      }
+      return;
+    }
+  } catch (error) {
+    if (overrides.signal?.aborted) return;
+    if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
+    const retry = !(error instanceof ContentBlockedError) && task.attempt < MAX_LOCAL_ATTEMPTS;
+    if (retry) {
+      failTaskWithCredits(task, true);
+      return;
+    }
+    failTaskWithCredits(task, false);
   }
 }

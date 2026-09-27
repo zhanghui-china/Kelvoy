@@ -1,14 +1,17 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   type ContentViolation,
+  type Persona,
   DEFAULT_CANDIDATES,
-  type EpisodeMode,
+  type EpisodeAspect,
+  type VideoSource,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
 } from "@kelvoy/engine";
 import {
   createEpisode,
+  getMe,
   getEstimate,
   getMySettings,
   isContentViolation,
@@ -17,8 +20,10 @@ import {
   listTemplates,
 } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
+import { GuideTip } from "../GuideTip";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import "./NewEpisodePage.css";
+import { clearDraft, draftForDestinationParam, readDraft, saveDraft, seasonAfterDestinationChange, type EpisodeDraft } from "./episode-draft";
 
 // FR-01 语气快捷 chip，点一下直接填入(替换，不追加)。
 const TONE_CHIPS = ["松弛", "治愈", "活力", "文艺"];
@@ -42,12 +47,22 @@ function splitBannedInput(raw: string): string[] {
 }
 
 export default function NewEpisodePage() {
+  const meRes = useApiResource(getMe, []);
+  if (meRes.loading) return <p className="k-empty">加载中…</p>;
+  if (meRes.error || !meRes.data?.user) return <p className="k-error">无法确认当前账号，请重新登录。</p>;
+  return <NewEpisodeForm ownerId={meRes.data.user.user_id} />;
+}
+
+function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   const navigate = useNavigate();
   // 首页"灵感目的地"卡片点进来时带 ?destination=<id>（#42）。
   const [searchParams] = useSearchParams();
   const destinationParam = searchParams.get("destination");
+  const restoredDraft = useRef(readDraft(ownerId));
+  const initialDraft = useRef(draftForDestinationParam(restoredDraft.current, destinationParam));
+  const handledDestinationParam = useRef(destinationParam);
 
-  // M2-15：账号级出片默认值（语气/候选数/关键帧模式）。没设置过的账号回
+  // M2-15：账号级出片默认值（语气/候选数）。没设置过的账号回
   // 空对象，下面的预填就什么都不做，表单保持 M2-15 之前的初值。
   const settingsRes = useApiResource(getMySettings, []);
   const settings = settingsRes.data?.settings ?? null;
@@ -60,28 +75,36 @@ export default function NewEpisodePage() {
   const destinations = destinationsRes.data?.destinations ?? [];
   const templates = templatesRes.data?.templates ?? [];
 
-  const [personaId, setPersonaId] = useState("");
-  const [destinationId, setDestinationId] = useState("");
-  const [templateId, setTemplateId] = useState("");
-  const [seasonMode, setSeasonMode] = useState<"preset" | "custom">("preset");
-  const [season, setSeason] = useState("");
-  const [tone, setTone] = useState("");
-  const [banned, setBanned] = useState<string[]>(DEFAULT_BANNED);
+  const [personaId, setPersonaId] = useState(() => initialDraft.current?.personaId ?? "");
+  const [personaTab, setPersonaTab] = useState<"mine" | "official">("mine");
+  const [destinationId, setDestinationId] = useState(destinationParam ?? initialDraft.current?.destinationId ?? "");
+  const [templateId, setTemplateId] = useState(initialDraft.current?.templateId ?? "");
+  const [seasonMode, setSeasonMode] = useState<"preset" | "custom">(initialDraft.current?.seasonMode ?? "preset");
+  const [season, setSeason] = useState(initialDraft.current?.season ?? "");
+  const [tone, setTone] = useState(initialDraft.current?.tone ?? "");
+  const [banned, setBanned] = useState<string[]>(initialDraft.current?.banned ?? DEFAULT_BANNED);
   const [bannedInput, setBannedInput] = useState("");
-  const [outfitOverride, setOutfitOverride] = useState("");
-  const [mode, setMode] = useState<EpisodeMode>("per_shot");
-  const [candidates, setCandidates] = useState<number>(DEFAULT_CANDIDATES);
+  const [outfitOverride, setOutfitOverride] = useState(initialDraft.current?.outfitOverride ?? "");
+  const [candidates, setCandidates] = useState<number>(initialDraft.current?.candidates ?? DEFAULT_CANDIDATES);
+  const [name, setName] = useState(initialDraft.current?.name ?? "");
+  const [requirements, setRequirements] = useState(initialDraft.current?.requirements ?? "");
+  const [aspect, setAspect] = useState<EpisodeAspect>(initialDraft.current?.aspect ?? "9:16");
+  const [videoSource, setVideoSource] = useState<VideoSource>(initialDraft.current?.videoSource ?? "references");
 
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<string[] | null>(null);
   const [violations, setViolations] = useState<ContentViolation[] | null>(null);
 
+  useEffect(() => {
+    const draft: EpisodeDraft = { personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect, videoSource };
+    saveDraft(draft, ownerId);
+  }, [ownerId, personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect, videoSource]);
+
   // 出片默认值到位后预填一次。settings 的引用只在这次请求结束时变，所以
   // 不会覆盖用户之后的手动修改（同下面那几个"各选一次默认项"的 effect）。
   useEffect(() => {
-    if (!settings) return;
+    if (!settings || restoredDraft.current) return;
     if (settings.default_tone !== undefined) setTone(settings.default_tone);
-    if (settings.default_mode !== undefined) setMode(settings.default_mode);
     if (settings.default_candidates !== undefined) setCandidates(settings.default_candidates);
   }, [settings]);
 
@@ -93,12 +116,31 @@ export default function NewEpisodePage() {
   // 目的地的默认项优先用 ?destination=<id> 预选；id 不在库里（或者库变了）
   // 就回落到第一个，不报错——这个入口只是省一次下拉选择。
   useEffect(() => {
-    if (destinations.length === 0 || destinationId !== "") return;
+    if (destinations.length === 0 || destinations.some((d) => d.destination_id === destinationId)) return;
     const preselected = destinations.find((d) => d.destination_id === destinationParam);
     setDestinationId(preselected?.destination_id ?? destinations[0].destination_id);
   }, [destinations, destinationId, destinationParam]);
 
+  useEffect(() => {
+    if (!destinationParam || destinationParam === handledDestinationParam.current || destinations.length === 0) return;
+    handledDestinationParam.current = destinationParam;
+    const destination = destinations.find((d) => d.destination_id === destinationParam);
+    if (!destination) return;
+    setDestinationId(destination.destination_id);
+    setSeasonMode("preset");
+    setSeason(destination.season_best[0] ?? "");
+    setTemplateId(templates.find((t) => t.skeleton === destination.type)?.template_id ?? "");
+  }, [destinationParam, destinations, templates]);
+
   const selectedPersona = personas.find((p) => p.persona_id === personaId) ?? null;
+  const visiblePersonas = personas.filter((p) => personaTab === "official" ? p.owner_id === null : p.owner_id !== null);
+
+  useEffect(() => {
+    if (!personasRes.loading && personas.length > 0 && personas.every((p) => p.owner_id === null)) {
+      setPersonaTab("official");
+    }
+  }, [personasRes.loading, personas]);
+
   const selectedDestination = destinations.find((d) => d.destination_id === destinationId) ?? null;
   const selectedTemplate = templates.find((t) => t.template_id === templateId) ?? null;
 
@@ -106,7 +148,7 @@ export default function NewEpisodePage() {
   // 换成第一个匹配的模板；用户手动选了别的骨架的模板会保留到下次目的地变化。
   useEffect(() => {
     if (!selectedDestination) return;
-    if (selectedTemplate && selectedTemplate.skeleton === selectedDestination.type) return;
+    if (selectedTemplate && (selectedTemplate.skeleton === selectedDestination.type || initialDraft.current?.templateId)) return;
     const match = templates.find((t) => t.skeleton === selectedDestination.type);
     if (match) setTemplateId(match.template_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,16 +157,14 @@ export default function NewEpisodePage() {
   // 季节默认取目的地的 season_best[0]，跟着目的地切换；"自定义"下不跟随。
   useEffect(() => {
     if (seasonMode !== "preset" || !selectedDestination) return;
-    setSeason(selectedDestination.season_best[0] ?? "");
+    if (!initialDraft.current?.season) setSeason(selectedDestination.season_best[0] ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDestination?.destination_id, seasonMode]);
 
-  // FR-01/FR-09：mode / 候选数一变就重新粗估，展示在提交按钮旁，只展示不
-  // 拦截。候选数目前只进估价，不随建期请求落库——Episode 里还没有这个字段
-  // （PRD §6），要让流水线真按 N 出候选是 M1 接真实图像模型时的事。
+  // New episodes use the working per-shot mode; candidate count controls the estimate.
   const { data: estimateData, loading: estimateLoading } = useApiResource(
-    () => getEstimate(mode, candidates),
-    [mode, candidates],
+    () => getEstimate("per_shot", candidates, videoSource),
+    [candidates, videoSource],
   );
   const estimate = estimateData?.estimate ?? null;
 
@@ -147,12 +187,16 @@ export default function NewEpisodePage() {
 
     const result = await createEpisode({
       persona_id: personaId,
+      name: name.trim() || undefined,
+      requirements,
+      aspect,
+      video_source: videoSource,
+      candidate_count: candidates,
       destination_id: destinationId,
       template_id: templateId,
       season: season.trim().length > 0 ? season : undefined,
       tone: tone.trim().length > 0 ? tone : undefined,
       banned,
-      mode,
       outfit_override: outfitOverride.trim().length > 0 ? outfitOverride : undefined,
     });
     setSubmitting(false);
@@ -170,6 +214,7 @@ export default function NewEpisodePage() {
       return;
     }
 
+    clearDraft();
     navigate(`/episodes/${result.episode.episode_id}`);
   }
 
@@ -204,206 +249,97 @@ export default function NewEpisodePage() {
   }
 
   return (
-    <div>
-      <div className="k-eyebrow">新的一期</div>
-      <h1>新建一期</h1>
-
-      <form onSubmit={handleSubmit} className="k-brief-form">
-        <div className="k-brief-grid">
-          <label className="k-field">
-            角色
-            <select value={personaId} onChange={(e) => setPersonaId(e.target.value)}>
-              {personas.map((p) => (
-                <option key={p.persona_id} value={p.persona_id}>
-                  {p.name} v{p.version}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="k-field">
-            目的地
-            <select value={destinationId} onChange={(e) => setDestinationId(e.target.value)}>
-              {destinations.map((d) => (
-                <option key={d.destination_id} value={d.destination_id}>
-                  {d.city} · {d.name}（{DESTINATION_TYPE_LABELS[d.type]}）
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="k-field">
-            模板
-            <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-              {templates.map((t) => (
-                <option key={t.template_id} value={t.template_id}>
-                  {t.name}
-                  {selectedDestination && t.skeleton !== selectedDestination.type
-                    ? "（骨架与目的地类型不同）"
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedTemplate && (
-            <p className="k-card-meta k-brief-template-preview">
-              LUT：{selectedTemplate.lut} · 片头：{selectedTemplate.intro ?? "无"} · 片尾：
-              {selectedTemplate.outro ?? "无"} · 标题样式：{selectedTemplate.title_style}
-            </p>
-          )}
-
-          <label className="k-field">
-            季节
-            <select
-              value={seasonMode === "custom" ? "__custom__" : season}
-              onChange={(e) => {
-                if (e.target.value === "__custom__") {
-                  setSeasonMode("custom");
-                  return;
-                }
-                setSeasonMode("preset");
-                setSeason(e.target.value);
-              }}
-            >
-              {(selectedDestination?.season_best ?? []).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-              <option value="__custom__">自定义…</option>
-            </select>
-          </label>
-          {seasonMode === "custom" && (
-            <label className="k-field">
-              自定义季节
-              <input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="例如：早春" />
+    <div className="k-create-page">
+      <div className="k-eyebrow">创作工作台 / 新建一期</div>
+      <h1>创建新的旅行故事</h1>
+      <p className="k-page-intro">选择角色与目的地，再写下这趟旅程希望呈现的内容。</p>
+      <GuideTip section="create">先选出镜角色与目的地。推荐人物图＋场景图直出视频，省去每镜图片生成；创建前核对实时积分预估。</GuideTip>
+      <form onSubmit={handleSubmit} className="k-create-layout">
+        <div className="k-card k-create-form-panel">
+          <div className="k-create-panel-heading"><span className="k-create-step">01</span><div><h2>本期内容</h2><p>为这期作品设定目的地与创作方向</p></div></div>
+          <div className="k-create-fields">
+            <label className="k-field">本期名称
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={selectedDestination ? `${selectedDestination.city} · ${selectedDestination.name}` : "输入名称"} />
+              <span className="k-card-meta">用于在工作台识别这一期；成片标题在合成设置中单独填写。</span>
             </label>
-          )}
-
-          <label className="k-field">
-            语气
-            <input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="例如：松弛" />
-          </label>
-          <div className="k-brief-chips k-brief-tone-chips">
-            {TONE_CHIPS.map((chip) => (
-              <button type="button" key={chip} className="k-chip" onClick={() => setTone(chip)}>
-                {chip}
-              </button>
-            ))}
-          </div>
-
-          <label className="k-field">
-            穿搭覆盖（可选）
-            <input
-              value={outfitOverride}
-              onChange={(e) => setOutfitOverride(e.target.value)}
-              placeholder={selectedPersona?.default_outfit ?? ""}
-            />
-          </label>
-
-          <label className="k-field">
-            禁止项
-            <div className="k-brief-banned-input">
-              <input
-                value={bannedInput}
-                onChange={(e) => setBannedInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addBannedTerms();
-                  }
-                }}
-                placeholder="按逗号/顿号/回车分隔多项"
-              />
-              <button type="button" className="k-btn k-btn-secondary" onClick={addBannedTerms}>
-                添加
-              </button>
+            <label className="k-field">目的地
+              <select value={destinationId} onChange={(e) => { const next = destinations.find((d) => d.destination_id === e.target.value); setDestinationId(e.target.value); setSeason(seasonAfterDestinationChange(seasonMode, season, next?.season_best ?? [])); const match = templates.find((t) => t.skeleton === next?.type); if (match) setTemplateId(match.template_id); }}>
+                {destinations.map((d) => <option key={d.destination_id} value={d.destination_id}>{d.city} · {d.name}（{DESTINATION_TYPE_LABELS[d.type]}）</option>)}
+              </select>
+              <span className="k-card-meta">直出视频会把选中角色的参考图与每镜地标实景图一起交给模型。</span>
+            </label>
+            {selectedDestination?.landmarks[0]?.refs[0] && <div className="k-create-scene-preview">
+              <img src={`/api/assets/${selectedDestination.landmarks[0].refs[0]}`} alt={`${selectedDestination.name}场景参考`} />
+              <span className="k-card-meta">场景参考示例：{selectedDestination.landmarks[0].name}。实际每镜按脚本对应地标选图。</span>
+            </div>}
+            <div className="k-create-row">
+              <div className="k-field">季节 / 时段
+                <span className="k-card-meta">先选当前目的地推荐的季节，也可自定义。</span>
+                <div className="k-create-choices">{(selectedDestination?.season_best ?? []).map((item) =>
+                  <button type="button" key={item} className={seasonMode === "preset" && season === item ? "active" : ""}
+                    aria-pressed={seasonMode === "preset" && season === item}
+                    onClick={() => { setSeasonMode("preset"); setSeason(item); }}>{item}</button>)}
+                  <button type="button" className={seasonMode === "custom" ? "active" : ""}
+                    aria-pressed={seasonMode === "custom"} onClick={() => setSeasonMode("custom")}>自定义</button>
+                </div>
+                {seasonMode === "custom" && <input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="例如：早春" />}
+              </div>
+              <div className="k-field">画幅比例
+                <span className="k-card-meta">默认 9:16 适合手机竖屏；16:9 适合横屏播放。</span>
+                <div className="k-create-choices">{(["9:16", "16:9"] as const).map((item) =>
+                  <button type="button" key={item} className={aspect === item ? "active" : ""}
+                    aria-pressed={aspect === item} onClick={() => setAspect(item)}>{item} {item === "9:16" ? "竖屏" : "横屏"}</button>)}</div>
+              </div>
             </div>
-          </label>
-          <div className="k-brief-chips">
-            {banned.map((term) => (
-              <span className="k-chip k-chip-removable" key={term}>
-                {term}
-                <button type="button" aria-label={`删除禁止项 ${term}`} onClick={() => removeBanned(term)}>
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <label className="k-field">
-            每镜候选数
-            <select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>
-              {CANDIDATE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <fieldset className="k-field k-brief-mode">
-            <legend>关键帧模式</legend>
-            <label className="k-brief-radio">
-              <input
-                type="radio"
-                name="mode"
-                value="per_shot"
-                checked={mode === "per_shot"}
-                onChange={() => setMode("per_shot")}
-              />
-              逐镜生成（默认）—— 质量高、可控，图片调用量 ×2
+            <label className="k-field">风格 / 语气
+              <input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="例如：松弛治愈" />
             </label>
-            <label className="k-brief-radio">
-              <input
-                type="radio"
-                name="mode"
-                value="grid"
-                checked={mode === "grid"}
-                onChange={() => setMode("grid")}
-              />
-              网格直出 —— 省一步、更便宜，分辨率受限
+            <div className="k-brief-chips">{TONE_CHIPS.map((chip) => <button type="button" key={chip} className="k-chip" onClick={() => setTone(chip)}>{chip}</button>)}</div>
+            <p className="k-card-meta">语气决定整体氛围；创作要求可写希望出现的情节、地标或画面重点。</p>
+            <label className="k-field">创作要求
+              <textarea value={requirements} onChange={(e) => setRequirements(e.target.value)} placeholder="描述这一期想呈现的重点、画面或故事" />
             </label>
-          </fieldset>
-
-          <div className="k-field">
-            画幅
-            <div className="k-brief-aspect">9:16 竖屏 · 约 30 秒</div>
           </div>
+          <details className="k-create-advanced">
+            <summary>高级设置 <span>生成方式、模板、服装和禁止项</span></summary>
+            <div className="k-create-fields">
+              <label className="k-field">视频生成方式
+                <select value={videoSource} onChange={(e) => setVideoSource(e.target.value as VideoSource)}>
+                  <option value="references">人物＋场景直出视频（推荐）</option>
+                  <option value="keyframe">先生成关键帧候选，再做视频</option>
+                </select>
+                <span className="k-card-meta">直出流程跳过图片生成和关键帧审核；视频生成后直接逐镜检查片段。</span>
+              </label>
+              <label className="k-field">模板
+                <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+                  {templates.map((t) => <option key={t.template_id} value={t.template_id}>{t.name}{selectedDestination && t.skeleton !== selectedDestination.type ? "（骨架与目的地类型不同）" : ""}</option>)}
+                </select>
+              </label>
+              <p className="k-card-meta">模板决定镜头骨架，LUT 决定画面调色风格；可按目的地类型选择匹配模板。</p>
+              {selectedTemplate && <p className="k-card-meta">LUT：{selectedTemplate.lut} · 片头：{selectedTemplate.intro ?? "无"} · 片尾：{selectedTemplate.outro ?? "无"} · 标题样式：{selectedTemplate.title_style}</p>}
+              <label className="k-field">穿搭覆盖（可选）<input value={outfitOverride} onChange={(e) => setOutfitOverride(e.target.value)} placeholder={selectedPersona?.default_outfit ?? ""} /></label>
+              <label className="k-field">禁止项
+                <div className="k-brief-banned-input"><input value={bannedInput} onChange={(e) => setBannedInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addBannedTerms(); } }} placeholder="按逗号/顿号/回车分隔多项" /><button type="button" className="k-btn k-btn-secondary" onClick={addBannedTerms}>添加</button></div>
+              </label>
+              <div className="k-brief-chips">{banned.map((term) => <span className="k-chip k-chip-removable" key={term}>{term}<button type="button" aria-label={`删除禁止项 ${term}`} onClick={() => removeBanned(term)}>×</button></span>)}</div>
+              {videoSource === "keyframe" && <>
+                <label className="k-field">每镜候选数<select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>{CANDIDATE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+                <p className="k-card-meta">可选 1–3 张：3 张更方便挑选，1 张通常用量更低；下方预估会随选择更新。</p>
+              </>}
+            </div>
+          </details>
+          {violations && violations.length > 0 && <ul className="k-error" role="alert">{violations.map((v) => <li key={`${v.field}-${v.term}`}>以下内容不允许出现：{v.field}: {v.term}</li>)}</ul>}
+          {formErrors && <ul className="k-error" role="alert">{formErrors.map((err) => <li key={err}>{err}</li>)}</ul>}
+          <div className="k-create-submit"><span className="k-brief-estimate">{estimateLoading || !estimate ? "预估中…" : <>预计完整创作 <span className="k-mono">{estimateData?.credit_quote}</span> 积分 · 约 {Math.round(estimate.gpu_minutes)} GPU 分钟</>}</span><button type="submit" className="k-btn k-btn-primary" disabled={submitting}>{submitting ? "创建中…" : "创建这一期"}</button></div>
         </div>
-
-        {violations && violations.length > 0 && (
-          <ul className="k-error" role="alert">
-            {violations.map((v) => (
-              <li key={`${v.field}-${v.term}`}>
-                以下内容不允许出现：{v.field}: {v.term}
-              </li>
-            ))}
-          </ul>
-        )}
-        {formErrors && (
-          <ul className="k-error" role="alert">
-            {formErrors.map((err) => (
-              <li key={err}>{err}</li>
-            ))}
-          </ul>
-        )}
-
-        <div className="k-brief-submit-row">
-          <div className="k-brief-estimate">
-            {estimateLoading || !estimate ? (
-              "预估中…"
-            ) : (
-              <>
-                预估：约 <span className="k-mono">{Math.round(estimate.gpu_minutes)}</span> GPU
-                分钟（M0 前占位估算）
-              </>
-            )}
-          </div>
-          <button type="submit" className="k-btn k-btn-primary" disabled={submitting}>
-            {submitting ? "创建中…" : "创建这一期"}
-          </button>
-        </div>
+        <aside className="k-card k-create-personas">
+          <div className="k-create-panel-heading"><span className="k-create-step">02</span><div><h2>选择出镜角色</h2><p>角色形象在多期作品中保持一致</p></div></div>
+          <p className="k-card-meta">可直接选官方角色开始；想使用自己的形象时再新建角色。</p>
+          <div className="k-create-tabs" role="group" aria-label="角色来源"><button type="button" aria-pressed={personaTab === "mine"} className={personaTab === "mine" ? "active" : ""} onClick={() => setPersonaTab("mine")}>我的角色</button><button type="button" aria-pressed={personaTab === "official"} className={personaTab === "official" ? "active" : ""} onClick={() => setPersonaTab("official")}>官方角色</button></div>
+          <div className="k-create-persona-list">{visiblePersonas.length === 0 ? <p className="k-empty">这里还没有角色。</p> : visiblePersonas.map((p: Persona) => <button type="button" className={`k-create-persona-card${personaId === p.persona_id ? " active" : ""}`} key={p.persona_id} onClick={() => setPersonaId(p.persona_id)} aria-pressed={personaId === p.persona_id}><span className="k-create-persona-avatar">{p.refs[0] ? <img src={`/api/assets/${p.refs[0]}`} alt="" /> : p.name.slice(0, 1)}</span><span><strong>{p.name}</strong><small>v{p.version} · {p.desc || p.default_outfit || "旅行角色"}</small></span><span className="k-create-persona-check" aria-hidden="true">✓</span></button>)}</div>
+          <Link to="/personas/new?returnTo=/episodes/new" className="k-create-persona-add">＋ 新建角色</Link>
+          {selectedPersona && <p className="k-card-meta">已选择：{selectedPersona.name}。切换页面后，本期草稿会保存在当前浏览器会话中。</p>}
+        </aside>
       </form>
     </div>
   );

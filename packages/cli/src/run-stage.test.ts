@@ -5,7 +5,7 @@ import { runEpisodeStage } from "./run-stage";
 
 function fixtureEpisode(id: string, status: EpisodeStatus): Episode {
   return {
-    episode_id: id,
+    name: "测试期", episode_id: id,
     owner_id: "u_test",
     persona_id: "c_test",
     persona_version: 1,
@@ -14,7 +14,7 @@ function fixtureEpisode(id: string, status: EpisodeStatus): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status,
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-23T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
@@ -22,6 +22,7 @@ function fixtureEpisode(id: string, status: EpisodeStatus): Episode {
     brief: {
       season: "秋",
       aspect: "9:16",
+      requirements: "",
       duration_s: 30,
       tone: "松弛",
       outfit_override: null,
@@ -72,6 +73,15 @@ test("stage failure from a non-generating status (draft) reports the error witho
   // best-effort patch silently no-ops, status stays "draft".
   const after = await getEpisode("e_draft");
   expect(after.ok && after.episode.status).toBe("draft");
+});
+
+test("an invalid or out-of-phase CLI stage does not change a generating episode", async () => {
+  await insertEpisode(fixtureEpisode("e_phase", "scripting"));
+  expect((await runEpisodeStage("e_phase", "brief")).ok).toBe(false);
+  expect((await runEpisodeStage("e_phase", "typo" as never)).ok).toBe(false);
+  const loaded = await getEpisode("e_phase");
+  expect(loaded.ok && loaded.episode.status).toBe("scripting");
+  expect(loaded.ok && loaded.row_version).toBe(1);
 });
 
 test("stage failure from a generating status marks the episode failed", async () => {

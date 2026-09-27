@@ -37,6 +37,13 @@ test("estimateCost honors explicit shot_count/candidates overrides", () => {
   expect(result.breakdown.keyframe_gpu_minutes).toBe(10 * 3 * KEYFRAME_GPU_MINUTES_PER_CANDIDATE);
 });
 
+test("direct reference estimate omits image work and makes one video per shot", () => {
+  const result = estimateCost({ mode: "per_shot", video_source: "references",
+    shot_count: 10, candidates: 3 });
+  expect(result.breakdown.keyframe_gpu_minutes).toBe(0);
+  expect(result.breakdown.video_gpu_minutes).toBe(10 * VIDEO_GPU_MINUTES_PER_CANDIDATE);
+});
+
 test("estimateCredits falls back to the default shot count when the episode has no shots yet", () => {
   const credits = estimateCredits({ shots: [], mode: "per_shot" });
   expect(credits).toBe(estimateCost({ mode: "per_shot" }).estimated_credits);

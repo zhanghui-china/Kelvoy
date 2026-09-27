@@ -22,7 +22,7 @@ export default function LandingPage() {
   return (
     <div className="k-lp-page">
       <LandingNav />
-      <LandingHero />
+      <LandingHero destinationCount={loading || error ? null : data?.destinations.length ?? 0} />
       <LandingSolutions />
       <LandingFeatures />
       <LandingHow />

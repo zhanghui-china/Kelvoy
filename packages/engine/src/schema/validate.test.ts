@@ -50,7 +50,7 @@ function validShot(no = 1): Shot {
 
 function validEpisode(): Episode {
   return {
-    episode_id: "e_test",
+    name: "测试期", episode_id: "e_test",
     owner_id: "u_test",
     persona_id: "c_test",
     persona_version: 1,
@@ -59,7 +59,7 @@ function validEpisode(): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status: "draft",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-23T00:00:00+08:00",
     estimated_credits: 0,
     credits_used: 0,
@@ -67,6 +67,7 @@ function validEpisode(): Episode {
     brief: {
       season: "秋",
       aspect: "9:16",
+      requirements: "",
       duration_s: 30,
       tone: "松弛",
       outfit_override: null,
@@ -117,6 +118,28 @@ describe("validateEpisode", () => {
     expect(result.valid).toBe(true);
   });
 
+  test("accepts the normal automatic-music default", () => {
+    const episode = { ...validEpisode(), music: { file: "", bpm: 0, license: "" } };
+    expect(validateEpisode(episode).valid).toBe(true);
+  });
+
+  test("rejects a whitespace-only music path", () => {
+    const episode = { ...validEpisode(), music: { file: "   ", bpm: 0, license: "" } };
+    expect(validateEpisode(episode).valid).toBe(false);
+  });
+
+  test("rejects duplicate shot and scene identities and dangling scene references", () => {
+    const episode = validEpisode();
+    episode.scenes.push({ ...episode.scenes[0]! });
+    episode.shots.push({ ...validShot(1), scene: "missing" });
+    const result = validateEpisode(episode);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((error) => error.includes("重复"))).toBe(true);
+      expect(result.errors.some((error) => error.includes("不存在"))).toBe(true);
+    }
+  });
+
   test("rejects an invalid episode status", () => {
     const episode = { ...validEpisode(), status: "not-a-status" };
     expect(validateEpisode(episode).valid).toBe(false);
@@ -143,6 +166,12 @@ describe("validateEpisode", () => {
 });
 
 describe("validatePatchEpisodeRequest", () => {
+  test("rejects fields outside the Episode patch contract", () => {
+    for (const patch of [{ candidate_count: 1_000_000 }, { name: "forged" }, { brief: {} }]) {
+      const result = validatePatchEpisodeRequest({ row_version: 1, patch });
+      expect(result.valid).toBe(false);
+    }
+  });
   test("accepts an empty patch (all fields optional)", () => {
     const result = validatePatchEpisodeRequest({ row_version: 3, patch: {} });
     expect(result.valid).toBe(true);
@@ -178,6 +207,7 @@ describe("validatePatchShotRequest", () => {
       row_version: 1,
       patch: {
         beat: "抬头看大佛",
+        caption: "山风吹过佛前",
         size: "close",
         camera: "push",
         landmark: null,
@@ -192,6 +222,7 @@ describe("validatePatchShotRequest", () => {
     expect(validatePatchShotRequest({ row_version: 1, patch: { size: "macro" } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { camera: "zoom" } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { beat: "" } }).valid).toBe(false);
+    expect(validatePatchShotRequest({ row_version: 1, patch: { caption: "字".repeat(121) } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { kf_prompt: 7 } }).valid).toBe(false);
     expect(validatePatchShotRequest({ row_version: 1, patch: { landmark: 7 } }).valid).toBe(false);
   });
@@ -322,6 +353,18 @@ function validCreateEpisodeRequest() {
 }
 
 describe("validateCreateEpisodeRequest", () => {
+  test("rejects grid for a newly created episode", () => {
+    expect(validateCreateEpisodeRequest({ ...validCreateEpisodeRequest(), mode: "grid" }).valid).toBe(false);
+  });
+  test("validates new creation fields at the request boundary", () => {
+    const base = validCreateEpisodeRequest();
+    expect(validateCreateEpisodeRequest({ ...base, name: "旅途", requirements: "拍全景",
+      aspect: "16:9", candidate_count: 3 }).valid).toBe(true);
+    for (const patch of [{ name: "  " }, { requirements: null }, { aspect: "1:1" },
+      { candidate_count: 0 }, { candidate_count: 2.5 }, { candidate_count: 4 }]) {
+      expect(validateCreateEpisodeRequest({ ...base, ...patch }).valid).toBe(false);
+    }
+  });
   test("accepts the three required foreign keys with nothing else", () => {
     expect(validateCreateEpisodeRequest(validCreateEpisodeRequest()).valid).toBe(true);
   });
@@ -369,13 +412,25 @@ describe("validateChangePasswordRequest", () => {
 });
 
 describe("validateUserSettingsPatch", () => {
+  test("accepts versioned onboarding dismissal and reopening", () => {
+    expect(validateUserSettingsPatch({ onboarding_dismissed_version: 1 })).toEqual({ valid: true, value: { onboarding_dismissed_version: 1 } });
+    expect(validateUserSettingsPatch({ onboarding_dismissed_version: 0 }).valid).toBe(true);
+  });
+  test("rejects invalid onboarding dismissal versions", () => {
+    for (const version of [-1, 2, 0.5, "1", null]) {
+      expect(validateUserSettingsPatch({ onboarding_dismissed_version: version }).valid).toBe(false);
+    }
+  });
+  test("rejects grid as a new account default", () => {
+    expect(validateUserSettingsPatch({ default_mode: "grid" }).valid).toBe(false);
+  });
   test("accepts an empty patch and a full one", () => {
     expect(validateUserSettingsPatch({}).valid).toBe(true);
     expect(
       validateUserSettingsPatch({
         default_tone: "松弛",
         default_candidates: 3,
-        default_mode: "grid",
+        default_mode: "per_shot",
       }).valid,
     ).toBe(true);
   });

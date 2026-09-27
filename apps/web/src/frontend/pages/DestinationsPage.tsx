@@ -1,4 +1,6 @@
 import { AssetImage } from "../AssetImage";
+import { GuideTip } from "../GuideTip";
+import { Link } from "react-router-dom";
 import { listDestinations } from "../api/client";
 import { MIN_LANDMARK_REFS } from "../destination-refs";
 import { useApiResource } from "../hooks/useApiResource";
@@ -15,6 +17,7 @@ export default function DestinationsPage() {
     <div>
       <div className="k-eyebrow">官方维护 · 实景为准</div>
       <h1>目的地库</h1>
+      <GuideTip section="destinations">目的地由平台维护，地标以实景参考图为准。选好地方后可在<Link to="/episodes/new">新建一期</Link>中使用。</GuideTip>
       {destinations.length === 0 ? (
         <p className="k-empty">还没有目的地。</p>
       ) : (
@@ -32,6 +35,7 @@ export default function DestinationsPage() {
                   </span>
                 ))}
               </div>
+              <Link to={`/episodes/new?destination=${encodeURIComponent(d.destination_id)}`} className="k-btn k-btn-secondary">用这个目的地新建一期 →</Link>
               {d.route.length > 0 && <div className="k-card-meta">动线：{d.route.join(" → ")}</div>}
 
               <div className="k-landmark-grid">

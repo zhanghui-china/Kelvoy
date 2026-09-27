@@ -39,11 +39,11 @@ flowchart LR
 | `packages/engine` schema(Persona/Destination/Episode) | 类型已按 PRD §6 落实,`schema/validate.ts` 有运行时校验 |
 | `packages/engine` state(状态机) | Episode/Shot 转移函数 + 合法性判断已完成，有测试 |
 | `packages/engine` rules(FR-02) | 镜数/景别连续/地标覆盖/地标引用规则已实现 |
-| `packages/engine` stages/providers | brief/script/compose 已实现;compose 出 ComposePlan(卡拍 `rules/beat.ts`、账号级 LUT、片头片尾、AI 标识水印+元数据、选曲),ffmpeg 执行在 `apps/worker`;assets/keyframe/video 仍是 `throw new Error("not implemented")` |
-| `packages/store` | episodes(读/patch/replace,乐观锁)、destinations(读/upsert)、tasks(入队/出队/完成/失败重试)均已实现，有测试 |
-| `apps/web` | Hono `/api/health` 可用,其余 `/api/*` 路由空壳,没有 `/internal/*` 了 |
+| `packages/engine` stages/providers | brief/script/assets/keyframe/video/compose 主流程已实现；engine 产出生成及合成请求，实际推理与 ffmpeg 由 Worker 注入；模型契约和真机验收仍待完成 |
+| `packages/store` | SQLite 期/目录/任务/积分；目的地版本快照、一次性旧库回填和任务结果事务见 [ADR-0007](decisions/0007-transactional-results-and-catalog-snapshots.md) |
+| `apps/web` | Hono 账号、期、审核、上传、分享 API 与 React 前端已实现；首页/作品页使用概览列表，性能和交互审计仍在进行 |
 | `apps/worker` | 消费循环真实实现（轮询 `packages/store` 的 tasks 表），产物存本地 `projects/` 目录;`compose/ffmpeg.ts` 是全系统唯一调 ffmpeg 的地方（环境要求见 `apps/worker/README.md`） |
-| `services/inference` | FastAPI `/health` 可用,四个模型 router 占位 501 |
+| `services/inference` | FastAPI 图像/视频通过 ComfyUI；`/llm` 与 `/upscale` 仍为 501；四份生产工作流已静态检查，真实 DGX 验收待做 |
 | `infra` | 不需要本地容器编排；DGX 侦察记录见 `infra/dgx/README.md` |
 
 待定项见 PRD 第 11 节和各 ADR。

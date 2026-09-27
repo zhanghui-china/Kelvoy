@@ -9,7 +9,7 @@ import share from "./share";
 
 function fixture(id: string, shareEnabled: boolean, slug: string): Episode {
   return {
-    episode_id: id,
+    name: "测试期", episode_id: id,
     owner_id: "u_owner",
     persona_id: "c_test",
     persona_version: 1,
@@ -18,12 +18,12 @@ function fixture(id: string, shareEnabled: boolean, slug: string): Episode {
     series_id: "s_test",
     template_id: "t_test",
     status: "done",
-    mode: "per_shot",
+    mode: "per_shot", candidate_count: 2,
     created_at: "2026-09-23T00:00:00+08:00",
     estimated_credits: 42,
     credits_used: 42,
     share: { enabled: shareEnabled, slug },
-    brief: { season: "秋", aspect: "9:16", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
+    brief: { season: "秋", aspect: "9:16", requirements: "", duration_s: 30, tone: "松弛", outfit_override: null, banned: [] },
     grid_refs: [],
     scenes: [{ id: "s1", name: "到达", time: "morning", landmarks: [] }],
     shots: [],
@@ -99,6 +99,20 @@ test("GET /:slug/final.mp4 serves the final video with no login required", async
   expect(await res.text()).toBe("fake-mp4-bytes");
 });
 
+test("share serves the recorded delivery version instead of an older file", async () => {
+  const episode = fixture("e_1", true, "abc123");
+  episode.final = { version: 2, key: "final/e_1_v2.mp4", duration_s: 30,
+    width: 1080, height: 1920, fps: 30, size_bytes: 9,
+    completed_at: "2026-09-26T00:00:00Z" };
+  await insertEpisode(episode);
+  await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1_v1.mp4"), "old");
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1_v2.mp4"), "new");
+  const res = await buildApp().request("/api/share/abc123/final.mp4");
+  expect(res.status).toBe(200);
+  expect(await res.text()).toBe("new");
+});
+
 test("GET /:slug/final.mp4 404s when sharing is off, even if the file exists", async () => {
   await insertEpisode(fixture("e_1", false, "abc123"));
   await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });
@@ -107,6 +121,18 @@ test("GET /:slug/final.mp4 404s when sharing is off, even if the file exists", a
   const app = buildApp();
   const res = await app.request("/api/share/abc123/final.mp4");
   expect(res.status).toBe(404);
+});
+
+test("share temporarily hides an old film while a shot is being regenerated", async () => {
+  const episode = fixture("e_1", true, "abc123");
+  episode.status = "clip_review";
+  await insertEpisode(episode);
+  await mkdir(join(tmpRoot, "projects", "e_1", "final"), { recursive: true });
+  await writeFile(join(tmpRoot, "projects", "e_1", "final", "e_1.mp4"), "old-film");
+
+  const app = buildApp();
+  expect((await app.request("/api/share/abc123")).status).toBe(404);
+  expect((await app.request("/api/share/abc123/final.mp4")).status).toBe(404);
 });
 
 test("GET /:slug/final.mp4 404s when composing hasn't produced the file yet", async () => {

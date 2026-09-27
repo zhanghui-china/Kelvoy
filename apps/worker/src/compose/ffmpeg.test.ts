@@ -3,7 +3,16 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ComposePlan } from "@kelvoy/engine";
-import { ffmpegComposeProvider } from "./ffmpeg";
+import { ffmpegComposeProvider, runCommand } from "./ffmpeg";
+
+test("a cancelled execution terminates its running child process", async () => {
+  const controller = new AbortController();
+  const started = performance.now();
+  const running = runCommand(["/bin/sleep", "3"], controller.signal);
+  setTimeout(() => controller.abort(), 20);
+  await expect(running).rejects.toThrow();
+  expect(performance.now() - started).toBeLessThan(1000);
+});
 
 /**
  * 端到端跑一次真实 ffmpeg（M1-13 验收：成片时长 = Σ 单镜实际时长 + 片头片尾
@@ -34,6 +43,16 @@ async function makeColorClip(path: string, color: string, seconds: number): Prom
 async function probeDuration(path: string): Promise<number> {
   const proc = Bun.spawn(
     ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", path],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const [out] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  return Number(out.trim());
+}
+
+async function probeFrames(path: string): Promise<number> {
+  const proc = Bun.spawn(
+    ["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0",
+      "-show_entries", "stream=nb_read_frames", "-of", "default=nw=1:nk=1", path],
     { stdout: "pipe", stderr: "pipe" },
   );
   const [out] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
@@ -105,6 +124,10 @@ afterEach(async () => {
 test.skipIf(!HAS_FFMPEG)("ffmpegComposeProvider renders final/<id>.mp4 at Σcuts + intro ± 0.5 s", async () => {
   const result = await ffmpegComposeProvider.compose({ plan: planFixture() });
   expect(result.output_key).toBe("final/e_it.mp4");
+  expect(result.probe.width).toBe(180);
+  expect(result.probe.height).toBe(320);
+  expect(result.probe.fps).toBe(30);
+  expect(result.probe.size_bytes).toBeGreaterThan(0);
 
   const output = join(projectsRoot, "e_it", "final", "e_it.mp4");
   expect(await Bun.file(output).exists()).toBe(true);
@@ -133,4 +156,43 @@ test.skipIf(!HAS_FFMPEG)("ffmpegComposeProvider names the missing asset instead 
   const noMusic = planFixture();
   noMusic.music = { file_key: "music/nope.m4a", bpm: 120, license: "test" };
   await expect(ffmpegComposeProvider.compose({ plan: noMusic })).rejects.toThrow("合成缺少配乐文件");
+});
+
+test.skipIf(!HAS_FFMPEG)("fixed cuts render exactly 30 frames per shot and reject tail overrun", async () => {
+  const plan = planFixture();
+  plan.cuts = [
+    { no: 1, clip_key: "clip/01.mp4", trim_start_s: 2 / 30, duration_s: 1, trim_start_frame: 2, frame_count: 30 },
+    { no: 2, clip_key: "clip/02.mp4", trim_start_s: 0, duration_s: 1, trim_start_frame: 0, frame_count: 30 },
+  ];
+  plan.intro_key = null;
+  plan.outro_key = null;
+  plan.music = null;
+  plan.lut_key = null;
+  await ffmpegComposeProvider.compose({ plan });
+  const output = join(projectsRoot, "e_it", "final", "e_it.mp4");
+  expect(await probeFrames(output)).toBe(60);
+  expect(await probeDuration(output)).toBeCloseTo(2, 2);
+
+  plan.cuts[0] = { ...plan.cuts[0]!, trim_start_s: 75 / 30, trim_start_frame: 75 };
+  await expect(ffmpegComposeProvider.compose({ plan })).rejects.toThrow("选段超出片段尾部");
+});
+
+test.skipIf(!HAS_FFMPEG || process.platform !== "darwin")("renders title, captions and AI label without ASS or drawtext", async () => {
+  const plan = planFixture();
+  plan.title = "无锡一日游";
+  plan.ai_label = true;
+  plan.subtitles_enabled = true;
+  plan.cuts[0]!.caption = "来到水边";
+  const previousFont = process.env.KELVOY_FONT_FILE;
+  delete process.env.KELVOY_FONT_FILE;
+  try {
+    await ffmpegComposeProvider.compose({ plan });
+  } finally {
+    if (previousFont === undefined) delete process.env.KELVOY_FONT_FILE;
+    else process.env.KELVOY_FONT_FILE = previousFont;
+  }
+  const output = join(projectsRoot, "e_it", "final", "e_it.mp4");
+  expect(await Bun.file(output).exists()).toBe(true);
+  expect(await Bun.file(`${output}.overlay-0.png`).exists()).toBe(true);
+  expect(await probeFrames(output)).toBeGreaterThan(90);
 });
