@@ -17,6 +17,9 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
     mkdirSync(dirname(path), { recursive: true });
   }
   db = new Database(path, { create: true });
+  // Web and Worker write to the same WAL database. Wait for short writer
+  // transactions instead of crashing the Worker on a transient SQLITE_BUSY.
+  db.exec("pragma busy_timeout = 5000;");
   db.exec("pragma journal_mode = WAL;");
   db.exec(SCHEMA);
   applyColumnMigrations(db);
