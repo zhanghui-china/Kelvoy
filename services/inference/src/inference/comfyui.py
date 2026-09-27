@@ -23,6 +23,11 @@ TEMPLATES = {
     "video_reference": ("2_2_DualRef2Video_MinimaxH3_api.json", "40", "gifs", ".mp4"),
 }
 MAX_MEDIA_BYTES = 512 * 1024 * 1024
+# Keep generation + bounded cleanup below the Worker's 300 second HTTP deadline.
+# One measured dual-reference landscape clip took 256.2 s; load can still exceed this budget.
+CANCEL_TIMEOUT_S = 10
+DIRECT_VIDEO_TIMEOUT_S = 270
+DEFAULT_TIMEOUT_S = 240
 logger = logging.getLogger(__name__)
 
 
@@ -30,6 +35,18 @@ class ComfyUIError(Exception):
     def __init__(self, status: int, message: str):
         self.status = status
         super().__init__(message)
+
+
+def response_object(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("expected a ComfyUI JSON object")
+    return value
+
+
+def response_string(value: object, *, allow_empty: bool = False) -> str:
+    if not isinstance(value, str) or (not allow_empty and not value.strip()):
+        raise ValueError("expected a ComfyUI string")
+    return value
 
 
 async def validate_media(path: Path, kind: str) -> None:
@@ -66,12 +83,13 @@ async def validate_media(path: Path, kind: str) -> None:
 
 async def cancel_prompt(client: httpx.AsyncClient, prompt_id: str) -> None:
     try:
-        response = await client.post(f"/api/jobs/{prompt_id}/cancel")
-        response.raise_for_status()
-        payload = response.json()
-        if not isinstance(payload, dict) or payload.get("cancelled") is not True:
-            logger.warning("ComfyUI did not confirm cancellation for prompt %s", prompt_id)
-    except (httpx.HTTPError, ValueError) as error:
+        async with asyncio.timeout(CANCEL_TIMEOUT_S):
+            response = await client.post(f"/api/jobs/{prompt_id}/cancel")
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict) or payload.get("cancelled") is not True:
+                logger.warning("ComfyUI did not confirm cancellation for prompt %s", prompt_id)
+    except (httpx.HTTPError, ValueError, TimeoutError) as error:
         logger.warning("ComfyUI cancellation failed for prompt %s: %s", prompt_id, error)
 
 
@@ -197,10 +215,10 @@ async def _generate_once(
                     data={"overwrite": "false"},
                 )
             response.raise_for_status()
-            item = response.json()
-            uploaded.append(
-                f"{item['subfolder']}/{item['name']}" if item.get("subfolder") else item["name"]
-            )
+            item = response_object(response.json())
+            name = response_string(item.get("name"))
+            subfolder = response_string(item.get("subfolder", ""), allow_empty=True)
+            uploaded.append(f"{subfolder}/{name}" if subfolder else name)
         if kind == "image":
             workflow = build_image_workflow(template, uploaded, prompt, chosen_seed, aspect)
         elif kind == "video_reference":
@@ -215,22 +233,30 @@ async def _generate_once(
             "/prompt", json={"prompt": workflow, "client_id": str(uuid.uuid4())}
         )
         response.raise_for_status()
-        prompt_id = response.json()["prompt_id"]
+        prompt_id = response_string(response_object(response.json()).get("prompt_id"))
         while True:
             response = await client.get(f"/history/{prompt_id}")
             response.raise_for_status()
-            history = response.json().get(prompt_id)
-            if history:
-                status = history.get("status", {})
+            histories = response_object(response.json())
+            if prompt_id in histories:
+                history = response_object(histories[prompt_id])
+                status = response_object(history.get("status", {}))
                 if status.get("status_str") == "error":
                     raise ComfyUIError(
                         502, f"ComfyUI generation failed: {status.get('messages', [])}"
                     )
-                outputs = history.get("outputs", {}).get(output_node, {})
+                outputs = response_object(
+                    response_object(history.get("outputs", {})).get(output_node, {})
+                )
                 entries = outputs.get(output_key, [])
+                if not isinstance(entries, list):
+                    raise ValueError("expected a ComfyUI media list")
                 if entries:
-                    item = entries[0]
-                    if not item["filename"].lower().endswith(extension):
+                    item = response_object(entries[0])
+                    filename = response_string(item.get("filename"))
+                    subfolder = response_string(item.get("subfolder", ""), allow_empty=True)
+                    media_type = response_string(item.get("type", "output"))
+                    if not filename.lower().endswith(extension):
                         raise ComfyUIError(502, "ComfyUI returned an unexpected media type")
                     media_kind = "image" if kind == "image" else "video"
                     output_dir = projects_root.resolve() / "inference" / media_kind
@@ -243,9 +269,9 @@ async def _generate_once(
                             "GET",
                             "/view",
                             params={
-                                "filename": item["filename"],
-                                "subfolder": item.get("subfolder", ""),
-                                "type": item.get("type", "output"),
+                                "filename": filename,
+                                "subfolder": subfolder,
+                                "type": media_type,
                             },
                         ) as media:
                             media.raise_for_status()
@@ -305,11 +331,13 @@ async def generate(
     base_url: str,
     seed: int | None = None,
     duration_s: int = 5,
-    timeout_s: float = 240,
+    timeout_s: float | None = None,
     client: httpx.AsyncClient | None = None,
     aspect: str = "9:16",
 ) -> InferenceResponse:
-    """Enforce one deadline across upload, submission, polling and download."""
+    """Enforce one generation deadline, followed by bounded targeted cancellation."""
+    if timeout_s is None:
+        timeout_s = DIRECT_VIDEO_TIMEOUT_S if kind == "video_reference" else DEFAULT_TIMEOUT_S
     try:
         return await asyncio.wait_for(
             _generate_once(kind, prompt, refs, projects_root, base_url, seed, duration_s,
