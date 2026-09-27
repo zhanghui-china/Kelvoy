@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { WriteResult } from "../api/client";
 import { describeWriteError } from "./errors";
+import { updateMutationVersion } from "./episode-mutation-version";
 
 export interface EpisodeMutation {
   pending: boolean;
@@ -17,22 +18,31 @@ export interface EpisodeMutation {
 
 /**
  * 审片台所有写操作的唯一入口（FR-05/§9）。row_version 从最近一次 GET 来，
- * 但写请求自己返回的更新（+1）比下一次轮询更早到，所以两边取最大的那个——
- * 乐观锁计数器单调递增，取 max 不会用到旧值。
+ * 但写请求自己返回的更新（+1）比下一次轮询更早到，所以同一期内取最大值。
+ * 切换期时重置版本，旧期未完成的响应不再影响新期。
  */
-export function useEpisodeMutation(rowVersion: number, refresh: () => void): EpisodeMutation {
+export function useEpisodeMutation(episodeId: string, rowVersion: number, refresh: () => void): EpisodeMutation {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const rowVersionRef = useRef(rowVersion);
-  rowVersionRef.current = Math.max(rowVersionRef.current, rowVersion);
+  const versionRef = useRef({ episodeId, rowVersion });
+  const epochRef = useRef(0);
+  if (versionRef.current.episodeId !== episodeId) epochRef.current++;
+  versionRef.current = updateMutationVersion(versionRef.current, episodeId, rowVersion);
+
+  useEffect(() => {
+    setPending(false);
+    setError(null);
+  }, [episodeId]);
 
   const run = useCallback<EpisodeMutation["run"]>(
     async (call) => {
+      const epoch = epochRef.current;
       setPending(true);
       setError(null);
-      const result = await call(rowVersionRef.current);
+      const result = await call(versionRef.current.rowVersion);
+      if (epoch !== epochRef.current) return null;
       setPending(false);
 
       if (!result.ok) {
@@ -43,18 +53,18 @@ export function useEpisodeMutation(rowVersion: number, refresh: () => void): Epi
         setError(describeWriteError(result));
         if (result.error === "version_conflict") {
           if (typeof result.current_row_version === "number") {
-            rowVersionRef.current = result.current_row_version;
+            versionRef.current = updateMutationVersion(versionRef.current, episodeId, result.current_row_version);
           }
           refresh();
         }
         return result;
       }
 
-      rowVersionRef.current = Math.max(rowVersionRef.current, result.row_version);
+      versionRef.current = updateMutationVersion(versionRef.current, episodeId, result.row_version);
       refresh();
       return result;
     },
-    [navigate, refresh],
+    [episodeId, navigate, refresh],
   );
 
   const clearError = useCallback(() => setError(null), []);

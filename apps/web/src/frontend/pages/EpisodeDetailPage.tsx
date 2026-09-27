@@ -14,6 +14,7 @@ import SaveAsTemplateForm from "../review/SaveAsTemplateForm";
 import StageSteps from "../review/StageSteps";
 import ScriptReview from "../review/ScriptReview";
 import { useEpisodeMutation } from "../review/useEpisodeMutation";
+import { versionForEpisode } from "../review/episode-mutation-version";
 import type { EpisodeMutation } from "../review/useEpisodeMutation";
 import "../review/review.css";
 
@@ -30,9 +31,9 @@ export default function EpisodeDetailPage() {
     (result) => result.episode.status !== "done" && result.episode.status !== "failed",
   );
 
-  const mutation = useEpisodeMutation(data?.row_version ?? 0, refresh);
+  const mutation = useEpisodeMutation(id ?? "", versionForEpisode(id, data), refresh);
 
-  if (loading) return <p className="k-empty">加载中…</p>;
+  if (loading || (data && data.episode.episode_id !== id)) return <p className="k-empty">加载中…</p>;
   if (error) return <p className="k-error">加载失败：{error}</p>;
   if (!data) return null;
 
