@@ -12,3 +12,4 @@ export * from "./script-actions";
 export * from "./credits";
 export * from "./charged-tasks";
 export * from "./review-shot-patch";
+export * from "./artifact-retention";

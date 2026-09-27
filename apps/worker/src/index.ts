@@ -4,7 +4,7 @@
  * artifacts to local disk, writes status back via @kelvoy/store.
  */
 import { consumeLoop } from "./queue/consumer";
-import { cleanupStaleEpisodeTemps, cleanupStaleInferenceMedia } from "./storage/cleanup";
+import { cleanupIncompleteEpisodeMedia, cleanupStaleEpisodeTemps, cleanupStaleInferenceMedia } from "./storage/cleanup";
 
 const sweep = () => {
   void cleanupStaleInferenceMedia().catch((error) => {
@@ -12,6 +12,9 @@ const sweep = () => {
   });
   void cleanupStaleEpisodeTemps().catch((error) => {
     console.warn("could not clean stale episode publish temps", error);
+  });
+  void cleanupIncompleteEpisodeMedia().catch((error) => {
+    console.warn("could not clean incomplete episode media", error);
   });
 };
 sweep();
