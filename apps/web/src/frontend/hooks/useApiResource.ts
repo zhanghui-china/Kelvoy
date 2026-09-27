@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ApiResult } from "../api/client";
+import { singleFlight } from "./singleFlight";
 
 interface State<T> {
   loading: boolean;
@@ -61,9 +62,7 @@ export function usePolledApiResource<T>(
 
   useEffect(() => {
     let cancelled = false;
-
-    async function tick() {
-      const result = await fetcherRef.current();
+    const poll = singleFlight(() => fetcherRef.current(), (result) => {
       if (cancelled) return;
       if (!result.ok) {
         if (result.error === "unauthorized") {
@@ -74,16 +73,15 @@ export function usePolledApiResource<T>(
         return;
       }
       setState({ loading: false, data: result, error: null });
-    }
+    });
 
     setState({ loading: true, data: null, error: null });
-    tickRef.current = () => {
-      void tick();
-    };
-    tick();
-    const id = setInterval(tick, POLL_INTERVAL_MS);
+    tickRef.current = poll.trigger;
+    poll.trigger();
+    const id = setInterval(poll.trigger, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
+      poll.stop();
       clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
