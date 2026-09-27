@@ -158,6 +158,7 @@ describe("transitionEpisode: illegal transitions", () => {
 describe("removeShot", () => {
   test("removes a shot into removed_shots without mutating the input", () => {
     const episode = makeEpisode(MIN_SHOTS + 1);
+    episode.status = "script_review";
     const result = removeShot(episode, 1);
 
     expect(result.shots.length).toBe(MIN_SHOTS);
@@ -171,12 +172,21 @@ describe("removeShot", () => {
 
   test("throws when removal would drop below the MIN_SHOTS floor", () => {
     const episode = makeEpisode(MIN_SHOTS);
+    episode.status = "script_review";
     expect(() => removeShot(episode, 1)).toThrow();
   });
 
   test("throws when the shot doesn't exist", () => {
     const episode = makeEpisode(MIN_SHOTS + 1);
+    episode.status = "script_review";
     expect(() => removeShot(episode, 999)).toThrow();
+  });
+
+  test("rejects removal after script review even when enough shots remain", () => {
+    const episode = makeEpisode(MIN_SHOTS + 1);
+    episode.status = "done";
+    expect(() => removeShot(episode, 1)).toThrow();
+    expect(episode.shots).toHaveLength(MIN_SHOTS + 1);
   });
 });
 

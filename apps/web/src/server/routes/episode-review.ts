@@ -132,6 +132,8 @@ review.post("/:id/shots/reorder", async (c) => {
   const body = await c.req.json().catch(() => null);
   const rowVersion = parseRowVersion(body);
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
+  if (rowVersion !== loaded.row_version) return c.json({ ok: false, error: "version_conflict",
+    current_row_version: loaded.row_version }, 409);
   const order = (body as Record<string, unknown>).order;
   if (!Array.isArray(order) || !order.every((n) => typeof n === "number" && Number.isFinite(n))) {
     return c.json({ ok: false, error: "invalid_order" }, 400);
@@ -231,6 +233,9 @@ review.post("/:id/shots/:no/remove", async (c) => {
   const body = await c.req.json().catch(() => null);
   const rowVersion = parseRowVersion(body);
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
+  if (rowVersion !== loaded.row_version) return c.json({ ok: false, error: "version_conflict",
+    current_row_version: loaded.row_version }, 409);
+  if (loaded.episode.status !== "script_review") return c.json({ ok: false, error: "illegal_transition" }, 400);
 
   let updated: Episode;
   try {

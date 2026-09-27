@@ -208,6 +208,8 @@ episodes.patch("/:id", async (c) => {
   const body = await c.req.json().catch(() => null);
   const result = validatePatchEpisodeRequest(body);
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
+  if (result.value.row_version !== loaded.row_version) return c.json({ ok: false,
+    error: "version_conflict", current_row_version: loaded.row_version }, 409);
   if (Object.keys(result.value.patch).some((field) => field !== "render" && field !== "music") ||
       (loaded.episode.status !== "compose_ready" && loaded.episode.status !== "done")) {
     return c.json({ ok: false, error: "invalid_public_patch" }, 400);

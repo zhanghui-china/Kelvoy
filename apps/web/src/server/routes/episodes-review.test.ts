@@ -1,4 +1,4 @@
-import { dequeueTask, insertEpisode, submitReviewShotPatch, upsertDestination } from "@kelvoy/store";
+import { dequeueTask, insertEpisode, submitReviewShotPatch, submitScriptAction, upsertDestination } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode } from "@kelvoy/engine";
 import { setupEpisodeRouteTests, buildApp, compliantShots, destinationFixture, fixture, login, shotFixture } from "./episode-test-fixtures";
@@ -112,6 +112,7 @@ test("POST /:id/shots/:no/remove deletes the shot and re-validates FR-02 on what
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
   episode.destination_id = "d_1";
+  episode.status = "script_review";
   episode.shots = compliantShots(25, 6); // extra shot + extra landmark headroom
   await insertEpisode(episode);
 
@@ -130,11 +131,31 @@ test("POST /:id/shots/:no/remove deletes the shot and re-validates FR-02 on what
   expect(body.episode.removed_shots.map((s) => s.no)).toEqual([25]);
 });
 
+test("POST /:id/shots/:no/remove cannot change a finished film", async () => {
+  const { cookie, ownerId } = await login("finished-cut");
+  await upsertDestination(destinationFixture("d_1"));
+  const episode = fixture("e_finished_cut", ownerId);
+  episode.destination_id = "d_1";
+  episode.status = "done";
+  episode.shots = compliantShots(25, 6);
+  await insertEpisode(episode);
+  const res = await buildApp().request("/api/episodes/e_finished_cut/shots/25/remove", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: 1 }),
+  });
+  expect(res.status).toBe(400);
+  const loaded = await buildApp().request("/api/episodes/e_finished_cut", { headers: { cookie } });
+  const saved = await loaded.json() as { episode: Episode; row_version: number };
+  expect(saved.episode.shots).toHaveLength(25);
+  expect(saved.row_version).toBe(1);
+});
+
 test("POST /:id/shots/:no/remove 400s when it would drop below the MIN_SHOTS floor", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
   episode.destination_id = "d_1";
+  episode.status = "script_review";
   episode.shots = compliantShots(24, 6); // exactly at the floor
   await insertEpisode(episode);
 
@@ -155,6 +176,7 @@ test("POST /:id/shots/:no/remove 400s when the remainder fails FR-02 (landmark c
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
   episode.destination_id = "d_1";
+  episode.status = "script_review";
   episode.shots = compliantShots(25, 5); // exactly at the MIN_LANDMARK_SHOTS floor
   await insertEpisode(episode);
 
@@ -357,6 +379,40 @@ test("POST /:id/shots/reorder reorders and renumbers the shots", async () => {
   const shots = ((await got.json()) as { episode: Episode }).episode.shots;
   expect(shots.map((s) => s.no)).toEqual(Array.from({ length: 24 }, (_, i) => i + 1));
   expect(shots[0]?.size).toBe(episode.shots[23].size); // last shot moved to the front
+});
+
+test("a delayed reorder cannot erase a script action by sending its newer row version", async () => {
+  const { cookie, ownerId } = await login("delayed-reorder");
+  await upsertDestination(destinationFixture("d_1"));
+  const episode = fixture("e_delayed_reorder", ownerId);
+  episode.destination_id = "d_1";
+  episode.status = "script_review";
+  episode.shots = compliantShots(24, 6);
+  await insertEpisode(episode);
+  let release!: (body: string) => void;
+  let reading!: () => void;
+  const readStarted = new Promise<void>((resolve) => { reading = resolve; });
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      reading();
+      release = (json) => { controller.enqueue(new TextEncoder().encode(json)); controller.close(); };
+    },
+  }, { highWaterMark: 0 });
+  const app = buildApp();
+  const pending = app.request("/api/episodes/e_delayed_reorder/shots/reorder", {
+    method: "POST", headers: { cookie, "content-type": "application/json" }, body,
+  });
+  await readStarted;
+  const action = submitScriptAction({ episode_id: episode.episode_id, owner_id: ownerId,
+    row_version: 1, operation: "script_regenerate" });
+  expect(action.ok).toBe(true);
+  release(JSON.stringify({ row_version: 2, order: episode.shots.map((shot) => shot.no) }));
+  const response = await pending;
+  expect(response.status).toBe(409);
+  const loaded = await app.request("/api/episodes/e_delayed_reorder", { headers: { cookie } });
+  const saved = await loaded.json() as { episode: Episode; row_version: number };
+  expect(saved.episode.script_pending_task_id).toBe(action.ok ? action.task.task_id : "");
+  expect(saved.row_version).toBe(2);
 });
 
 test("POST /:id/shots/reorder 400s when the new order breaks FR-02 (size run)", async () => {

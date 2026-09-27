@@ -123,6 +123,9 @@ export const MIN_SHOTS = 24;
  * Returns a new Episode; does not mutate the input.
  */
 export function removeShot(episode: Episode, shotNo: number): Episode {
+  if (episode.status !== "script_review") {
+    throw illegalTransition(episode.status, "remove_shot");
+  }
   const shot = episode.shots.find((s) => s.no === shotNo);
   if (!shot) {
     throw new Error(`shot ${shotNo} not found in episode ${episode.episode_id}`);

@@ -1,4 +1,4 @@
-import { dequeueTask, insertEpisode, insertPersona, patchShot, upsertDestination } from "@kelvoy/store";
+import { dequeueTask, insertEpisode, insertPersona, patchEpisode, patchShot, upsertDestination } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode, Template } from "@kelvoy/engine";
 import { setupEpisodeRouteTests, buildApp, compliantShots, destinationFixture, fixture, login, personaFixture, shotFixture } from "./episode-test-fixtures";
@@ -103,6 +103,35 @@ test("PATCH /:id 409s on a stale row_version", async () => {
     body: JSON.stringify({ row_version: 999, patch: { render: episode.render } }),
   });
   expect(res.status).toBe(409);
+});
+
+test("a delayed compose settings patch cannot overwrite a newer render", async () => {
+  const { cookie, ownerId } = await login("delayed-compose-patch");
+  const episode = fixture("e_delayed_compose", ownerId);
+  episode.status = "compose_ready";
+  await insertEpisode(episode);
+  let release!: (body: string) => void;
+  let reading!: () => void;
+  const readStarted = new Promise<void>((resolve) => { reading = resolve; });
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      reading();
+      release = (json) => { controller.enqueue(new TextEncoder().encode(json)); controller.close(); };
+    },
+  }, { highWaterMark: 0 });
+  const app = buildApp();
+  const pending = app.request("/api/episodes/e_delayed_compose", {
+    method: "PATCH", headers: { cookie, "content-type": "application/json" }, body,
+  });
+  await readStarted;
+  expect(await patchEpisode(episode.episode_id, 1, { render: { ...episode.render, title: "Concurrent" } }))
+    .toMatchObject({ ok: true, row_version: 2 });
+  release(JSON.stringify({ row_version: 2, patch: { render: { ...episode.render, title: "Stale" } } }));
+  expect((await pending).status).toBe(409);
+  const loaded = await app.request("/api/episodes/e_delayed_compose", { headers: { cookie } });
+  const saved = await loaded.json() as { episode: Episode; row_version: number };
+  expect(saved.episode.render.title).toBe("Concurrent");
+  expect(saved.row_version).toBe(2);
 });
 
 test("PATCH /:id 400s on an illegal status transition", async () => {
