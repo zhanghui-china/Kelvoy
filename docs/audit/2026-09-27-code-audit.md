@@ -34,7 +34,7 @@
 | C7 已修复 | CLI 将任意阶段字符串强转为 `StageName`，或从错误阶段运行时，异常分支可能把仍可正常推进的期标成失败；`packages/cli/src/run-stage.ts`。| 在执行前检查阶段名称和入口状态；错误命令不写库回归。 |
 | C8 部分修复 | 完整期校验拒绝正常的自动配乐空键，却接受重复镜号、重复场景 ID 和悬空场景引用；`packages/engine/src/schema/validate.ts`。| 已统一空配乐语义（精确空串可用、空白路径不可用）并补跨字段身份/引用校验与 PRD；脚本审核入口仍需统一复用领域约束。 |
 | S1 部分修复 | 合成共享素材 key 可通过 `../` 或符号链接逃出项目目录，进而让 ffmpeg 读取外部文件；`apps/worker/src/storage/artifacts.ts`。| 共享与期专属产物均已拒绝路径穿越、非法期 ID、已有符号链接逃逸；文件系统检查与使用之间的竞争窗口仍待更强隔离。 |
-| U1 部分修复 | 两个并发角色参考图上传都从旧 `refs` 计算上限，并把旧数组整块写回；结果可能都返回成功、只留下最后一组引用，另有孤儿文件；`apps/web/src/server/routes/personas.ts`。| 已在 store 事务内读取最新版本并追加，超限时清理本次文件；并发上传回归通过。接收体积的流式上限和写盘/DB 崩溃恢复仍待完成。 |
+| U1 部分修复 | 两个并发角色参考图上传都从旧 `refs` 计算上限，并把旧数组整块写回；结果可能都返回成功、只留下最后一组引用，另有孤儿文件；`apps/web/src/server/routes/personas.ts`。| 已在 store 事务内读取最新版本并追加，超限时清理本次文件；multipart 原始流在解析前按 71 MiB 上限读取，连没有 Content-Length 的分块请求也受限。并发与超限回归通过；写盘/DB 崩溃恢复仍待完成。 |
 | P1 部分修复 | `listEpisodes` 把所有整期 JSON 和 30 镜数据发给每个页面；`packages/store/src/episodes.ts`、`apps/web/src/server/routes/episodes.ts`、首页/作品/用量。根因是把详情模型作列表契约。| 首页和作品页已切换概览 DTO；1000 期响应从约 10.8 MB 降至 296 KB。用量页仍全量传输，分页与服务端聚合待完成。 |
 | C4 部分修复 | 租约失效/取消未贯穿 HTTP、ComfyUI、ffmpeg；失权任务可能继续耗 GPU，路径也未由执行令牌隔离；`consumer.ts`、`inference/comfyui.py`、`storage/artifacts.ts`。| 续租、结果提交、失败终态和写冲突回队已要求未过期的相同执行令牌；过期未被回收前也不能提交或结算。仍需 AbortSignal 与期限贯通、执行隔离暂存、不可变发布、运行中取消和故障注入。 |
 | C5 部分修复 | 目的地只保存当前文档，历史期有版本号却读不到对应版本；`packages/store/src/destinations.ts`、`apps/worker/src/queue/consumer.ts`。| 已保存不可变版本、阻止同版改写，Worker、CLI、审片台按期内版本读取；旧库缺失版本迁移为带近似标记的快照，审片台明确提示。需在真实旧生产库验收模型输入与分享行为。 |

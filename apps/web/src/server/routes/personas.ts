@@ -58,6 +58,41 @@ function projectsRoot(): string {
 const MIN_REFS = 3;
 const MAX_REFS = 7;
 const MAX_REF_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = MAX_REFS * MAX_REF_BYTES + 1024 * 1024;
+
+/** Bound the entire multipart body before FormData parsing allocates File objects. */
+export async function parseBoundedMultipart(request: Request, maxBytes: number): Promise<
+  { ok: true; form: FormData } | { ok: false; error: "upload_too_large" | "invalid_form" }
+> {
+  const claimed = Number(request.headers.get("content-length"));
+  if (Number.isFinite(claimed) && claimed > maxBytes) {
+    return { ok: false, error: "upload_too_large" };
+  }
+  const reader = request.body?.getReader();
+  if (!reader) return { ok: false, error: "invalid_form" };
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        return { ok: false, error: "upload_too_large" };
+      }
+      chunks.push(value);
+    }
+    const response = new Response(Buffer.concat(chunks), {
+      headers: { "content-type": request.headers.get("content-type") ?? "" },
+    });
+    return { ok: true, form: await response.formData() };
+  } catch {
+    return { ok: false, error: "invalid_form" };
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 const EXT_BY_MIME: Record<string, string> = {
   "image/png": ".png",
@@ -72,8 +107,10 @@ personas.post("/:id/refs", async (c) => {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 
-  const form = await c.req.formData().catch(() => null);
-  const files = form?.getAll("files").filter((f): f is File => f instanceof File) ?? [];
+  const parsed = await parseBoundedMultipart(c.req.raw, MAX_UPLOAD_BYTES);
+  if (!parsed.ok) return c.json({ ok: false, error: parsed.error },
+    parsed.error === "upload_too_large" ? 413 : 400);
+  const files = parsed.form.getAll("files").filter((f): f is File => f instanceof File);
   if (files.length === 0) {
     return c.json({ ok: false, error: "no_files" }, 400);
   }

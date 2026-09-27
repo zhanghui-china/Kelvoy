@@ -5,7 +5,21 @@ import { close, createSession, createUser, getPersona, insertPersona, open } fro
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Persona } from "@kelvoy/engine";
 import { Hono } from "hono";
-import personas from "./personas";
+import personas, { parseBoundedMultipart } from "./personas";
+
+test("multipart reader rejects a chunked body before parsing an oversized payload", async () => {
+  let reads = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      reads++;
+      controller.enqueue(new Uint8Array(6));
+      if (reads === 2) controller.close();
+    },
+  });
+  const request = new Request("http://localhost/upload", { method: "POST",
+    headers: { "content-type": "multipart/form-data; boundary=abc" }, body: stream });
+  expect(await parseBoundedMultipart(request, 10)).toEqual({ ok: false, error: "upload_too_large" });
+});
 
 function fixture(id: string, ownerId: string): Persona {
   return {
