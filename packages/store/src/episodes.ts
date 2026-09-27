@@ -115,14 +115,14 @@ export async function getUsageSummary(ownerId: string): Promise<{
 /** Small list projection: no prompts, candidate paths, or model provenance leave the DB. */
 export async function listEpisodeOverviews(ownerId: string): Promise<{
   episode_id: string; name: string; status: Episode["status"]; persona_id: string;
-  destination_id: string; created_at: string; credits_used: number;
+  destination_id: string; created_at: string; credits_used: number; season: string;
   render: { title: string }; shot_count: number; approved_shot_count: number;
   any_shot_started: boolean; all_keyframes_selected: boolean; all_shots_approved: boolean;
 }[]> {
   const rows = getDb().query<{
     episode_id: string; name: string | null; status: Episode["status"];
     persona_id: string; destination_id: string; created_at: string;
-    credits_used: number | null; title: string | null; shots: string;
+    credits_used: number | null; title: string | null; season: string | null; shots: string;
   }, [string]>(`select episode_id,
     json_extract(doc, '$.name') as name,
     json_extract(doc, '$.status') as status,
@@ -131,6 +131,7 @@ export async function listEpisodeOverviews(ownerId: string): Promise<{
     json_extract(doc, '$.created_at') as created_at,
     json_extract(doc, '$.credits_used') as credits_used,
     json_extract(doc, '$.render.title') as title,
+    json_extract(doc, '$.brief.season') as season,
     json_extract(doc, '$.shots') as shots
     from episodes where owner_id = ? order by episode_id`).all(ownerId);
   return rows.map((row) => {
@@ -139,6 +140,7 @@ export async function listEpisodeOverviews(ownerId: string): Promise<{
       episode_id: row.episode_id, name: row.name ?? row.title ?? row.destination_id,
       status: row.status, persona_id: row.persona_id, destination_id: row.destination_id,
       created_at: row.created_at, credits_used: row.credits_used ?? 0,
+      season: row.season ?? "",
       render: { title: row.title ?? "" },
       shot_count: shots.length,
       approved_shot_count: shots.filter((shot) => shot.status === "approved").length,

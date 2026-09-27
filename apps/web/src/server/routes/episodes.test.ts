@@ -61,9 +61,10 @@ test("overview list preserves review counts without sending prompts or media key
   const app = buildApp();
   const res = await app.request("/api/episodes/overview", { headers: { cookie } });
   expect(res.status).toBe(200);
-  const body = await res.json() as { episodes: { shot_count: number; approved_shot_count: number }[] };
+  const body = await res.json() as { episodes: { shot_count: number; approved_shot_count: number; season: string }[] };
   expect(body.episodes[0]?.shot_count).toBe(1);
   expect(body.episodes[0]?.approved_shot_count).toBe(1);
+  expect(body.episodes[0]?.season).toBe("秋");
   expect(JSON.stringify(body)).not.toContain("private prompt");
   expect(JSON.stringify(body)).not.toContain("kf/private.png");
   expect((await app.request("/api/episodes/overview")).status).toBe(401);
