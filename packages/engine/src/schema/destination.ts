@@ -21,6 +21,10 @@ export interface Destination {
   version: number;
   name: string;
   city: string;
+  /** Explicit catalog metadata only; missing values are never inferred from city. */
+  country_code?: string; // Uppercase two-letter ISO 3166-1 alpha-2 shape
+  province?: string;
+  description?: string;
   type: DestinationType;
   season_best: string[];
   landmarks: Landmark[];
