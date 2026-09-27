@@ -3,10 +3,14 @@
    类，配色和 .k-card/.k-field/.k-btn/.k-error 都直接复用它定义的那套。 */
 
 .k-settings-stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 1.5rem;
-  max-width: 560px;
+  max-width: 1200px;
+}
+@media (max-width: 900px) {
+  .k-settings-stack { grid-template-columns: 1fr; }
 }
 
 .k-settings-form {

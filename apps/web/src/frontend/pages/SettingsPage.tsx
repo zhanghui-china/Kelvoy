@@ -8,7 +8,7 @@ import { changePassword, getMySettings, updateMySettings } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
 import { GuideTip } from "../GuideTip";
 import "./SettingsPage.css";
-import { Button, Field } from "../ui";
+import { Button, ErrorState, Field, LoadingState } from "../ui";
 
 /*
  * M2-15（#43）设置页：只有两块——出片默认值、账号与安全。设计稿上的成员
@@ -22,7 +22,8 @@ const CANDIDATE_OPTIONS = Array.from(
 );
 
 export default function SettingsPage() {
-  const { loading, data, error } = useApiResource(getMySettings, []);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const { loading, data, error } = useApiResource(getMySettings, [loadAttempt]);
 
   const [tone, setTone] = useState("");
   const [candidates, setCandidates] = useState<number>(DEFAULT_CANDIDATES);
@@ -101,8 +102,8 @@ export default function SettingsPage() {
     setPasswordSaved(true);
   }
 
-  if (loading) return <p className="k-empty">加载中…</p>;
-  if (error) return <p className="k-error">加载失败：{error}</p>;
+  if (loading) return <LoadingState />;
+  if (error) return <ErrorState message={`加载失败：${error}`} onRetry={() => setLoadAttempt((value) => value + 1)} />;
 
   return (
     <div>
@@ -115,7 +116,7 @@ export default function SettingsPage() {
           <p className="k-card-meta">新建一期时预填这几项，每一期都还能当场改。</p>
           <GuideTip section="settings">默认值仅影响之后新建的作品。候选数仅用于传统关键帧方式；人物与场景直出视频不会生成候选图。提交时请看预估积分。</GuideTip>
 
-          <form className="k-settings-form" onSubmit={handleSaveDefaults}>
+          <form className="k-settings-form" onSubmit={handleSaveDefaults} aria-busy={savingDefaults}>
             <Field label="默认语气">
               <input
                 value={tone}
@@ -146,7 +147,7 @@ export default function SettingsPage() {
               <Button type="submit" disabled={savingDefaults}>
                 {savingDefaults ? "保存中…" : "保存默认值"}
               </Button>
-              {defaultsSaved && <span className="k-card-meta">已保存</span>}
+              {defaultsSaved && <span className="k-card-meta" role="status">默认值已保存</span>}
             </div>
           </form>
         </section>
@@ -157,7 +158,7 @@ export default function SettingsPage() {
             改自己的登录密码。忘记密码没有自助流程（比赛阶段账号由团队预置），找团队重置。
           </p>
 
-          <form className="k-settings-form" onSubmit={handleChangePassword}>
+          <form className="k-settings-form" onSubmit={handleChangePassword} aria-busy={savingPassword}>
             <Field label="当前密码">
               <input
                 type="password"
@@ -197,7 +198,7 @@ export default function SettingsPage() {
               <Button type="submit" disabled={savingPassword}>
                 {savingPassword ? "修改中…" : "修改密码"}
               </Button>
-              {passwordSaved && <span className="k-card-meta">密码已更新</span>}
+              {passwordSaved && <span className="k-card-meta" role="status">密码已更新</span>}
             </div>
           </form>
         </section>

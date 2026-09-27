@@ -106,3 +106,13 @@ test("modified or non-primary TOC clicks do not move the current page", () => {
     expect(scrolled).toBe(0);
   } finally { globalThis.document = previousDocument; }
 });
+
+test("help directory searches real anchored sections without hiding the article", () => {
+  const html = renderToStaticMarkup(<StaticRouter location="/help"><HelpPage /></StaticRouter>);
+  expect(html).toContain('type="search"');
+  expect(html).toContain('aria-label="帮助目录"');
+  for (const id of ["personas", "destinations", "templates", "settings", "credits", "retries", "faq"]) {
+    expect(html).toContain(`href="/help#${id}"`);
+    expect(html).toContain(`id="${id}"`);
+  }
+});

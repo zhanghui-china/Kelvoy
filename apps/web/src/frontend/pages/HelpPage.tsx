@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { updateMySettings } from "../api/client";
-import { GUIDE_RESOURCES, GUIDE_SECTIONS, guideHref } from "../guide";
+import { GUIDE_RESOURCES, GUIDE_SECTIONS } from "../guide";
+import { searchHelp, type HelpAnchor } from "./help-search";
 import "./HelpPage.css";
 
 const GUIDE_ANCHORS = new Set([...GUIDE_SECTIONS.map((section) => section.id), ...GUIDE_RESOURCES.map((resource) => resource.id), "retries", "faq"]);
@@ -20,12 +21,12 @@ export function focusGuideHash(hash: string, doc: { getElementById(id: string): 
 
 /** A repeated click on the current hash does not change location, so focus explicitly. */
 export function GuideJumpLink({ section, currentHash, children }: {
-  section: (typeof GUIDE_SECTIONS)[number]["id"];
+  section: HelpAnchor;
   currentHash: string;
   children: React.ReactNode;
 }) {
   const targetHash = `#${section}`;
-  return <Link to={guideHref(section)} onClick={(event) => {
+  return <Link to={`/help#${section}`} onClick={(event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (currentHash === targetHash) focusGuideHash(targetHash, document);
   }}>{children}</Link>;
@@ -69,6 +70,8 @@ function ReopenOnboarding() {
 
 export default function HelpPage() {
   const { hash } = useLocation();
+  const [query, setQuery] = useState("");
+  const results = searchHelp(query);
   useEffect(() => {
     if (hash) focusGuideHash(hash, document);
   }, [hash]);
@@ -78,6 +81,24 @@ export default function HelpPage() {
       <div className="k-eyebrow">使用指南</div>
       <h1>从第一期到可分享的旅行作品</h1>
       <p className="k-page-intro">一期开一个角色与真实目的地的旅行故事。推荐人物＋场景直出视频，审核脚本和片段即可；选择传统方式时另有关键帧审核。</p>
+
+      <section className="k-card k-help-search" aria-labelledby="help-search-heading">
+        <h2 id="help-search-heading">查找创作指南</h2>
+        <label className="k-field">搜索帮助内容
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="例如：角色、横屏、失败重试" />
+        </label>
+        <p className="k-card-meta" role="status">{query.trim() ? `找到 ${results.length} 条相关说明` : "完整目录"}</p>
+        {results.length === 0 ? <p className="k-empty">没有匹配的说明，请换个关键词。</p> :
+          <nav className="k-help-directory" aria-label="帮助目录">
+            {(["创作流程", "资源与账户", "问题处理"] as const).map((group) => {
+              const items = results.filter((item) => item.group === group);
+              return items.length > 0 && <div key={group}>
+                <h3>{group}</h3>
+                <ul>{items.map((item) => <li key={item.id}><GuideJumpLink section={item.id} currentHash={hash}>{item.title}</GuideJumpLink></li>)}</ul>
+              </div>;
+            })}
+          </nav>}
+      </section>
 
       <section className="k-help-quick" aria-labelledby="quick-start-heading">
         <div>
