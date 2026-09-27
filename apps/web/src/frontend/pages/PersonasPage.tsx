@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Card, EmptyState, ErrorState, LoadingState, PageHeading, Status } from "../ui";
 import { Link } from "react-router-dom";
 import type { Persona } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
@@ -12,7 +14,7 @@ const MIN_REFS = 3;
 
 export function PersonaCard({ persona: p }: { persona: Persona }) {
   return (
-    <div className="k-card k-persona-card">
+    <Card className="k-persona-card">
       <div className="k-persona-refs">
         {(p.refs.length > 0 ? p.refs.slice(0, 3) : [null, null, null]).map((ref, i) =>
           ref ? (
@@ -28,8 +30,8 @@ export function PersonaCard({ persona: p }: { persona: Persona }) {
         <div className="k-card-title">
           {p.name} <span className="k-pill">v{p.version}</span>
         </div>
-        {p.owner_id === null && <span className="k-pill k-pill-accent">官方角色</span>}
-        {p.refs.length < MIN_REFS && <span className="k-pill">参考图不足</span>}
+        {p.owner_id === null && <Status tone="info">官方角色</Status>}
+        {p.refs.length < MIN_REFS && <Status tone="warning">参考图不足</Status>}
       </div>
       {p.desc && <div className="k-card-meta">{p.desc}</div>}
       {p.locked.length > 0 && (
@@ -53,31 +55,30 @@ export function PersonaCard({ persona: p }: { persona: Persona }) {
       {canEditPersona(p) && (
         <Link to={`/personas/${p.persona_id}/edit`} className="k-btn k-btn-secondary">编辑</Link>
       )}
-    </div>
+    </Card>
   );
 }
 
 export default function PersonasPage() {
-  const { loading, data, error } = useApiResource(listPersonas, []);
+  const [attempt, setAttempt] = useState(0);
+  const { loading, data, error } = useApiResource(listPersonas, [attempt]);
 
-  if (loading) return <p className="k-empty">加载中…</p>;
-  if (error) return <p className="k-error">加载失败：{error}</p>;
+  if (loading) return <LoadingState />;
+  if (error) return <ErrorState message={`加载失败：${error}`} onRetry={() => setAttempt((value) => value + 1)} />;
   const personas = data?.personas ?? [];
 
   return (
     <div>
-      <div className="k-eyebrow">账号级资产 · 跨期复用</div>
-      <div className="k-persona-page-head">
-        <h1>角色</h1>
+      <PageHeading title="角色" eyebrow="账号级资产 · 跨期复用">
         <Link to="/personas/new" className="k-btn k-btn-primary">
           新建角色
         </Link>
-      </div>
+      </PageHeading>
       <GuideTip section="personas">官方角色可直接用于新建一期。自己的角色建议用 3–7 张多视角参考图，锁定特征帮助跨期保持一致；编辑后版本号会更新。</GuideTip>
       {personas.length === 0 ? (
-        <p className="k-empty">
+        <EmptyState>
           还没有角色，点上面"新建角色"开始第一个。
-        </p>
+        </EmptyState>
       ) : (
         <div className="k-persona-grid">
           {personas.map((p) => <PersonaCard key={p.persona_id} persona={p} />)}
