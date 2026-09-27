@@ -49,6 +49,13 @@ test("assets checks real references before allowing keyframing", async () => {
   })).rejects.toThrow("地标");
 });
 
+test("direct reference episodes skip keyframes after validating person and scene", async () => {
+  const next = await runAssets(episode({ video_source: "references" }), undefined,
+    { persona, destination });
+  expect(next.status).toBe("clipping");
+  expect(next.shots[0]?.status).toBe("draft");
+});
+
 test("one shot produces two distinct candidates and enters keyframe review", async () => {
   const calls: unknown[] = [];
   const context: StageContext = {
@@ -122,6 +129,24 @@ test("video uses selected keyframe and enters clip review", async () => {
   expect(next.shots[0]?.clip).toBe("clip/01_task-2.mp4");
   expect((inputSeen as { keyframe: string; duration_s: number }).keyframe).toBe("kf/01_a.png");
   expect((inputSeen as { duration_s: number }).duration_s).toBe(3);
+});
+
+test("direct video sends person and landmark images without a generated keyframe", async () => {
+  let inputSeen: unknown;
+  const context: StageContext = {
+    persona, destination, generation_id: "task-direct", attempt: 1,
+    video: { async generate(input) {
+      inputSeen = input;
+      return { key: "clip/01_task-direct.mp4", model: "MiniMax-H3", version: "dual",
+        seed: input.seed, seconds: 60, ref_hashes: ["person-hash", "scene-hash"] };
+    } },
+  };
+  const next = await runVideo(episode({ video_source: "references", status: "clipping",
+    shots: [shot({ status: "generating_clip" })] }), 1, context);
+  expect(next.status).toBe("clip_review");
+  expect(next.shots[0]?.clip).toBe("clip/01_task-direct.mp4");
+  expect((inputSeen as { refs: string[] }).refs).toEqual(["persona/front.png", "dest/a.jpg"]);
+  expect(next.shots[0]?.kf_selected).toBeNull();
 });
 
 test("finishing one of several shots leaves the episode generating and preserves other shots", async () => {

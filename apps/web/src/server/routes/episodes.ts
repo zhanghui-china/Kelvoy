@@ -77,6 +77,7 @@ episodes.post("/", async (c) => {
   const mode = "per_shot";
   const aspect = req.aspect ?? "9:16";
   const candidateCount = req.candidate_count ?? user?.settings.default_candidates ?? 3;
+  const videoSource = req.video_source ?? "references";
   const episode: Episode = {
     episode_id: `e_${crypto.randomUUID()}`,
     name: req.name ?? `${destination.city} · ${destination.name}`,
@@ -89,12 +90,13 @@ episodes.post("/", async (c) => {
     template_id: template.template_id,
     status: "draft",
     mode,
+    video_source: videoSource,
     cut_policy: "fixed_1s",
     candidate_count: candidateCount,
     created_at: new Date().toISOString(),
     // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
     // 镜数常量（credits.ts，M0-6 占位）；候选数取本期保存的值。
-    estimated_credits: estimateCreditQuote(candidateCount),
+    estimated_credits: estimateCreditQuote(candidateCount, 30, videoSource),
     credits_used: 0,
     share: { enabled: false, slug: "" },
     brief: {
@@ -137,6 +139,10 @@ episodes.get("/estimate", async (c) => {
   if (mode !== "per_shot") {
     return c.json({ ok: false, error: "invalid_mode" }, 400);
   }
+  const videoSource = c.req.query("video_source") ?? "references";
+  if (videoSource !== "keyframe" && videoSource !== "references") {
+    return c.json({ ok: false, error: "invalid_video_source" }, 400);
+  }
 
   // M2-15：候选数由表单传上来（来自账号的出片默认值，用户可当场改），
   // 不传时取账号默认候选数，否则用新期默认 3。范围跟设置页同一套常量。
@@ -157,8 +163,8 @@ episodes.get("/estimate", async (c) => {
     const user = await getUserById(c.get("ownerId"));
     candidates = user?.settings.default_candidates;
   }
-  return c.json({ ok: true, estimate: estimateCost({ mode, candidates }),
-    credit_quote: estimateCreditQuote(candidates ?? 3) });
+  return c.json({ ok: true, estimate: estimateCost({ mode, candidates, video_source: videoSource }),
+    credit_quote: estimateCreditQuote(candidates ?? 3, 30, videoSource) });
 });
 
 episodes.get("/:id", async (c) => {

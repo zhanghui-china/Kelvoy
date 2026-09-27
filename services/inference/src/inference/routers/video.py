@@ -1,4 +1,4 @@
-"""Generate a 3–5 second clip from its selected first frame."""
+"""Generate a clip from a reviewed keyframe or person and scene references."""
 
 from fastapi import APIRouter, HTTPException
 
@@ -16,10 +16,12 @@ async def generate(request: InferenceRequest) -> InferenceResponse:
         raise HTTPException(status_code=422, detail="video generates one clip per request")
     if request.size not in (None, "9:16", "16:9", "480x864", "864x480"):
         raise HTTPException(status_code=422, detail="video supports 9:16 and 16:9 presets only")
+    if len(request.refs) not in (1, 2):
+        raise HTTPException(status_code=422, detail="video needs one keyframe or two references")
     settings = Settings()
     try:
         return await generate_comfyui(
-            "video",
+            "video_reference" if len(request.refs) == 2 else "video",
             request.prompt,
             request.refs,
             settings.projects_root,

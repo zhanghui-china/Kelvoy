@@ -62,3 +62,9 @@ test("queued retry keeps progress visible without offering another retry", () =>
   expect(html).toContain("等待后台处理");
   expect(html).not.toContain("<button");
 });
+
+test("direct reference progress has no keyframe stage", () => {
+  const html = renderToStaticMarkup(<StageSteps status="clipping" videoSource="references" />);
+  expect(html).not.toContain("关键帧");
+  expect(html).toContain('aria-current="step">③ 视频片段');
+});

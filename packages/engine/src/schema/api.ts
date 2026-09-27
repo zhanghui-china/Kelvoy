@@ -115,6 +115,7 @@ export interface CreateEpisodeRequest {
   name?: string;
   requirements?: string;
   aspect?: EpisodeAspect;
+  video_source?: "keyframe" | "references";
   candidate_count?: number;
   persona_id: string;
   destination_id: string;

@@ -107,3 +107,29 @@ test("video adapter preserves an existing approved clip on a new task", async ()
   expect(await readFile(join(root, "e1", "clip", "01_old-task.mp4"), "utf8")).toBe("approved clip");
   expect(await readFile(join(root, "e1", result.key), "utf8")).toBe("new clip");
 });
+
+test("direct video sends person and scene references without a keyframe", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-direct-video-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "persona"));
+  await mkdir(join(root, "dest"));
+  await mkdir(join(root, "inference", "video"), { recursive: true });
+  await writeFile(join(root, "persona", "front.png"), "person");
+  await writeFile(join(root, "dest", "scene.jpg"), "scene");
+  await writeFile(join(root, "inference", "video", "result.mp4"), "video");
+  let request: unknown;
+  const provider = createLocalGenerationProviders(async (route, body) => {
+    request = { route, body };
+    return { ok: true, response: { paths: ["inference/video/result.mp4"], model: "MiniMax-H3",
+      version: "dual", seed: 7, seconds: 30 } };
+  }).video;
+  const result = await provider.generate({ episode_id: "e1", shot_no: 1,
+    refs: ["persona/front.png", "dest/scene.jpg"], prompt: "人物在场景中行走",
+    duration_s: 3, aspect: "16:9", seed: 7, generation_id: "direct-1" });
+  expect(request).toEqual({ route: "/video/", body: {
+    prompt: "人物在场景中行走", refs: ["persona/front.png", "dest/scene.jpg"],
+    seed: 7, size: "16:9", count: 1, params: { duration_s: 3 },
+  } });
+  expect(result.ref_hashes).toHaveLength(2);
+  expect(await readFile(join(root, "e1", result.key), "utf8")).toBe("video");
+});

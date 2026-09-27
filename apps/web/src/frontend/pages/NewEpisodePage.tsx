@@ -5,6 +5,7 @@ import {
   type Persona,
   DEFAULT_CANDIDATES,
   type EpisodeAspect,
+  type VideoSource,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
 } from "@kelvoy/engine";
@@ -88,15 +89,16 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   const [name, setName] = useState(initialDraft.current?.name ?? "");
   const [requirements, setRequirements] = useState(initialDraft.current?.requirements ?? "");
   const [aspect, setAspect] = useState<EpisodeAspect>(initialDraft.current?.aspect ?? "9:16");
+  const [videoSource, setVideoSource] = useState<VideoSource>(initialDraft.current?.videoSource ?? "references");
 
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<string[] | null>(null);
   const [violations, setViolations] = useState<ContentViolation[] | null>(null);
 
   useEffect(() => {
-    const draft: EpisodeDraft = { personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect };
+    const draft: EpisodeDraft = { personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect, videoSource };
     saveDraft(draft, ownerId);
-  }, [ownerId, personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect]);
+  }, [ownerId, personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect, videoSource]);
 
   // 出片默认值到位后预填一次。settings 的引用只在这次请求结束时变，所以
   // 不会覆盖用户之后的手动修改（同下面那几个"各选一次默认项"的 effect）。
@@ -161,8 +163,8 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
 
   // New episodes use the working per-shot mode; candidate count controls the estimate.
   const { data: estimateData, loading: estimateLoading } = useApiResource(
-    () => getEstimate("per_shot", candidates),
-    [candidates],
+    () => getEstimate("per_shot", candidates, videoSource),
+    [candidates, videoSource],
   );
   const estimate = estimateData?.estimate ?? null;
 
@@ -188,6 +190,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
       name: name.trim() || undefined,
       requirements,
       aspect,
+      video_source: videoSource,
       candidate_count: candidates,
       destination_id: destinationId,
       template_id: templateId,
@@ -250,7 +253,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
       <div className="k-eyebrow">创作工作台 / 新建一期</div>
       <h1>创建新的旅行故事</h1>
       <p className="k-page-intro">选择角色与目的地，再写下这趟旅程希望呈现的内容。</p>
-      <GuideTip section="create">先选出镜角色与目的地，再设定本期方向；创建前确认下方随候选数更新的积分预估。</GuideTip>
+      <GuideTip section="create">先选出镜角色与目的地。推荐人物图＋场景图直出视频，省去每镜图片生成；创建前核对实时积分预估。</GuideTip>
       <form onSubmit={handleSubmit} className="k-create-layout">
         <div className="k-card k-create-form-panel">
           <div className="k-create-panel-heading"><span className="k-create-step">01</span><div><h2>本期内容</h2><p>为这期作品设定目的地与创作方向</p></div></div>
@@ -263,7 +266,12 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
               <select value={destinationId} onChange={(e) => { const next = destinations.find((d) => d.destination_id === e.target.value); setDestinationId(e.target.value); setSeason(seasonAfterDestinationChange(seasonMode, season, next?.season_best ?? [])); const match = templates.find((t) => t.skeleton === next?.type); if (match) setTemplateId(match.template_id); }}>
                 {destinations.map((d) => <option key={d.destination_id} value={d.destination_id}>{d.city} · {d.name}（{DESTINATION_TYPE_LABELS[d.type]}）</option>)}
               </select>
+              <span className="k-card-meta">直出视频会把选中角色的参考图与每镜地标实景图一起交给模型。</span>
             </label>
+            {selectedDestination?.landmarks[0]?.refs[0] && <div className="k-create-scene-preview">
+              <img src={`/api/assets/${selectedDestination.landmarks[0].refs[0]}`} alt={`${selectedDestination.name}场景参考`} />
+              <span className="k-card-meta">场景参考示例：{selectedDestination.landmarks[0].name}。实际每镜按脚本对应地标选图。</span>
+            </div>}
             <div className="k-create-row">
               <div className="k-field">季节 / 时段
                 <span className="k-card-meta">先选当前目的地推荐的季节，也可自定义。</span>
@@ -293,8 +301,15 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
             </label>
           </div>
           <details className="k-create-advanced">
-            <summary>高级设置 <span>模板、候选数、服装和禁止项</span></summary>
+            <summary>高级设置 <span>生成方式、模板、服装和禁止项</span></summary>
             <div className="k-create-fields">
+              <label className="k-field">视频生成方式
+                <select value={videoSource} onChange={(e) => setVideoSource(e.target.value as VideoSource)}>
+                  <option value="references">人物＋场景直出视频（推荐）</option>
+                  <option value="keyframe">先生成关键帧候选，再做视频</option>
+                </select>
+                <span className="k-card-meta">直出流程跳过图片生成和关键帧审核；视频生成后直接逐镜检查片段。</span>
+              </label>
               <label className="k-field">模板
                 <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
                   {templates.map((t) => <option key={t.template_id} value={t.template_id}>{t.name}{selectedDestination && t.skeleton !== selectedDestination.type ? "（骨架与目的地类型不同）" : ""}</option>)}
@@ -307,8 +322,10 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
                 <div className="k-brief-banned-input"><input value={bannedInput} onChange={(e) => setBannedInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addBannedTerms(); } }} placeholder="按逗号/顿号/回车分隔多项" /><button type="button" className="k-btn k-btn-secondary" onClick={addBannedTerms}>添加</button></div>
               </label>
               <div className="k-brief-chips">{banned.map((term) => <span className="k-chip k-chip-removable" key={term}>{term}<button type="button" aria-label={`删除禁止项 ${term}`} onClick={() => removeBanned(term)}>×</button></span>)}</div>
-              <label className="k-field">每镜候选数<select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>{CANDIDATE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-              <p className="k-card-meta">可选 1–3 张：3 张更方便挑选，1 张通常用量更低；下方预估会随选择更新。</p>
+              {videoSource === "keyframe" && <>
+                <label className="k-field">每镜候选数<select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>{CANDIDATE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+                <p className="k-card-meta">可选 1–3 张：3 张更方便挑选，1 张通常用量更低；下方预估会随选择更新。</p>
+              </>}
             </div>
           </details>
           {violations && violations.length > 0 && <ul className="k-error" role="alert">{violations.map((v) => <li key={`${v.field}-${v.term}`}>以下内容不允许出现：{v.field}: {v.term}</li>)}</ul>}

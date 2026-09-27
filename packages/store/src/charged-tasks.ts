@@ -41,8 +41,11 @@ export function submitReviewAdvance(input: {
       shot_no?: number; units: number; held: boolean }[] = [];
     if (episode.status === "script_review" && input.next_status === "assets") {
       for (const shot of episode.shots) chargedTasks.push({
-        id: `tk_${crypto.randomUUID()}`, stage: "keyframe", shot_no: shot.no,
-        units: episode.candidate_count ?? 2, held: true,
+        id: `tk_${crypto.randomUUID()}`,
+        stage: episode.video_source === "references" ? "video" : "keyframe",
+        shot_no: shot.no,
+        units: episode.video_source === "references" ? 1 : episode.candidate_count ?? 2,
+        held: true,
       });
     } else if (episode.status === "kf_review" && input.next_status === "clipping") {
       for (const shot of episode.shots.filter((item) => item.status === "kf_selected")) {
@@ -94,10 +97,12 @@ export function submitShotRegeneration(input: {
     const shot = episode.shots.find((item) => item.no === input.shot_no);
     if (!shot) return { ok: false, error: "not_found" } as const;
     const nextStatus = input.stage === "keyframe" ? "kf_review" : "clip_review";
-    if (!isLegalShotStatusChange(shot.status, "rejected") ||
+    if ((episode.video_source === "references" && input.stage === "keyframe") ||
+        !isLegalShotStatusChange(shot.status, "rejected") ||
         (episode.status !== nextStatus && episode.status !== "done" &&
           !(episode.status === "clip_review" && nextStatus === "kf_review")) ||
-        (input.stage === "video" && (!shot.kf_selected || !shot.candidates.includes(shot.kf_selected))) ||
+        (input.stage === "video" && episode.video_source !== "references" &&
+          (!shot.kf_selected || !shot.candidates.includes(shot.kf_selected))) ||
         (episode.status !== nextStatus && !isLegalEpisodeStatusChange(episode.status, nextStatus))) {
       return { ok: false, error: "illegal_transition" } as const;
     }
@@ -156,10 +161,10 @@ export function completeTaskWithEpisode(task: Task, rowVersion: number, updated:
         values (?, ?, 'script', 1, 'pending')`)
         .run(`tk_script_${task.episode_id}`, task.episode_id);
     }
-    if (task.stage === "assets" && updated.status === "keyframing") {
+    if (task.stage === "assets" && (updated.status === "keyframing" || updated.status === "clipping")) {
       getDb().query(`update tasks set status = 'pending', updated_at = datetime('now')
-        where episode_id = ? and stage = 'keyframe' and status = 'held'`)
-        .run(task.episode_id);
+        where episode_id = ? and stage = ? and status = 'held'`)
+        .run(task.episode_id, updated.status === "clipping" ? "video" : "keyframe");
     }
     return { ok: true, row_version: rowVersion + 1 } as const;
   }).immediate();
@@ -193,11 +198,11 @@ export function failTaskWithCredits(task: Task, requeue: boolean): boolean {
       if (task.stage === "brief") finalizeCredits(`tk_script_${task.episode_id}`, "released");
       if (task.stage === "assets") {
         const held = getDb().query<{ task_id: string }, [string]>(
-          "select task_id from tasks where episode_id = ? and stage = 'keyframe' and status = 'held'",
+          "select task_id from tasks where episode_id = ? and status = 'held' and stage in ('keyframe', 'video')",
         ).all(task.episode_id);
         for (const pending of held) finalizeCredits(pending.task_id, "released");
         getDb().query(`update tasks set status = 'cancelled', updated_at = datetime('now')
-          where episode_id = ? and stage = 'keyframe' and status = 'held'`).run(task.episode_id);
+          where episode_id = ? and status = 'held' and stage in ('keyframe', 'video')`).run(task.episode_id);
       }
       getDb().query(`update tasks set status = 'failed', lease_token = null,
         lease_until = null, updated_at = datetime('now') where task_id = ?`)

@@ -244,7 +244,7 @@ export default function ScriptReview({
           disabled={actionDisabled}
           onClick={() => mutation.run((rowVersion) => continueEpisode(episode.episode_id, rowVersion))}
         >
-          继续 → 生成素材与关键帧
+          {episode.video_source === "references" ? "继续 → 用人物与场景生成视频" : "继续 → 生成素材与关键帧"}
         </button>
       </div>
     </section>

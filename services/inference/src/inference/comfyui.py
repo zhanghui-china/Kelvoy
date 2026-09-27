@@ -18,6 +18,7 @@ TEMPLATES = {
     "image": ("1_2_DualRef2IMG_QwenImage2_1_api.json", "482", "images", ".png"),
     "image_single": ("1_1_SingleRef2IMG_QwenImage2_1_api.json", "482", "images", ".png"),
     "video": ("2_0_Image2Video_MinimaxH3_api.json", "40", "gifs", ".mp4"),
+    "video_reference": ("2_2_DualRef2Video_MinimaxH3_api.json", "40", "gifs", ".mp4"),
 }
 
 
@@ -80,6 +81,29 @@ def build_video_workflow(
     return workflow
 
 
+def build_dual_ref_video_workflow(
+    template: dict, uploaded_refs: list[str], prompt: str, duration_s: int,
+    seed: int, aspect: str,
+) -> dict:
+    if len(uploaded_refs) != 2:
+        raise ValueError("direct video needs person and scene images")
+    if duration_s not in (3, 4, 5):
+        raise ValueError("video duration must be 3 to 5 seconds")
+    aspects = {"9:16": "9:16 (Vertical)", "16:9": "16:9 (Widescreen)"}
+    if aspect not in aspects:
+        raise ValueError("unsupported video aspect")
+    workflow = deepcopy(template)
+    workflow["7"]["inputs"]["image"] = uploaded_refs[0]
+    workflow["92"]["inputs"]["image"] = uploaded_refs[1]
+    workflow["77"]["inputs"]["prompt"] = prompt
+    workflow["76"]["inputs"]["value"] = duration_s
+    workflow["82"]["inputs"]["aspect_ratio"] = aspects[aspect]
+    workflow["82"]["inputs"]["megapixels"] = 0.9
+    workflow["49"]["inputs"]["seed"] = seed
+    workflow["49"]["inputs"]["control_after_generate"] = "fixed"
+    return workflow
+
+
 async def generate(
     kind: str,
     prompt: str,
@@ -92,13 +116,14 @@ async def generate(
     client: httpx.AsyncClient | None = None,
     aspect: str = "9:16",
 ) -> InferenceResponse:
-    if kind not in ("image", "video"):
+    if kind not in ("image", "video", "video_reference"):
         raise ValueError("unsupported workflow")
-    if len(refs) not in ((1, 2) if kind == "image" else (1,)):
-        raise ValueError("image needs persona and optional landmark; video needs one first frame")
+    expected_counts = {"image": (1, 2), "video": (1,), "video_reference": (2,)}
+    if len(refs) not in expected_counts[kind]:
+        raise ValueError("image needs persona and optional landmark; video needs its required references")
     if not prompt.strip():
         raise ValueError("prompt is required")
-    if kind == "video" and duration_s not in (3, 4, 5):
+    if kind in ("video", "video_reference") and duration_s not in (3, 4, 5):
         raise ValueError("video duration must be 3 to 5 seconds")
     if aspect not in ("9:16", "16:9"):
         raise ValueError("unsupported aspect")
@@ -128,11 +153,16 @@ async def generate(
             uploaded.append(
                 f"{item['subfolder']}/{item['name']}" if item.get("subfolder") else item["name"]
             )
-        workflow = (
-            build_image_workflow(template, uploaded, prompt, chosen_seed, aspect)
-            if kind == "image"
-            else build_video_workflow(template, uploaded[0], prompt, duration_s, chosen_seed)
-        )
+        if kind == "image":
+            workflow = build_image_workflow(template, uploaded, prompt, chosen_seed, aspect)
+        elif kind == "video_reference":
+            workflow = build_dual_ref_video_workflow(
+                template, uploaded, prompt, duration_s, chosen_seed, aspect
+            )
+        else:
+            workflow = build_video_workflow(
+                template, uploaded[0], prompt, duration_s, chosen_seed
+            )
         response = await client.post(
             "/prompt", json={"prompt": workflow, "client_id": str(uuid.uuid4())}
         )
@@ -165,9 +195,10 @@ async def generate(
                     media.raise_for_status()
                     if not media.content:
                         raise ComfyUIError(502, "ComfyUI returned an empty file")
-                    output_dir = projects_root.resolve() / "inference" / kind
+                    media_kind = "image" if kind == "image" else "video"
+                    output_dir = projects_root.resolve() / "inference" / media_kind
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    relative = Path("inference") / kind / f"{uuid.uuid4().hex}{extension}"
+                    relative = Path("inference") / media_kind / f"{uuid.uuid4().hex}{extension}"
                     (projects_root.resolve() / relative).write_bytes(media.content)
                     return InferenceResponse(
                         paths=[relative.as_posix()],

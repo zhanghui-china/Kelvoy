@@ -102,19 +102,21 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
     video: { async generate(input) {
       safeId(input.episode_id);
       safeId(input.generation_id);
-      if (!input.keyframe.startsWith("kf/")) throw new Error("invalid keyframe path");
-      const frameKey = `${input.episode_id}/${input.keyframe}`;
-      const hash = await hashKey(frameKey);
+      const direct = input.refs !== undefined;
+      if (direct && input.refs?.length !== 2) throw new Error("direct video needs two references");
+      if (!direct && !input.keyframe?.startsWith("kf/")) throw new Error("invalid keyframe path");
+      const refs = direct ? input.refs! : [`${input.episode_id}/${input.keyframe}`];
+      const hashes = await Promise.all(refs.map(hashKey));
       const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}.mp4`;
-      const fingerprint = requestHash({ input, hash });
+      const fingerprint = requestHash({ input, hashes });
       const cached = await readCached(input.episode_id, key, fingerprint);
       if (cached) return cached;
       const response = await requestOne(call, "/video/", localVideoRequest({
-        prompt: input.prompt, first_frame: frameKey,
+        prompt: input.prompt, refs,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
       }));
       const asset = { key, model: response.model, version: response.version,
-        seed: response.seed, seconds: response.seconds, ref_hashes: [hash] };
+        seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       await saveCached(input.episode_id, key, response.source, fingerprint, asset);
       return asset;
     } },

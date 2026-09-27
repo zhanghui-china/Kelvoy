@@ -45,10 +45,12 @@ export function getCreditPrice(kind: CreditKind): number {
   return row.price;
 }
 
-export function estimateCreditQuote(candidates: number, shotCount = 30): number {
+export function estimateCreditQuote(candidates: number, shotCount = 30,
+  videoSource: "keyframe" | "references" = "keyframe"): number {
   if (!Number.isInteger(candidates) || candidates < 1 || candidates > 3 ||
       !Number.isInteger(shotCount) || shotCount < 0) throw new Error("invalid quote parameters");
-  return getCreditPrice("script") + shotCount * candidates * getCreditPrice("image") +
+  return getCreditPrice("script") +
+    (videoSource === "keyframe" ? shotCount * candidates * getCreditPrice("image") : 0) +
     shotCount * getCreditPrice("video") + getCreditPrice("compose");
 }
 

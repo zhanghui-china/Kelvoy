@@ -24,7 +24,7 @@ export default function ProgressView({
     (s) => s.status === "kf_ready" || s.status === "kf_selected" || s.status === "clip_ready",
   ).length;
   const failedGuideSection: Record<FailedTaskSummary["stage"], GuideSectionId> = {
-    brief: "create", script: "script", assets: "keyframes", keyframe: "keyframes",
+    brief: "create", script: "script", assets: episode.video_source === "references" ? "clips" : "keyframes", keyframe: "keyframes",
     video: "clips", compose: "compose",
   };
   const guideSection: GuideSectionId = canRetry && failedTask
@@ -32,7 +32,7 @@ export default function ProgressView({
     : episode.shots.length === 0 ? "script"
     : episode.shots.every((shot) => shot.status === "approved") ? "compose"
     : episode.shots.some((shot) => shot.clip || shot.status === "generating_clip" || shot.status === "clip_ready") ? "clips"
-    : "keyframes";
+    : episode.video_source === "references" ? "clips" : "keyframes";
 
   return (
     <section className="k-desk-main">

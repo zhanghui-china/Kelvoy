@@ -9,6 +9,9 @@ export async function runAssets(episode: Episode, _shotNo?: number, context?: St
   if (!context?.persona || !context.destination) throw new Error("assets 需要角色和目的地");
   if (context.persona.refs.length < 3) throw new Error("角色参考图不足 3 张");
   if (episode.shots.length === 0) throw new Error("分镜表为空");
+  if (episode.video_source === "references" && !context.destination.landmarks[0]?.refs[0]) {
+    throw new Error("目的地缺少场景参考图，不能直接生成视频");
+  }
   for (const shot of episode.shots) {
     if (!shot.landmark) continue;
     const landmark = context.destination.landmarks.find((item) => item.id === shot.landmark);
@@ -16,5 +19,6 @@ export async function runAssets(episode: Episode, _shotNo?: number, context?: St
       throw new Error(`第 ${shot.no} 镜地标参考图不足，不能生成`);
     }
   }
-  return { ...episode, status: transitionEpisode(episode.status, { type: "advance" }) };
+  return { ...episode, status: transitionEpisode(episode.status,
+    { type: episode.video_source === "references" ? "skip_keyframes" : "advance" }) };
 }

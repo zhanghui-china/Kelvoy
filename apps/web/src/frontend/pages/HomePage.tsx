@@ -17,7 +17,7 @@ const CAPABILITIES = [
   { number: "01", title: "固定角色", body: "管理角色形象与参考图，让同一个人跨期出镜。", to: "/personas", action: "查看角色" },
   { number: "02", title: "真实目的地", body: "从地标、动线与实景参考图出发构建旅程。", to: "/destinations", action: "浏览目的地" },
   { number: "03", title: "创作模板", body: "选择与目的地类型匹配的叙事和视觉设置。", to: "/templates", action: "查看模板" },
-  { number: "04", title: "逐步审核", body: "在脚本、关键帧和片段节点检查实际生成结果。", to: "/works", action: "继续作品" },
+  { number: "04", title: "逐步审核", body: "检查脚本和视频片段；传统方式还需选择关键帧。", to: "/works", action: "继续作品" },
 ];
 
 export default function HomePage() {

@@ -224,9 +224,10 @@ export function createEpisode(body: CreateEpisodeRequest) {
   });
 }
 
-export function getEstimate(mode: EpisodeMode, candidates: number) {
+export function getEstimate(mode: EpisodeMode, candidates: number,
+  videoSource: "keyframe" | "references" = "references") {
   return apiFetch<{ estimate: EstimateCostResult; credit_quote: number }>(
-    `/api/episodes/estimate?mode=${encodeURIComponent(mode)}&candidates=${encodeURIComponent(candidates)}`,
+    `/api/episodes/estimate?mode=${encodeURIComponent(mode)}&candidates=${encodeURIComponent(candidates)}&video_source=${videoSource}`,
   );
 }
 

@@ -8,6 +8,8 @@
 .k-create-panel-heading p { font-size: 0.82rem; color: var(--color-muted); margin: 0; line-height: 1.5; }
 .k-create-step { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; background: #e8efff; color: var(--color-accent); font-size: 0.8rem; font-weight: 700; }
 .k-create-fields { display: grid; gap: 1rem; }
+.k-create-scene-preview { display: flex; align-items: center; gap: 0.8rem; min-width: 0; padding: 0.6rem; border: 1px solid var(--color-border); border-radius: 10px; background: #f7faff; }
+.k-create-scene-preview img { width: 88px; height: 64px; flex: none; object-fit: cover; border-radius: 7px; }
 .k-create-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .k-create-choices { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 .k-create-choices button { min-height: 40px; padding: 0 0.8rem; border: 1px solid var(--color-border-strong); border-radius: 8px; background: #fff; color: var(--color-ink-soft); cursor: pointer; }

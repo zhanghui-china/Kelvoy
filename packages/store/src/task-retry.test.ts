@@ -59,6 +59,24 @@ test("retry requeues failed image with original generation identity and one fres
     .toEqual({ ok: false, error: "no_failed_task" });
 });
 
+test("direct reference assets retry reserves video work without image tasks", async () => {
+  await insertEpisode({ ...episode(), status: "failed", video_source: "references",
+    shots: [{ ...episode().shots[0]!, status: "draft" }] });
+  const old = await enqueueTask({ episode_id: "e_retry", stage: "assets" });
+  const claimed = await dequeueTask();
+  expect(claimed?.task_id).toBe(old.task_id);
+  expect(failTaskWithCredits(claimed!, false)).toBe(true);
+  grantCredits(ownerId, 10, "direct-assets-retry");
+  expect(submitFailedTaskRetry({ episode_id: "e_retry", owner_id: ownerId, row_version: 1 }))
+    .toEqual({ ok: true, row_version: 2, stage: "assets", shot_no: null });
+  expect(getCreditBalance(ownerId)).toEqual({ available: 0, reserved: 10 });
+  const held = getDb().query<{ stage: string; status: string }, []>(
+    "select stage, status from tasks where status = 'held'",
+  ).all();
+  expect(held).toEqual([{ stage: "video", status: "held" }]);
+  expect((await dequeueTask())?.stage).toBe("assets");
+});
+
 test("failed compose retries only after reserving the action price", async () => {
   await insertEpisode({ ...episode(), status: "failed", shots: [] });
   await enqueueTask({ episode_id: "e_retry", stage: "compose" });

@@ -195,8 +195,9 @@ test("POST creates a fixed-cut draft with intro/outro off and enqueues a brief t
   expect(episode.destination_version).toBe(1);
   expect(episode.mode).toBe("per_shot"); // FR-01: 默认逐镜
   expect(episode.cut_policy).toBe("fixed_1s");
+  expect(episode.video_source).toBe("references");
   // FR-01/FR-09 粗估：建期这一刻没有真实镜数，estimateCost 用它的默认常量。
-  expect(episode.estimated_credits).toBe(estimateCreditQuote(3));
+  expect(episode.estimated_credits).toBe(estimateCreditQuote(3, 30, "references"));
   expect(episode.estimated_credits).toBeGreaterThan(0);
   expect(episode.render.intro).toBeNull();
   expect(episode.render.outro).toBeNull();
@@ -240,7 +241,7 @@ test("POST saves independent name, requirements, aspect and candidate count", as
   expect(episode.brief.aspect).toBe("16:9");
   expect(episode.render.res).toBe("1920x1080");
   expect(episode.candidate_count).toBe(1);
-  expect(episode.estimated_credits).toBe(estimateCreditQuote(1));
+  expect(episode.estimated_credits).toBe(estimateCreditQuote(1, 30, "references"));
 });
 
 test("POST rejects invalid aspect and candidate count", async () => {
@@ -298,7 +299,7 @@ test("POST honors an explicit season/tone/banned/mode over the defaults", async 
     banned: ["真人"],
   });
   expect(body.episode.mode).toBe("per_shot");
-  expect(body.episode.estimated_credits).toBe(estimateCreditQuote(3));
+  expect(body.episode.estimated_credits).toBe(estimateCreditQuote(3, 30, "references"));
 });
 
 test("GET /estimate returns a cost estimate for a given mode without touching the db", async () => {
@@ -308,7 +309,7 @@ test("GET /estimate returns a cost estimate for a given mode without touching th
   const perShotRes = await app.request("/api/episodes/estimate?mode=per_shot", { headers: { cookie } });
   expect(perShotRes.status).toBe(200);
   const perShotBody = (await perShotRes.json()) as { ok: boolean; estimate: unknown };
-  expect(perShotBody.estimate).toEqual(estimateCost({ mode: "per_shot" }));
+  expect(perShotBody.estimate).toEqual(estimateCost({ mode: "per_shot", video_source: "references" }));
 
 });
 
@@ -321,13 +322,13 @@ test("GET /estimate takes the candidate count from the query (M2-15 出片默认
   });
   expect(res.status).toBe(200);
   const body = (await res.json()) as { estimate: unknown };
-  expect(body.estimate).toEqual(estimateCost({ mode: "per_shot", candidates: 3 }));
+  expect(body.estimate).toEqual(estimateCost({ mode: "per_shot", candidates: 3, video_source: "references" }));
 
   // 不传 candidates 时行为不变：仍然是 credits.ts 的 DEFAULT_CANDIDATES。
   const noCandidates = await app.request("/api/episodes/estimate?mode=per_shot", {
     headers: { cookie },
   });
-  expect((await noCandidates.json()).estimate).toEqual(estimateCost({ mode: "per_shot" }));
+  expect((await noCandidates.json()).estimate).toEqual(estimateCost({ mode: "per_shot", video_source: "references" }));
 });
 
 test("saved candidate count is used while a legacy grid default is ignored", async () => {
@@ -338,7 +339,7 @@ test("saved candidate count is used while a legacy grid default is ignored", asy
   await upsertTemplate(templateFixture("t_1"));
   const app = buildApp();
   const estimate = await app.request("/api/episodes/estimate?mode=per_shot", { headers: { cookie } });
-  expect((await estimate.json()).estimate).toEqual(estimateCost({ mode: "per_shot", candidates: 1 }));
+  expect((await estimate.json()).estimate).toEqual(estimateCost({ mode: "per_shot", candidates: 1, video_source: "references" }));
   const created = await app.request("/api/episodes", {
     method: "POST", headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ persona_id: "c_1", destination_id: "d_1", template_id: "t_1" }),

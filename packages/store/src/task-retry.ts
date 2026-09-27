@@ -39,8 +39,10 @@ export function submitFailedTaskRetry(input: {
       generation_id: string | null; held: boolean; units: number }[] = [];
     if (stage === "assets") {
       for (const shot of episode.shots.filter((item) => item.status === "draft")) {
-        tasks.push({ id: `tk_${crypto.randomUUID()}`, stage: "keyframe", shot_no: shot.no,
-          generation_id: null, held: true, units: episode.candidate_count ?? 2 });
+        tasks.push({ id: `tk_${crypto.randomUUID()}`,
+          stage: episode.video_source === "references" ? "video" : "keyframe", shot_no: shot.no,
+          generation_id: null, held: true,
+          units: episode.video_source === "references" ? 1 : episode.candidate_count ?? 2 });
       }
       tasks.push({ id: `tk_${crypto.randomUUID()}`, stage, shot_no: null,
         generation_id: null, held: false, units: 0 });

@@ -1,4 +1,4 @@
-import type { Episode, EpisodeMode } from "../schema/episode";
+import type { Episode, EpisodeMode, VideoSource } from "../schema/episode";
 
 /**
  * FR-01/FR-09 提交前粗估：镜数 × 候选数 × 单位成本 × 1.5 返工系数
@@ -37,6 +37,7 @@ export interface EstimateCostInput {
   /** 缺省时用 DEFAULT_CANDIDATES。 */
   candidates?: number;
   mode: EpisodeMode;
+  video_source?: VideoSource;
 }
 
 export interface EstimateCostBreakdown {
@@ -61,8 +62,9 @@ export function estimateCost(input: EstimateCostInput): EstimateCostResult {
 
   const keyframeUnitMinutes =
     KEYFRAME_GPU_MINUTES_PER_CANDIDATE * (input.mode === "grid" ? GRID_MODE_KEYFRAME_DISCOUNT : 1);
-  const keyframeGpuMinutes = shotCount * candidates * keyframeUnitMinutes;
-  const videoGpuMinutes = shotCount * candidates * VIDEO_GPU_MINUTES_PER_CANDIDATE;
+  const direct = input.video_source === "references";
+  const keyframeGpuMinutes = direct ? 0 : shotCount * candidates * keyframeUnitMinutes;
+  const videoGpuMinutes = shotCount * (direct ? 1 : candidates) * VIDEO_GPU_MINUTES_PER_CANDIDATE;
 
   const gpuMinutes = (keyframeGpuMinutes + videoGpuMinutes) * REWORK_FACTOR;
 
@@ -83,7 +85,9 @@ export function estimateCost(input: EstimateCostInput): EstimateCostResult {
  * POST /api/episodes 建期时用：这一刻 episode.shots 还是空数组（脚本要到
  * brief 任务跑完才有），所以镜数落回默认值，只有 mode 是真实输入。
  */
-export function estimateCredits(episode: Pick<Episode, "shots" | "mode"> & Partial<Pick<Episode, "candidate_count">>): number {
+export function estimateCredits(episode: Pick<Episode, "shots" | "mode"> &
+  Partial<Pick<Episode, "candidate_count" | "video_source">>): number {
   const shotCount = episode.shots.length > 0 ? episode.shots.length : undefined;
-  return estimateCost({ shot_count: shotCount, mode: episode.mode, candidates: episode.candidate_count }).estimated_credits;
+  return estimateCost({ shot_count: shotCount, mode: episode.mode,
+    candidates: episode.candidate_count, video_source: episode.video_source }).estimated_credits;
 }

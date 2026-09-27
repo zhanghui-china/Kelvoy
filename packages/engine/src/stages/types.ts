@@ -30,7 +30,8 @@ export interface StageContext {
     generate(input: {
       episode_id: string;
       shot_no: number;
-      keyframe: string;
+      keyframe?: string;
+      refs?: string[];
       aspect?: EpisodeAspect;
       prompt: string;
       duration_s: number;

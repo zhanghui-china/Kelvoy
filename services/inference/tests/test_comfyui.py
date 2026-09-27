@@ -11,6 +11,7 @@ from inference.comfyui import (
     ComfyUIError,
     build_image_workflow,
     build_video_workflow,
+    build_dual_ref_video_workflow,
     generate,
     resolve_reference,
 )
@@ -88,6 +89,22 @@ def test_video_workflow_uses_selected_first_frame_and_measured_preset():
     assert workflow["9"]["inputs"]["scale_to_length"] == 480
     assert workflow["9"]["inputs"]["aspect_ratio"] == "original"
     assert workflow["49"]["inputs"]["seed"] == 31
+
+
+def test_dual_reference_video_uses_person_and_scene_with_requested_aspect():
+    template = json.loads((BRIDGE / "2_2_DualRef2Video_MinimaxH3_api.json").read_text())
+    workflow = build_dual_ref_video_workflow(
+        template, ["person.png", "scene.jpg"], "traveler walks through scene", 3, 31,
+        "9:16",
+    )
+    assert workflow["7"]["inputs"]["image"] == "person.png"
+    assert workflow["92"]["inputs"]["image"] == "scene.jpg"
+    assert workflow["77"]["inputs"]["prompt"] == "traveler walks through scene"
+    assert workflow["76"]["inputs"]["value"] == 3
+    assert workflow["82"]["inputs"]["aspect_ratio"] == "9:16 (Vertical)"
+    assert workflow["82"]["inputs"]["megapixels"] == 0.9
+    assert workflow["49"]["inputs"]["seed"] == 31
+    assert template["76"]["inputs"]["value"] == 15
 
 
 @pytest.mark.parametrize(

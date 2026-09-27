@@ -191,6 +191,7 @@ export function validateCreateEpisodeRequest(input: unknown): ValidationResult<C
   if ("name" in r && !isNonEmptyString(r.name)) errors.push("name: 必须是非空字符串");
   if ("requirements" in r && typeof r.requirements !== "string") errors.push("requirements: 必须是字符串");
   if ("aspect" in r && r.aspect !== "9:16" && r.aspect !== "16:9") errors.push("aspect: 必须是 9:16 / 16:9 之一");
+  if ("video_source" in r && r.video_source !== "keyframe" && r.video_source !== "references") errors.push("video_source: 必须是 keyframe / references 之一");
   if ("candidate_count" in r && (!Number.isInteger(r.candidate_count) || r.candidate_count! < SETTINGS_CANDIDATES_MIN || r.candidate_count! > SETTINGS_CANDIDATES_MAX)) errors.push("candidate_count: 必须是 1–3 的整数");
   if ("series_id" in r && !isNonEmptyString(r.series_id)) errors.push("series_id: 必须是非空字符串");
   if ("season" in r && !isNonEmptyString(r.season)) errors.push("season: 必须是非空字符串");

@@ -19,6 +19,10 @@ describe("transitionShot: legal transitions", () => {
     expect(transitionShot("kf_selected", { type: "start_clip" })).toBe("generating_clip");
   });
 
+  test("draft --start_direct_clip--> generating_clip", () => {
+    expect(transitionShot("draft", { type: "start_direct_clip" })).toBe("generating_clip");
+  });
+
   test("generating_clip --clip_ready--> clip_ready", () => {
     expect(transitionShot("generating_clip", { type: "clip_ready" })).toBe("clip_ready");
   });

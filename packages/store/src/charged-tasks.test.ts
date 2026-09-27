@@ -87,6 +87,23 @@ test("review gate reserves every image candidate before moving to assets", async
   expect([one?.stage, two?.stage]).toEqual(["keyframe", "keyframe"]);
 });
 
+test("direct reference review reserves videos and skips image tasks", async () => {
+  const draft = { ...episode(), video_source: "references" as const,
+    status: "script_review" as const, shots: [{ no: 1, status: "draft" }] } as Episode;
+  await insertEpisode(draft);
+  grantCredits(ownerId, 10, "direct-grant");
+  expect(submitReviewAdvance({ episode_id: draft.episode_id, owner_id: ownerId,
+    row_version: 1, next_status: "assets" })).toEqual({ ok: true, row_version: 2 });
+  expect(getCreditBalance(ownerId)).toEqual({ available: 0, reserved: 10 });
+  const assets = await dequeueTask();
+  expect(assets?.stage).toBe("assets");
+  expect(await dequeueTask()).toBeNull();
+  expect(completeTaskWithEpisode(assets!, 2, { ...draft, status: "clipping" }).ok).toBe(true);
+  const video = await dequeueTask();
+  expect(video?.stage).toBe("video");
+  expect(await dequeueTask()).toBeNull();
+});
+
 test("only the first reported bad video for a shot is free", async () => {
   const shot = { no: 1, status: "approved", kf_selected: "kf/1.png",
     candidates: ["kf/1.png"], bad_shot_reported: false };
@@ -110,4 +127,18 @@ test("only the first reported bad video for a shot is free", async () => {
     row_version: 3, shot_no: 1, stage: "video", report_bad: true }))
     .toEqual({ ok: true, row_version: 4, free: false });
   expect(getCreditBalance(ownerId)).toEqual({ available: 0, reserved: 10 });
+});
+
+test("direct reference shots can regenerate video without a keyframe, not images", async () => {
+  const done = { ...episode(), video_source: "references" as const,
+    status: "done" as const, shots: [{ no: 1, status: "approved", candidates: [],
+      kf_selected: null, bad_shot_reported: false }] } as unknown as Episode;
+  await insertEpisode(done);
+  expect(submitShotRegeneration({ episode_id: done.episode_id, owner_id: ownerId,
+    row_version: 1, shot_no: 1, stage: "keyframe", report_bad: false }))
+    .toEqual({ ok: false, error: "illegal_transition" });
+  grantCredits(ownerId, 10, "direct-regen-grant");
+  expect(submitShotRegeneration({ episode_id: done.episode_id, owner_id: ownerId,
+    row_version: 1, shot_no: 1, stage: "video", report_bad: false }))
+    .toEqual({ ok: true, row_version: 2, free: false });
 });

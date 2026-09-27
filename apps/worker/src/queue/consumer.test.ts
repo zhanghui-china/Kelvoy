@@ -308,6 +308,32 @@ test("assets, one keyframe shot and video reach both review gates", async () => 
   expect(finished.ok && finished.episode.shots[0]?.model.video?.ref_hashes).toEqual(["frame-hash"]);
 });
 
+test("direct reference episode reaches clip review without image task", async () => {
+  const ep = { ...fixtureEpisode("e_direct"), video_source: "references" as const,
+    status: "assets" as const, shots: [shotFixture()] };
+  await insertEpisode(ep);
+  await insertPersona({ ...personaFixture("c_test"), refs: ["p/front.png", "p/side.png", "p/full.png"] });
+  await upsertDestination({ ...destinationFixture("d_test"), landmarks: [{
+    id: "l1", name: "地标", refs: ["d/a.jpg", "d/b.jpg", "d/c.jpg"], best_time: "上午",
+  }] });
+  const assets = await enqueueTask({ episode_id: ep.episode_id, stage: "assets" });
+  await dequeueTask();
+  await handleTask(assets);
+  const ready = await getEpisode(ep.episode_id);
+  expect(ready.ok && ready.episode.status).toBe("clipping");
+  expect(await dequeueTask()).toBeNull();
+  const video = await enqueueTask({ episode_id: ep.episode_id, stage: "video", shot_no: 1 });
+  await dequeueTask();
+  await handleTask(video, { video: { async generate(input) {
+    expect(input.refs).toEqual(["p/front.png", "d/a.jpg"]);
+    return { key: "clip/direct.mp4", model: "MiniMax-H3", version: "dual",
+      seed: input.seed, seconds: 45, ref_hashes: ["person", "scene"] };
+  } } });
+  const finished = await getEpisode(ep.episode_id);
+  expect(finished.ok && finished.episode.status).toBe("clip_review");
+  expect(finished.ok && finished.episode.shots[0]?.kf_selected).toBeNull();
+});
+
 test("a queued video task never regenerates an approved shot", async () => {
   const ep = fixtureEpisode("e_approved");
   ep.status = "clip_review";

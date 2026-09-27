@@ -3,6 +3,7 @@ export type ShotCamera = "static" | "pan" | "push" | "follow";
 export type SceneTime = "morning" | "noon" | "afternoon" | "evening" | "night";
 export type EpisodeMode = "per_shot" | "grid";
 export type EpisodeAspect = "9:16" | "16:9";
+export type VideoSource = "keyframe" | "references";
 
 // PRD v0.2 §6 期级状态机. Review states advance to the next generating state on user action.
 export type EpisodeStatus =
@@ -135,6 +136,8 @@ export interface Episode {
   template_id: string;
   status: EpisodeStatus;
   mode: EpisodeMode;
+  /** Missing on older episodes; they keep the reviewed-keyframe path. */
+  video_source?: VideoSource;
   cut_policy?: "fixed_1s" | "beat_aligned";
   candidate_count: number;
   script_pending_task_id?: string | null;

@@ -13,13 +13,14 @@ import { GUIDE_SECTIONS } from "../guide";
 
 const render = (node: React.ReactNode) => renderToStaticMarkup(<StaticRouter location="/">{node}</StaticRouter>);
 
-test("public entry copy explains both formats, variable candidates and workflow", () => {
+test("public entry copy explains direct video and optional keyframe workflow", () => {
   const html = render(<><LandingHero /><LandingHow /><LoginPage /></>);
   expect(html).toContain("9:16");
   expect(html).toContain("16:9");
-  expect(html).toContain("从每镜 1–3 张候选图中选一张关键帧");
+  expect(html).toContain("人物与场景直出视频");
+  expect(html).toContain("传统方式另需选关键帧");
   expect(html).not.toContain("三选一");
-  expect(html).toContain("脚本、关键帧、片段");
+  expect(html).toContain("审核脚本和视频片段");
 });
 
 test("resource hints lead to focused, stable help sections", () => {

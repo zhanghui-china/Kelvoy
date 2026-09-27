@@ -66,7 +66,7 @@ export function EpisodeDetailContent({ episode, destination, persona, failedTask
         <span className="k-card-meta">预计完整创作：{episode.estimated_credits} 积分</span>
         <span className="k-card-meta">{episode.shots.length} 镜 · 每 3 秒自动刷新</span>
       </div>
-      <StageSteps status={episode.status} failedTask={failedTask} />
+      <StageSteps status={episode.status} failedTask={failedTask} videoSource={episode.video_source} />
 
       {episode.status === "script_review" && (
         <ScriptReview episode={episode} destination={destination} mutation={mutation} />

@@ -77,7 +77,7 @@ export default function HelpPage() {
     <div className="k-help-page">
       <div className="k-eyebrow">使用指南</div>
       <h1>从第一期到可分享的旅行作品</h1>
-      <p className="k-page-intro">一期开一个角色与真实目的地的旅行故事。按下面六步创作，脚本、关键帧和片段由你逐关审核。</p>
+      <p className="k-page-intro">一期开一个角色与真实目的地的旅行故事。推荐人物＋场景直出视频，审核脚本和片段即可；选择传统方式时另有关键帧审核。</p>
 
       <section className="k-help-quick" aria-labelledby="quick-start-heading">
         <div>
@@ -103,7 +103,7 @@ export default function HelpPage() {
         <article className="k-card" id="personas" tabIndex={-1}><h2>角色怎么选</h2><p><Link to="/personas">官方角色</Link>已经可用，直接选就能开始。想持续使用自己的原创角色，可在角色页新建并上传多个视角的参考图；它们有助于跨期保持形象一致。</p></article>
         <article className="k-card" id="destinations" tabIndex={-1}><h2>目的地看什么</h2><p>在<Link to="/destinations">目的地库</Link>查看景区地标和实景参考，选与你想呈现的行程相符的地方。缺少足够参考图的地标会提示，生成前先核对地标与季节。</p></article>
         <article className="k-card" id="templates" tabIndex={-1}><h2>模板如何搭配</h2><p>新建一期会按目的地类型预选匹配的模板；高级设置可手动换。去<Link to="/templates">模板库</Link>查看骨架、调色、片头片尾和标题样式，选与你的叙事相符的组合。</p></article>
-        <article className="k-card" id="settings" tabIndex={-1}><h2>出片默认值</h2><p>在<Link to="/settings">设置页</Link>保存默认语气与每镜 1–3 张候选图；只预填之后新建的作品，每期仍可改。候选越多，用量通常越高，提交前看预估积分。</p></article>
+        <article className="k-card" id="settings" tabIndex={-1}><h2>出片默认值</h2><p>在<Link to="/settings">设置页</Link>保存默认语气。每镜 1–3 张候选图只用于传统关键帧方式；直出视频不生成候选图。提交前看实时预估积分。</p></article>
         <article className="k-card" id="credits" tabIndex={-1}><h2>积分与流水</h2><p>团队发放积分；可用余额可用于新任务，任务预留会先锁定积分，成功结算，失败退回。到<Link to="/usage">用量页</Link>看可用、预留余额及实际流水。</p></article>
       </section>
 
@@ -128,7 +128,7 @@ export default function HelpPage() {
         <dl>
           <dt>必须先上传自己的角色吗？</dt><dd>不必。<Link to="/personas">官方角色</Link>可直接使用；想让原创角色跨期保持一致，再新建自己的角色。</dd>
           <dt>能横屏吗？</dt><dd>可以。<Link to="/episodes/new">新建一期</Link>默认 9:16，可切换 16:9。</dd>
-          <dt>候选图会自动挑最好的一张吗？</dt><dd>不会。关键帧审核需要你逐镜选择，没有自动排名。</dd>
+          <dt>还要逐镜选候选图吗？</dt><dd>推荐的直出视频方式不生成候选图。若选择传统关键帧方式，仍需逐镜人工选择；候选图没有自动排名。</dd>
           <dt>分享会帮我发布到平台吗？</dt><dd>不会。开启分享只生成可访问的作品链接；平台发布需自行完成。</dd>
         </dl>
       </section>

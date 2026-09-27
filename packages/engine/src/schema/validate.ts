@@ -230,6 +230,7 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
   if (!isNonEmptyString(e.episode_id)) errors.push("episode_id: 缺失或为空");
   if (e.name !== undefined && !isNonEmptyString(e.name)) errors.push("name: 必须是非空字符串");
   if (e.candidate_count !== undefined && (!Number.isInteger(e.candidate_count) || e.candidate_count < 1 || e.candidate_count > 3)) errors.push("candidate_count: 必须是 1–3 的整数");
+  if (e.video_source !== undefined && e.video_source !== "keyframe" && e.video_source !== "references") errors.push("video_source: 必须是 keyframe / references 之一");
   if (!isNonEmptyString(e.owner_id)) errors.push("owner_id: 缺失或为空");
   if (!isNonEmptyString(e.persona_id)) errors.push("persona_id: 缺失或为空");
   if (!isFiniteNumber(e.persona_version)) errors.push("persona_version: 必须是数字");

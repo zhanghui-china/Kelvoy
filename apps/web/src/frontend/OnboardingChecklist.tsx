@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { OnboardingState } from "./onboarding";
 
-const STEPS = ["新建一期", "审核脚本", "选定全部关键帧", "批准全部片段", "完成成片"];
+const STEPS = ["新建一期", "审核脚本", "画面素材就绪", "批准全部片段", "完成成片"];
 
 export function OnboardingChecklist({ completed, href, failed, targetDone, collapsed, pending, onToggle, onDismiss }: OnboardingState & {
   collapsed: boolean;

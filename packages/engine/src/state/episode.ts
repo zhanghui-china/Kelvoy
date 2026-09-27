@@ -36,6 +36,7 @@ const ADVANCE: Partial<Record<EpisodeStatus, EpisodeStatus>> = {
 
 export type EpisodeEvent =
   | { type: "advance" }
+  | { type: "skip_keyframes" }
   | { type: "fail" }
   | { type: "retry"; into: GeneratingEpisodeStatus }
   | { type: "recompose" }
@@ -48,6 +49,10 @@ export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): 
       const next = ADVANCE[current];
       if (!next) throw illegalTransition(current, event.type);
       return next;
+    }
+    case "skip_keyframes": {
+      if (current !== "assets") throw illegalTransition(current, event.type);
+      return "clipping";
     }
     case "fail": {
       if (!GENERATING_STATES.has(current)) throw illegalTransition(current, event.type);
@@ -92,6 +97,7 @@ const RETRY_TARGETS: GeneratingEpisodeStatus[] = [
 export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatus): boolean {
   const events: EpisodeEvent[] = [
     { type: "advance" },
+    { type: "skip_keyframes" },
     { type: "fail" },
     { type: "recompose" },
     { type: "prepare_compose" },

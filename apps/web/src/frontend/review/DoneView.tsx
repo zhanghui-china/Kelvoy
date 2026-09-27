@@ -133,14 +133,14 @@ export default function DoneView({
         {episode.shots.map((shot) => (
           <div className="k-desk-actions" key={shot.no}>
             <span className="k-card-meta">第 {shot.no} 镜 · {shot.beat}</span>
-            <button type="button" className="k-btn k-btn-secondary k-btn-tiny"
+            {episode.video_source !== "references" && <button type="button" className="k-btn k-btn-secondary k-btn-tiny"
               disabled={mutation.pending}
               onClick={() => mutation.run((rowVersion) =>
                 regenShot(episode.episode_id, shot.no, rowVersion, "keyframe"))}>
               重生成关键帧
-            </button>
+            </button>}
             <button type="button" className="k-btn k-btn-secondary k-btn-tiny"
-              disabled={mutation.pending || !shot.kf_selected}
+              disabled={mutation.pending || (episode.video_source !== "references" && !shot.kf_selected)}
               onClick={() => mutation.run((rowVersion) =>
                 regenShot(episode.episode_id, shot.no, rowVersion, "video"))}>
               重生成视频

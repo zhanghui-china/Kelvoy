@@ -1,4 +1,4 @@
-import type { EpisodeAspect } from "@kelvoy/engine";
+import type { EpisodeAspect, VideoSource } from "@kelvoy/engine";
 
 export const EPISODE_DRAFT_KEY = "kelvoy_new_episode_draft";
 export type EpisodeDraft = {
@@ -14,6 +14,7 @@ export type EpisodeDraft = {
   name: string;
   requirements: string;
   aspect: EpisodeAspect;
+  videoSource?: VideoSource;
 };
 
 /** An explicit destination link starts a new location choice while retaining the
@@ -33,6 +34,7 @@ function isDraft(value: unknown): value is EpisodeDraft {
   return ["personaId", "destinationId", "templateId", "season", "tone", "outfitOverride", "name", "requirements"].every((key) => typeof draft[key] === "string")
     && (draft.seasonMode === "preset" || draft.seasonMode === "custom")
     && (draft.aspect === "9:16" || draft.aspect === "16:9")
+    && (draft.videoSource === undefined || draft.videoSource === "keyframe" || draft.videoSource === "references")
     && typeof draft.candidates === "number" && Number.isInteger(draft.candidates)
     && Array.isArray(draft.banned) && draft.banned.every((term: unknown) => typeof term === "string");
 }

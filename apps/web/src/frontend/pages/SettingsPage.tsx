@@ -112,7 +112,7 @@ export default function SettingsPage() {
         <section className="k-card">
           <h2>出片默认值</h2>
           <p className="k-card-meta">新建一期时预填这几项，每一期都还能当场改。</p>
-          <GuideTip section="settings">默认值仅影响之后新建的作品。每镜可选 1–3 张候选图；选得越多，通常用量越高，提交时请看预估积分，实际用量可在用量页查看。</GuideTip>
+          <GuideTip section="settings">默认值仅影响之后新建的作品。候选数仅用于传统关键帧方式；人物与场景直出视频不会生成候选图。提交时请看预估积分。</GuideTip>
 
           <form className="k-settings-form" onSubmit={handleSaveDefaults}>
             <label className="k-field">
@@ -125,7 +125,7 @@ export default function SettingsPage() {
             </label>
 
             <label className="k-field">
-              默认每镜候选数
+              传统方式默认每镜候选数
               <select value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}>
                 {CANDIDATE_OPTIONS.map((n) => (
                   <option key={n} value={n}>
