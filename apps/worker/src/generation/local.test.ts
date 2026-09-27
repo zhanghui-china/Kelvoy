@@ -122,7 +122,9 @@ test("new lease reuses only matching intact candidates and regenerates changed r
   expect(changed.key).not.toBe(first.key);
   expect(calls).toBe(2);
   await writeFile(join(root, "e1", changed.key), "tampered");
-  await expect(provider.generate({ ...input, execution_id: "new" })).rejects.toThrow();
+  const recovered = await provider.generate({ ...input, execution_id: "new" });
+  expect(recovered.key).not.toBe(changed.key);
+  expect(await readFile(join(root, "e1", changed.key), "utf8")).toBe("tampered");
   expect(calls).toBe(3);
 });
 
@@ -146,6 +148,31 @@ test("new lease reuses matching direct video without another model call", async 
     prompt: "walking", duration_s: 3, seed: 7, generation_id: "generation-1" };
   const first = await provider.generate({ ...input, execution_id: "old" });
   expect((await provider.generate({ ...input, execution_id: "new" })).key).toBe(first.key);
+  expect(calls).toBe(1);
+});
+
+test("an orphaned media file from a failed metadata publish does not block a same-lease retry", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-orphan-retry-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "e1", "kf"), { recursive: true });
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  const orphan = join(root, "e1", "kf", "01_generation-1_lease-1_0.png");
+  await writeFile(orphan, "orphan from interrupted publish");
+  const source = join(root, "inference", "image", "result.png");
+  let calls = 0;
+  const provider = createLocalGenerationProviders(async () => {
+    calls++;
+    await writeFile(source, "fresh generation");
+    return { ok: true, response: { paths: ["inference/image/result.png"],
+      model: "Qwen", version: "1", seed: 42, seconds: 1 } };
+  }).keyframe;
+  const input = { episode_id: "e1", shot_no: 1, candidate_no: 0, prompt: "scene",
+    refs: [], seed: 42, generation_id: "generation-1", execution_id: "lease-1" };
+  const result = await provider.generate(input);
+  expect(result.key).not.toBe("kf/01_generation-1_lease-1_0.png");
+  expect(await readFile(orphan, "utf8")).toBe("orphan from interrupted publish");
+  expect(await readFile(join(root, "e1", result.key), "utf8")).toBe("fresh generation");
+  expect((await provider.generate(input)).key).toBe(result.key);
   expect(calls).toBe(1);
 });
 

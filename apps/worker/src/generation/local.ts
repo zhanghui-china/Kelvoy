@@ -62,6 +62,25 @@ async function saveCached(episodeId: string, key: string, source: string,
   }
 }
 
+async function publishCached(episodeId: string, source: string, hash: string,
+  asset: CachedAsset): Promise<CachedAsset> {
+  const extension = asset.key.endsWith(".png") ? ".png" : ".mp4";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = attempt === 0 ? asset.key
+      : `${asset.key.slice(0, -extension.length)}_retry_${crypto.randomUUID()}${extension}`;
+    const candidate = { ...asset, key };
+    try {
+      await saveCached(episodeId, key, source, hash, candidate);
+      return candidate;
+    } catch (error) {
+      // A prior process may have published media but died before metadata, or
+      // another writer may have won the metadata link. Never replace either.
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  throw new Error("could not reserve a unique generation artifact key");
+}
+
 async function discardInferenceSource(source: string): Promise<void> {
   try {
     await rm(source, { force: true });
@@ -147,9 +166,9 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
         input.signal?.throwIfAborted();
-        await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+        const published = await publishCached(input.episode_id, response.source, fingerprint, asset);
         input.signal?.throwIfAborted();
-        return asset;
+        return published;
       } finally {
         await discardInferenceSource(response.source);
       }
@@ -179,9 +198,9 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
         input.signal?.throwIfAborted();
-        await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+        const published = await publishCached(input.episode_id, response.source, fingerprint, asset);
         input.signal?.throwIfAborted();
-        return asset;
+        return published;
       } finally {
         await discardInferenceSource(response.source);
       }
