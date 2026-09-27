@@ -33,16 +33,16 @@ export default function LoginPage() {
         <LogoMark size={36} />
         <h1>登录 Kelvoy</h1>
         <p className="k-card-meta">登录后选角色与目的地，审核脚本和视频片段即可出片。</p>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} aria-busy={submitting}>
           <label className="k-field">
             用户名
-            <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <input autoComplete="username" name="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
           </label>
           <label className="k-field">
             密码
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input type="password" autoComplete="current-password" name="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>
-          {error && <p className="k-error">{error}</p>}
+          {error && <p className="k-error" role="alert">{error}</p>}
           <button type="submit" className="k-btn k-btn-primary" disabled={submitting}>
             {submitting ? "登录中…" : "登录"}
           </button>
