@@ -17,6 +17,15 @@ test("latest failed task is scoped to its episode and includes its shot", async 
   expect(await getLatestFailedTask(episode)).toEqual({ stage: "video", shot_no: 7 });
 });
 
+test("failed summary skips a stale failure with an active replacement", async () => {
+  const episode = { episode_id: "e_1", status: "failed",
+    shots: [{ no: 7, status: "failed" }] } as Episode;
+  const old = await enqueueTask({ episode_id: "e_1", stage: "video", shot_no: 7 });
+  await failTask(old.task_id, { requeue: false });
+  await enqueueTask({ episode_id: "e_1", stage: "video", shot_no: 7 });
+  expect(await getLatestFailedTask(episode)).toBeNull();
+});
+
 beforeEach(() => {
   open(":memory:");
 });

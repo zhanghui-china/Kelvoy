@@ -24,6 +24,8 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
   db.exec(SCHEMA);
   applyColumnMigrations(db);
   db.exec("create index if not exists idx_tasks_status_created_lease on tasks(status, created_at, lease_until)");
+  db.exec("create index if not exists idx_tasks_episode_status_updated on tasks(episode_id, status, updated_at)");
+  db.exec("create index if not exists idx_tasks_episode_stage_shot_status on tasks(episode_id, stage, shot_no, status)");
   migrateLegacyCatalogVersions(db);
   return db;
 }

@@ -40,7 +40,7 @@
 | C5 部分修复 | 目的地只保存当前文档，历史期有版本号却读不到对应版本；`packages/store/src/destinations.ts`、`apps/worker/src/queue/consumer.ts`。| 已保存不可变版本、阻止同版改写，Worker、CLI、审片台按期内版本读取；旧库缺失版本迁移为带近似标记的快照，审片台明确提示。需在真实旧生产库验收模型输入与分享行为。 |
 | C6 部分修复 | 编辑脚本后，审核推进未必重新执行完整 FR-02 规则；`episode-review.ts`、`charged-tasks.ts`。| 事务性审核推进现按期内目的地版本重查脚本结构规则；关键帧选择和片段批准前置条件由共享领域函数供路由与事务使用。已测试绕开路由直接调 store 的非法推进；内容规则、编辑命令的一致性仍待复核。 |
 | P2 部分修复 | 每次 DB 打开扫描并补 persona 历史，1000 期启动成本随数据增长；`packages/store/src/db.ts`。| persona 与 destination 历史回填已用 `schema_migrations` 限制为一次，旧库重复打开回归通过；部署旧生产库时仍需备份和验收实际迁移耗时。 |
-| P3 部分修复 | 失败任务查询、队列扫描、跨期浏览器聚合有结构性放大；`packages/store/src/tasks.ts`、`apps/web/src/frontend/pages/UsagePage.tsx`。| 队列领取已按实测补复合索引；失败任务 N+1 和前端跨期聚合仍待修。 |
+| P3 部分修复 | 失败任务查询、队列扫描、跨期浏览器聚合有结构性放大；`packages/store/src/tasks.ts`、`apps/web/src/frontend/pages/UsagePage.tsx`。| 队列领取与失败摘要均已补索引，失败摘要改为单次 SQL 反连接；用量页全量聚合、分页和真实并发仍待修。 |
 | R1 部分修复 | 媒体使用整文件缓冲、多份拷贝且暂存未统一回收；`services/inference/src/inference/comfyui.py` 和 worker 生成适配。| ComfyUI 下载已改流式、512 MiB 上限和原子临时文件清理，超限回归通过；Worker 归档后的中间副本、损坏媒体检查和目录回收仍待修。 |
 | R4 部分修复 | ComfyUI 坏响应、落盘异常发生在提交后时原代码可能不发取消；取消 HTTP 失败也被忽略；`services/inference/src/inference/comfyui.py`。| 已对坏响应和 I/O 错误尝试按任务 ID 取消、检查 HTTP/确认位并记录失败，坏响应、取消 500 与合法非对象响应回归通过；断连、硬期限和目标 DGX 取消语义仍待验。 |
 | R2 部分修复 | 合成文本降级依赖系统 `python3` + 未声明的 Pillow；`apps/worker/src/compose/ffmpeg.ts`、`scripts/render-text-overlays.py`。| 已锁定 Pillow 并让 Worker 使用项目受管理解释器，CI 检查依赖，macOS 无 ASS/drawtext 合成回归通过；DGX 字体和正式部署预检待验。 |
@@ -91,3 +91,11 @@
 | 1,000 | 0.040 / 0.042 ms | 0.004 / 0.006 ms |
 | 10,000 | 0.349 / 0.407 ms | 0.004 / 0.007 ms |
 | 100,000 | 3.566 / 4.051 ms | 0.005 / 0.006 ms |
+
+失败摘要基准：`bun scripts/benchmark-failed-task.ts`，同机内存 SQLite，100 次取中位/p95。每个历史失败任务属于同一镜且已有待处理替代任务，这是旧实现逐条查询活动任务的放大场景；新实现只运行一条反连接查询。真实产品中同时保留这么多同镜失败记录并不常见，不能把该数字当日常响应时间。
+
+| 同镜历史失败任务 | 原实现中位/p95 | 单查询中位/p95 |
+| ---: | ---: | ---: |
+| 100 | 0.474 / 0.768 ms | 0.104 / 0.220 ms |
+| 1,000 | 4.877 / 9.326 ms | 0.544 / 0.897 ms |
+| 10,000 | 46.730 / 79.122 ms | 6.206 / 7.020 ms |

@@ -29,15 +29,16 @@ export type RetryableFailure = {
 /** The same eligibility rule powers the retry mutation and the detail summary. */
 export function findRetryableFailedTask(episode: Episode): RetryableFailure | null {
   const failures = getDb().query<RetryableFailure, [string]>(
-    `select task_id, stage, shot_no, generation_id from tasks where episode_id = ?
-     and status = 'failed' and operation is null order by updated_at desc, rowid desc`,
+    `select failed.task_id, failed.stage, failed.shot_no, failed.generation_id
+     from tasks as failed where failed.episode_id = ?
+       and failed.status = 'failed' and failed.operation is null
+       and not exists (select 1 from tasks as active
+         where active.episode_id = failed.episode_id and active.stage = failed.stage
+           and active.shot_no is failed.shot_no
+           and active.status in ('pending', 'processing', 'held'))
+     order by failed.updated_at desc, failed.rowid desc`,
   ).all(episode.episode_id);
   return failures.find((item) => {
-    const active = getDb().query<{ count: number }, [string, string, number | null]>(
-      `select count(*) as count from tasks where episode_id = ? and stage = ?
-       and shot_no is ? and status in ('pending', 'processing', 'held')`,
-    ).get(episode.episode_id, item.stage, item.shot_no);
-    if ((active?.count ?? 0) > 0) return false;
     if (item.stage === "keyframe" || item.stage === "video") {
       const shot = episode.shots.find((candidate) => candidate.no === item.shot_no);
       return !!shot && (shot.status === "failed" ||
