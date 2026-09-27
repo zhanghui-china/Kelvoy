@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CallInferenceResult } from "../inference-client";
@@ -37,6 +37,7 @@ test("image adapter sends ordered references, hashes them and archives the retur
   expect(result.key).toBe("kf/01_task-1_0.png");
   expect(result.ref_hashes).toHaveLength(2);
   expect(await readFile(join(root, "e1", result.key), "utf8")).toBe("generated image");
+  expect(await Bun.file(join(root, "inference", "image", "result.png")).exists()).toBe(false);
 });
 
 test("image adapter sends a wide request when the episode is wide", async () => {
@@ -64,6 +65,7 @@ test("retry reuses a completed candidate and only requests the missing one", asy
   const provider = createLocalGenerationProviders(async () => {
     calls++;
     if (calls === 2) throw new Error("temporary failure");
+    await writeFile(join(root, "inference", "image", "result.png"), "generated image");
     return { ok: true, response: { paths: ["inference/image/result.png"],
       model: "Qwen", version: "v1", seed: 42, seconds: 1 } };
   }).keyframe;
@@ -93,6 +95,7 @@ test("reclaimed executions cannot overwrite each other's generated files", async
   expect(current.key).not.toBe(old.key);
   expect(await readFile(join(root, "e1", old.key), "utf8")).toBe("old execution");
   expect(await readFile(join(root, "e1", current.key), "utf8")).toBe("new execution");
+  expect(await Bun.file(source).exists()).toBe(false);
 });
 
 test("video adapter rejects a keyframe path escaping the episode directory", async () => {
@@ -103,6 +106,22 @@ test("video adapter rejects a keyframe path escaping the episode directory", asy
     episode_id: "e1", shot_no: 1, keyframe: "../other.png", prompt: "move",
     duration_s: 3, seed: 1, generation_id: "task-1",
   })).rejects.toThrow("path");
+});
+
+test("inference media symlink cannot turn source cleanup into deletion of a reference", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-media-link-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "persona"), { recursive: true });
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  const reference = join(root, "persona", "front.png");
+  await writeFile(reference, "keep me");
+  await symlink(reference, join(root, "inference", "image", "linked.png"));
+  const provider = createLocalGenerationProviders(async () => ({ ok: true,
+    response: { paths: ["inference/image/linked.png"], model: "Qwen", version: "1",
+      seed: 42, seconds: 1 } })).keyframe;
+  await expect(provider.generate({ episode_id: "e1", shot_no: 1, candidate_no: 0,
+    prompt: "scene", refs: [], seed: 42, generation_id: "task-link" })).rejects.toThrow();
+  expect(await readFile(reference, "utf8")).toBe("keep me");
 });
 
 test("video adapter preserves an existing approved clip on a new task", async () => {

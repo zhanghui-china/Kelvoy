@@ -37,6 +37,16 @@ async function saveCached(episodeId: string, key: string, source: string,
   }
 }
 
+async function discardInferenceSource(source: string): Promise<void> {
+  try {
+    await rm(source, { force: true });
+  } catch (error) {
+    // The immutable episode artifact is already published; cleanup failure
+    // must not charge another model attempt. The stale-file sweep handles it.
+    console.warn("could not remove archived inference media", source, error);
+  }
+}
+
 function projectsRoot(): string {
   return resolve(process.env.KELVOY_PROJECTS_ROOT ?? "projects");
 }
@@ -80,7 +90,13 @@ async function requestOne(
       !Number.isFinite(response.seconds) || response.seconds < 0) {
     throw new Error("invalid local inference response");
   }
-  return { source: await resolveKey(response.paths[0]), model: response.model,
+  const source = await resolveKey(response.paths[0]);
+  const sourceRelative = relative(await realpath(projectsRoot()), source);
+  const sourceDir = route === "/image/" ? `inference${sep}image${sep}` : `inference${sep}video${sep}`;
+  if (!sourceRelative.startsWith(sourceDir)) {
+    throw new Error("inference media resolves outside its staging directory");
+  }
+  return { source, model: response.model,
     version: response.version, seed: response.seed, seconds: response.seconds };
 }
 
@@ -100,11 +116,16 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const cached = await readCached(input.episode_id, key, fingerprint);
       if (cached) return cached;
       const response = await requestOne(call, "/image/", localImageRequest(input), input.signal);
-      input.signal?.throwIfAborted();
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
-      await saveCached(input.episode_id, key, response.source, fingerprint, asset);
-      return asset;
+      try {
+        input.signal?.throwIfAborted();
+        await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+        input.signal?.throwIfAborted();
+        return asset;
+      } finally {
+        await discardInferenceSource(response.source);
+      }
     } },
     video: { async generate(input) {
       input.signal?.throwIfAborted();
@@ -125,11 +146,16 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
         prompt: input.prompt, refs,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
       }), input.signal);
-      input.signal?.throwIfAborted();
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
-      await saveCached(input.episode_id, key, response.source, fingerprint, asset);
-      return asset;
+      try {
+        input.signal?.throwIfAborted();
+        await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+        input.signal?.throwIfAborted();
+        return asset;
+      } finally {
+        await discardInferenceSource(response.source);
+      }
     } },
   };
 }
