@@ -36,14 +36,14 @@
 | S1 部分修复 | 合成共享素材 key 可通过 `../` 或符号链接逃出项目目录，进而让 ffmpeg 读取外部文件；`apps/worker/src/storage/artifacts.ts`。| 共享与期专属产物均已拒绝路径穿越、非法期 ID、已有符号链接逃逸；文件系统检查与使用之间的竞争窗口仍待更强隔离。 |
 | U1 部分修复 | 两个并发角色参考图上传都从旧 `refs` 计算上限，并把旧数组整块写回；结果可能都返回成功、只留下最后一组引用，另有孤儿文件；`apps/web/src/server/routes/personas.ts`。| 已在 store 事务内读取最新版本并追加，超限时清理本次文件；multipart 原始流在解析前按 71 MiB 上限读取，连没有 Content-Length 的分块请求也受限。并发与超限回归通过；写盘/DB 崩溃恢复仍待完成。 |
 | P1 部分修复 | `listEpisodes` 把所有整期 JSON 和 30 镜数据发给每个页面；`packages/store/src/episodes.ts`、`apps/web/src/server/routes/episodes.ts`、首页/作品/用量。根因是把详情模型作列表契约。| 首页和作品页已切换概览 DTO；用量页改用仅含总额、逐期摘要及 provider/model 汇总的独立接口，共用单期成本口径，不再拉整期及角色/目的地目录。1000 期合成基准响应约 15.3 MB→168 KB，但服务端中位读取 16.86→77.18 ms，需继续做分页/汇总存储与并发测量。 |
-| C4 部分修复 | 租约失效/取消未贯穿 HTTP、ComfyUI、ffmpeg；失权任务可能继续耗 GPU，路径也未由执行令牌隔离；`consumer.ts`、`inference/comfyui.py`、`storage/artifacts.ts`。| 续租、镜头进入生成态、结果提交和失败终态均受未过期的同一执行令牌约束；续租失败和 Worker 停止会中止当前调用，信号传至 HTTP 推理和 ffmpeg，取消的结果不入库。Python 路由监测 HTTP 断连后取消该生成协程，并按 prompt ID 取消对应 ComfyUI 任务；模拟断连回归通过。图片/片段/成片按执行令牌分配路径，归档使用排他硬链接发布，旧执行不能覆盖新文件。推理暂存媒体的正常清理与超时回收已有测试；期目录内未引用的生成产物仍待回收。仍需硬期限、崩溃注入及目标 DGX 验证。 |
+| C4 部分修复 | 租约失效/取消未贯穿 HTTP、ComfyUI、ffmpeg；失权任务可能继续耗 GPU，路径也未由执行令牌隔离；`consumer.ts`、`inference/comfyui.py`、`storage/artifacts.ts`。| 续租、镜头进入生成态、结果提交和失败终态均受未过期的同一执行令牌约束；续租失败和 Worker 停止会中止当前调用，信号传至 HTTP 推理和 ffmpeg，取消的结果不入库。Python 路由监测 HTTP 断连后取消该生成协程，并按 prompt ID 取消对应 ComfyUI 任务；单个 240 秒期限覆盖上传、提交、轮询和下载，超时取消已提交的 prompt。图片/片段/成片按执行令牌分配路径，归档使用排他硬链接发布，旧执行不能覆盖新文件。推理暂存媒体的正常清理与超时回收已有测试；期目录内未引用的生成产物仍待回收。仍需崩溃注入及目标 DGX 验证。 |
 | C5 部分修复 | 目的地只保存当前文档，历史期有版本号却读不到对应版本；`packages/store/src/destinations.ts`、`apps/worker/src/queue/consumer.ts`。| 已保存不可变版本、阻止同版改写，Worker、CLI、审片台按期内版本读取；旧库缺失版本迁移为带近似标记的快照，审片台明确提示。需在真实旧生产库验收模型输入与分享行为。 |
 | C6 部分修复 | 编辑脚本后，审核推进未必重新执行完整 FR-02 规则；`episode-review.ts`、`charged-tasks.ts`。| 事务性审核推进现按期内目的地版本重查脚本结构规则；关键帧选择和片段批准前置条件由共享领域函数供路由与事务使用。已测试绕开路由直接调 store 的非法推进；内容规则、编辑命令的一致性仍待复核。 |
 | P2 部分修复 | 每次 DB 打开扫描并补 persona 历史，1000 期启动成本随数据增长；`packages/store/src/db.ts`。| persona 与 destination 历史回填已用 `schema_migrations` 限制为一次，旧库重复打开回归通过；部署旧生产库时仍需备份和验收实际迁移耗时。 |
 | P3 部分修复 | 失败任务查询、队列扫描、跨期浏览器聚合有结构性放大；`packages/store/src/tasks.ts`、`apps/web/src/frontend/pages/UsagePage.tsx`。| 队列领取与失败摘要均已补索引，失败摘要改为单次 SQL 反连接；用量聚合已移到服务端并缩小响应，但服务端读取变慢，分页与真实并发仍待修。 |
 | F1 部分修复 | 审片台 3 秒轮询与写后立即刷新可并发返回，旧响应覆盖新状态；`apps/web/src/frontend/hooks/useApiResource.ts`。| 同一 hook 的请求已单飞合并，刷新排队时丢弃过时响应，切期/卸载后不接收旧结果；慢请求/手动刷新测试通过。后台和稳定终态暂停轮询仍待完成。 |
 | R1 部分修复 | 媒体使用整文件缓冲、多份拷贝且暂存未统一回收；`services/inference/src/inference/comfyui.py` 和 worker 生成适配。| ComfyUI 下载已改流式、512 MiB 上限和原子临时文件清理。Worker 归档后立即删除推理中间副本；启动时及每小时只回收 `inference/image`、`inference/video` 中超过一小时且符合服务端 UUID 命名的遗留文件，跳过符号链接目录与文件。超限、清理和符号链接回归通过；期目录中的未引用产物、损坏媒体检查仍待修。 |
-| R4 部分修复 | ComfyUI 坏响应、落盘异常发生在提交后时原代码可能不发取消；取消 HTTP 失败也被忽略；`services/inference/src/inference/comfyui.py`。| 已对坏响应和 I/O 错误尝试按任务 ID 取消、检查 HTTP/确认位并记录失败；断连监测会取消生成协程并等待清理。坏响应、取消 500、合法非对象响应与模拟断连回归通过；硬期限和目标 DGX 取消语义仍待验。 |
+| R4 部分修复 | ComfyUI 坏响应、落盘异常发生在提交后时原代码可能不发取消；取消 HTTP 失败也被忽略；`services/inference/src/inference/comfyui.py`。| 已对坏响应和 I/O 错误尝试按任务 ID 取消、检查 HTTP/确认位并记录失败；断连监测会取消生成协程并等待清理。整体硬期限覆盖上传至下载，卡在轮询请求时也会取消 prompt。坏响应、取消 500、合法非对象响应、模拟断连及期限回归通过；目标 DGX 取消语义仍待验。 |
 | R2 部分修复 | 合成文本降级依赖系统 `python3` + 未声明的 Pillow；`apps/worker/src/compose/ffmpeg.ts`、`scripts/render-text-overlays.py`。| 已锁定 Pillow 并让 Worker 使用项目受管理解释器，CI 检查依赖，macOS 无 ASS/drawtext 合成回归通过；DGX 字体和正式部署预检待验。 |
 | R3 部分修复 | 模板/脚本改动不触发推理 CI，Python lint 原有两项失败；`.github/workflows/inference-ci.yml`。| 已扩展触发路径并修 lint；需 CI 实际运行确认。 |
 
@@ -53,7 +53,7 @@
 
 1. 完成 Web 文件级覆盖；复核 A 类所有写入与嵌套字段，补上传事务/并发测试。
 2. 在目标 ComfyUI 核对四份工作流节点、横竖画幅、失败和取消；静态通过不替代此项。
-3. 补全 C 类硬期限、期目录孤儿产物回收和崩溃注入，证明任务/积分/产物一致；执行令牌围栏、推理暂存回收、文件隔离与模拟断连取消已有回归。
+3. 补全 C 类期目录孤儿产物回收和崩溃注入，证明任务/积分/产物一致；执行令牌围栏、硬期限、推理暂存回收、文件隔离与模拟断连取消已有回归。
 4. 以 `scripts/benchmark-episode-list.ts` 为本机 SQLite 基线，补单/5 浏览器与 1/2 Worker 的端到端指标，然后改分页、投影、聚合和队列查询。
 5. 清理被替换内部路径、做一次性迁移和部署依赖；同步 PRD/ADR，验证旧库、分享和成片访问。
 

@@ -118,7 +118,7 @@ def build_dual_ref_video_workflow(
     return workflow
 
 
-async def generate(
+async def _generate_once(
     kind: str,
     prompt: str,
     refs: list[str],
@@ -126,7 +126,6 @@ async def generate(
     base_url: str,
     seed: int | None = None,
     duration_s: int = 5,
-    timeout_s: float = 240,
     client: httpx.AsyncClient | None = None,
     aspect: str = "9:16",
 ) -> InferenceResponse:
@@ -184,7 +183,7 @@ async def generate(
         )
         response.raise_for_status()
         prompt_id = response.json()["prompt_id"]
-        while time.monotonic() - started < timeout_s:
+        while True:
             response = await client.get(f"/history/{prompt_id}")
             response.raise_for_status()
             history = response.json().get(prompt_id)
@@ -242,7 +241,6 @@ async def generate(
                 if status.get("completed"):
                     raise ComfyUIError(502, "ComfyUI finished without expected output")
             await asyncio.sleep(2)
-        raise ComfyUIError(504, "ComfyUI generation timed out")
     except (ComfyUIError, asyncio.CancelledError):
         if prompt_id:
             await cancel_prompt(client, prompt_id)
@@ -263,3 +261,26 @@ async def generate(
     finally:
         if own_client:
             await client.aclose()
+
+
+async def generate(
+    kind: str,
+    prompt: str,
+    refs: list[str],
+    projects_root: Path,
+    base_url: str,
+    seed: int | None = None,
+    duration_s: int = 5,
+    timeout_s: float = 240,
+    client: httpx.AsyncClient | None = None,
+    aspect: str = "9:16",
+) -> InferenceResponse:
+    """Enforce one deadline across upload, submission, polling and download."""
+    try:
+        return await asyncio.wait_for(
+            _generate_once(kind, prompt, refs, projects_root, base_url, seed, duration_s,
+                           client, aspect),
+            timeout=timeout_s,
+        )
+    except TimeoutError as exc:
+        raise ComfyUIError(504, "ComfyUI generation timed out") from exc

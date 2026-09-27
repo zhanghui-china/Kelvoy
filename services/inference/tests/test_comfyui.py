@@ -276,6 +276,57 @@ def test_http_disconnect_cancels_only_the_submitted_comfyui_prompt(tmp_path):
     assert calls[-1] == "/api/jobs/p1/cancel"
 
 
+def test_hard_deadline_includes_reference_upload(tmp_path):
+    (tmp_path / "first.png").write_bytes(b"fixture")
+
+    async def handler(request):
+        if request.url.path == "/upload/image":
+            await asyncio.sleep(1)
+            return httpx.Response(200, json={"name": "first.png"})
+        raise AssertionError(request.url)
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await generate("video", "scene", ["first.png"], tmp_path, "http://comfy",
+                           client=client, timeout_s=0.02)
+
+    with pytest.raises(ComfyUIError) as error:
+        asyncio.run(run())
+    assert error.value.status == 504
+
+
+def test_hard_deadline_cancels_a_prompt_stuck_in_history_request(tmp_path):
+    (tmp_path / "first.png").write_bytes(b"fixture")
+    calls = []
+
+    async def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "first.png"})
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "p1"})
+        if request.url.path == "/history/p1":
+            await asyncio.sleep(1)
+            return httpx.Response(200, json={})
+        if request.url.path == "/api/jobs/p1/cancel":
+            return httpx.Response(200, json={"cancelled": True})
+        raise AssertionError(request.url)
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await generate("video", "scene", ["first.png"], tmp_path, "http://comfy",
+                           client=client, timeout_s=0.02)
+
+    with pytest.raises(ComfyUIError) as error:
+        asyncio.run(run())
+    assert error.value.status == 504
+    assert calls[-1] == "/api/jobs/p1/cancel"
+
+
 def test_generate_rejects_oversized_media_and_cleans_temporary_file(tmp_path, monkeypatch):
     from inference import comfyui
 
