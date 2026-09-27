@@ -11,6 +11,7 @@ import {
   open,
   patchEpisode,
   patchShot,
+  prepareTaskShot,
   upsertDestination,
   updatePersona,
   submitScriptAction,
@@ -338,6 +339,51 @@ test("worker preserves a different shot selection made while inference is runnin
   expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
     .get(task!.task_id)?.status).toBe("done");
   expect(await dequeueTask()).toBeNull();
+});
+
+test("cancelling a running generation leaves its task and result uncommitted", async () => {
+  const ep = fixtureEpisode("e_cancel_running");
+  ep.status = "keyframing";
+  ep.candidate_count = 1;
+  ep.shots = [shotFixture()];
+  await insertEpisode(ep);
+  await insertPersona({ ...personaFixture("c_test"), refs: ["p/front.png"] });
+  await upsertDestination({ ...destinationFixture("d_test"), landmarks: [{
+    id: "l1", name: "地标", refs: ["d/a.jpg"], best_time: "上午",
+  }] });
+  await enqueueTask({ episode_id: ep.episode_id, stage: "keyframe", shot_no: 1 });
+  const task = await dequeueTask();
+  const controller = new AbortController();
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const running = handleTask(task!, { signal: controller.signal, keyframe: { async generate(input) {
+    entered();
+    await new Promise<void>((resolve) => input.signal!.addEventListener("abort", () => resolve(), { once: true }));
+    return { key: "kf/obsolete.png", model: "Qwen-Image-2.1", version: "v1",
+      seed: input.seed, seconds: 1, ref_hashes: ["a", "b"] };
+  } } });
+  await started;
+  controller.abort();
+  await running;
+  const saved = await getEpisode(ep.episode_id);
+  expect(saved.ok && saved.episode.shots[0]?.status).toBe("generating_kf");
+  expect(saved.ok && saved.episode.shots[0]?.candidates).toEqual([]);
+  expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
+    .get(task!.task_id)?.status).toBe("processing");
+});
+
+test("a reclaimed lease cannot mark a shot generating", async () => {
+  const ep = fixtureEpisode("e_stale_prepare");
+  ep.status = "keyframing";
+  ep.shots = [shotFixture()];
+  await insertEpisode(ep);
+  await enqueueTask({ episode_id: ep.episode_id, stage: "keyframe", shot_no: 1 });
+  const stale = (await dequeueTask())!;
+  getDb().query("update tasks set lease_token = 'new-owner' where task_id = ?").run(stale.task_id);
+  expect(prepareTaskShot(stale, 1, "generating_kf"))
+    .toEqual({ ok: false, error: "lease_lost" });
+  const saved = await getEpisode(ep.episode_id);
+  expect(saved.ok && saved.episode.shots[0]?.status).toBe("draft");
 });
 
 test("editing the generating shot rejects stale output and leaves a retry entry", async () => {

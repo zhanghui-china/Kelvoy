@@ -93,6 +93,15 @@ test("finalOutputKey includes a delivery version", () => {
   expect(finalOutputKey("e_42", 2)).toBe("final/e_42_v2.mp4");
 });
 
+test("separate execution leases use separate files for the same delivery version", async () => {
+  const old = await buildComposePlan(episodeFixture(),
+    { persona: personaFixture(), execution_id: "lease_old" });
+  const current = await buildComposePlan(episodeFixture(),
+    { persona: personaFixture(), execution_id: "lease_new" });
+  expect(old.output_key).toBe("final/e_1_v1_lease_old.mp4");
+  expect(current.output_key).toBe("final/e_1_v1_lease_new.mp4");
+});
+
 test("buildComposePlan compiles an episode into a backend-agnostic plan", async () => {
   const plan = await buildComposePlan(episodeFixture(), { persona: personaFixture() });
 

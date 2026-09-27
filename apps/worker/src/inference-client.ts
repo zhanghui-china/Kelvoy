@@ -8,6 +8,7 @@ const TIMEOUT_MS = 5 * 60 * 1000; // PRD §8: 5-minute timeout, then retry.
 
 export type InferenceError =
   | { type: "timeout" }
+  | { type: "cancelled" }
   | { type: "network"; message: string }
   | { type: "not_implemented" } // LLM and upscale routes still return 501
   | { type: "invalid_request"; details: unknown } // pydantic 422
@@ -31,10 +32,13 @@ function inferenceBaseUrl(): string {
 export async function callInference(
   path: string,
   body: InferenceRequest,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<CallInferenceResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? TIMEOUT_MS);
+  const onCancel = () => controller.abort();
+  options.signal?.addEventListener("abort", onCancel, { once: true });
+  if (options.signal?.aborted) controller.abort();
 
   try {
     const res = await fetch(`${inferenceBaseUrl()}${path}`, {
@@ -60,11 +64,12 @@ export async function callInference(
     return { ok: true, response };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      return { ok: false, error: { type: "timeout" } };
+      return { ok: false, error: { type: options.signal?.aborted ? "cancelled" : "timeout" } };
     }
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, error: { type: "network", message } };
   } finally {
     clearTimeout(timeout);
+    options.signal?.removeEventListener("abort", onCancel);
   }
 }

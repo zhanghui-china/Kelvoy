@@ -18,7 +18,7 @@ import {
   getEpisode,
   getPersonaVersion,
   hasActiveStageTasks,
-  patchShot,
+  prepareTaskShot,
   replaceEpisode,
   renewTaskLease,
   requeueTaskAfterCommitConflict,
@@ -62,13 +62,22 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
       await Bun.sleep(POLL_INTERVAL_MS);
       continue;
     }
+    const execution = new AbortController();
+    const onShutdown = () => execution.abort();
+    signal?.addEventListener("abort", onShutdown, { once: true });
+    if (signal?.aborted) execution.abort();
     const heartbeat = task.lease_token
-      ? setInterval(() => { void renewTaskLease(task.task_id, task.lease_token!); }, 30_000)
+      ? setInterval(() => {
+        void renewTaskLease(task.task_id, task.lease_token!).then((active) => {
+          if (!active) execution.abort();
+        }).catch(() => execution.abort());
+      }, 30_000)
       : null;
     try {
-      await handleTask(task);
+      await handleTask(task, { signal: execution.signal });
     } finally {
       if (heartbeat) clearInterval(heartbeat);
+      signal?.removeEventListener("abort", onShutdown);
     }
   }
 }
@@ -85,6 +94,7 @@ export async function buildStageContext(stage: StageName, episode: Episode, task
     getPersonaVersion(episode.persona_id, episode.persona_version),
   ]);
   const context: StageContext = {};
+  if (task?.lease_token) context.execution_id = task.lease_token;
   if (destination) context.destination = destination;
   if (persona) context.persona = persona;
   if (stage === "compose") context.compose = ffmpegComposeProvider;
@@ -107,6 +117,7 @@ function generationStatus(stage: StageName): ShotStatus | null {
 async function prepareShot(task: Task, rowVersion: number, episode: Episode): Promise<
   | { kind: "ready"; episode: Episode; row_version: number }
   | { kind: "skip" }
+  | { kind: "lease_lost" }
   | { kind: "conflict" }
 > {
   const target = generationStatus(task.stage);
@@ -123,7 +134,8 @@ async function prepareShot(task: Task, rowVersion: number, episode: Episode): Pr
       !(shot.status === "rejected" && shot.regen_stage === task.stage)) {
     throw new Error(`shot ${shot.no} cannot enter ${target} from ${shot.status}`);
   }
-  const patched = await patchShot(task.episode_id, shot.no, rowVersion, { status: target });
+  const patched = prepareTaskShot(task, rowVersion, target);
+  if (!patched.ok && patched.error === "lease_lost") return { kind: "lease_lost" };
   if (!patched.ok) return { kind: "conflict" };
   const updated = await getEpisode(task.episode_id);
   if (!updated.ok) return { kind: "conflict" };
@@ -131,6 +143,7 @@ async function prepareShot(task: Task, rowVersion: number, episode: Episode): Pr
 }
 
 export async function handleTask(task: Task, overrides: Partial<StageContext> = {}): Promise<void> {
+  if (overrides.signal?.aborted) return;
   if (task.operation === "script_regenerate" || task.operation === "script_optimize") {
     await handleScriptActionTask(task, overrides);
     return;
@@ -145,6 +158,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
 
   let current = result;
   try {
+    if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const prepared = await prepareShot(task, current.row_version, current.episode);
     if (prepared.kind === "skip") {
       completeTaskWithoutEpisode(task);
@@ -154,7 +168,9 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       requeueTaskAfterCommitConflict(task);
       return;
     }
+    if (prepared.kind === "lease_lost") return;
     current = { ok: true, episode: prepared.episode, row_version: prepared.row_version };
+    overrides.signal?.throwIfAborted();
     const context = { ...await buildStageContext(task.stage, current.episode, task), ...overrides };
     const updated = await runStage(
       task.stage,
@@ -162,6 +178,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       task.shot_no,
       context,
     );
+    if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const written = completeTaskWithEpisode(task, current.row_version, updated, current.episode);
     if (!written.ok) {
@@ -182,6 +199,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
     }
 
   } catch (err) {
+    if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     if (err instanceof ContentBlockedError) {
       failTaskWithCredits(task, false, failureReason(err));
@@ -193,6 +211,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
 }
 
 async function handleScriptActionTask(task: Task, overrides: Partial<StageContext>): Promise<void> {
+  if (overrides.signal?.aborted) return;
   const current = await getEpisode(task.episode_id);
   if (!current.ok) {
     failTaskWithCredits(task, false);
@@ -205,6 +224,7 @@ async function handleScriptActionTask(task: Task, overrides: Partial<StageContex
   try {
     const context = { ...await buildStageContext("script", current.episode, task), ...overrides };
     const updated = await runScriptRevision(current.episode, task.instruction ?? "", context);
+    if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const written = completeTaskWithEpisode(task, current.row_version, updated);
     if (!written.ok) {
@@ -215,6 +235,7 @@ async function handleScriptActionTask(task: Task, overrides: Partial<StageContex
       return;
     }
   } catch (error) {
+    if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const retry = !(error instanceof ContentBlockedError) && task.attempt < MAX_LOCAL_ATTEMPTS;
     if (retry) {

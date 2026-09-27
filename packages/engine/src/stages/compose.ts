@@ -22,8 +22,11 @@ export const AI_LABEL_TEXT = "AI 生成 · 虚构角色 · 真实目的地";
 /**
  * 版本化成片，旧版本可以保留在磁盘但只有当前已交付版本可下载。
  */
-export function finalOutputKey(episodeId: string, version = 1): string {
-  return `final/${episodeId}_v${version}.mp4`;
+export function finalOutputKey(episodeId: string, version = 1, executionId?: string): string {
+  if (executionId && !/^[A-Za-z0-9_-]+$/.test(executionId)) {
+    throw new Error("invalid compose execution id");
+  }
+  return `final/${episodeId}_v${version}${executionId ? `_${executionId}` : ""}.mp4`;
 }
 
 /** 解析 render.res（"1080x1920"）。宽高是渲染参数，坏值直接报错，不猜。 */
@@ -64,7 +67,8 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
 
   return {
     episode_id: episode.episode_id,
-    output_key: finalOutputKey(episode.episode_id, (episode.final?.version ?? 0) + 1),
+    output_key: finalOutputKey(episode.episode_id, (episode.final?.version ?? 0) + 1,
+      context?.execution_id),
     cuts,
     music,
     lut_key: persona.style.lut !== "" ? persona.style.lut : null,
@@ -100,7 +104,8 @@ export async function runCompose(
   }
 
   const plan = await buildComposePlan(episode, context);
-  const result = await context.compose.compose({ plan });
+  const result = await context.compose.compose({ plan, signal: context.signal });
+  context.signal?.throwIfAborted();
   if (result.output_key !== plan.output_key) throw new Error("合成产物路径与计划不一致");
 
   // 选中的曲子回写进期记录：license 是合规留痕，bpm 是下次重新合成时保持同一

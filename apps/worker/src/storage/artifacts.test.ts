@@ -27,6 +27,23 @@ test("artifact publication refuses an existing directory symlink outside root", 
   }
 });
 
+test("publishing an existing artifact key never overwrites its bytes", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "kelvoy-immutable-artifact-"));
+  const prior = process.env.KELVOY_PROJECTS_ROOT;
+  try {
+    process.env.KELVOY_PROJECTS_ROOT = join(temp, "projects");
+    writeFileSync(join(temp, "first.png"), "first");
+    writeFileSync(join(temp, "second.png"), "second");
+    const path = await saveArtifact("e_1", "kf/a.png", join(temp, "first.png"));
+    await expect(saveArtifact("e_1", "kf/a.png", join(temp, "second.png"))).rejects.toThrow();
+    expect(await Bun.file(path).text()).toBe("first");
+  } finally {
+    if (prior === undefined) delete process.env.KELVOY_PROJECTS_ROOT;
+    else process.env.KELVOY_PROJECTS_ROOT = prior;
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test("shared asset keys cannot escape projects root", () => {
   expect(() => sharedAssetPath("../../etc/passwd")).toThrow();
   expect(() => sharedAssetPath("/etc/passwd")).toThrow();

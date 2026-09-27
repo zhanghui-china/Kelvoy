@@ -76,6 +76,25 @@ test("retry reuses a completed candidate and only requests the missing one", asy
   expect(calls).toBe(3);
 });
 
+test("reclaimed executions cannot overwrite each other's generated files", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-executions-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  const source = join(root, "inference", "image", "result.png");
+  await writeFile(source, "old execution");
+  const provider = createLocalGenerationProviders(async () => ({ ok: true,
+    response: { paths: ["inference/image/result.png"], model: "Qwen", version: "1",
+      seed: 42, seconds: 1 } })).keyframe;
+  const input = { episode_id: "e1", shot_no: 1, candidate_no: 0, prompt: "scene",
+    refs: [], seed: 42, generation_id: "generation-1" };
+  const old = await provider.generate({ ...input, execution_id: "lease_old" });
+  await writeFile(source, "new execution");
+  const current = await provider.generate({ ...input, execution_id: "lease_new" });
+  expect(current.key).not.toBe(old.key);
+  expect(await readFile(join(root, "e1", old.key), "utf8")).toBe("old execution");
+  expect(await readFile(join(root, "e1", current.key), "utf8")).toBe("new execution");
+});
+
 test("video adapter rejects a keyframe path escaping the episode directory", async () => {
   root = await mkdtemp(join(tmpdir(), "kelvoy-generate-"));
   process.env.KELVOY_PROJECTS_ROOT = root;

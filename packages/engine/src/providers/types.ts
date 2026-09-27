@@ -81,7 +81,7 @@ export interface ComposePlanMusic {
 }
 
 export interface ComposeProvider {
-  compose(input: { plan: ComposePlan }): Promise<{ output_key: string; probe: {
+  compose(input: { plan: ComposePlan; signal?: AbortSignal }): Promise<{ output_key: string; probe: {
     duration_s: number; width: number; height: number; fps: number; size_bytes: number;
   } }>;
 }

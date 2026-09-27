@@ -1,4 +1,4 @@
-import { mkdir, copyFile, rename, rm } from "node:fs/promises";
+import { mkdir, copyFile, link, rm } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
@@ -29,7 +29,7 @@ export async function saveArtifact(
   const tempPath = `${destPath}.tmp-${crypto.randomUUID()}`;
   try {
     await copyFile(sourcePath, tempPath);
-    await rename(tempPath, destPath);
+    await link(tempPath, destPath);
   } finally {
     await rm(tempPath, { force: true });
   }

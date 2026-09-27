@@ -13,6 +13,9 @@ export interface StageContext {
   destination?: Destination;
   persona?: Persona;
   generation_id?: string;
+  /** Unique lease token for this execution; generation_id stays stable for seeds. */
+  execution_id?: string;
+  signal?: AbortSignal;
   attempt?: number;
   keyframe?: {
     generate(input: {
@@ -24,6 +27,8 @@ export interface StageContext {
       refs: string[];
       seed: number;
       generation_id: string;
+      execution_id?: string;
+      signal?: AbortSignal;
     }): Promise<GeneratedAsset>;
   };
   video?: {
@@ -37,6 +42,8 @@ export interface StageContext {
       duration_s: number;
       seed: number;
       generation_id: string;
+      execution_id?: string;
+      signal?: AbortSignal;
     }): Promise<GeneratedAsset>;
   };
   /**

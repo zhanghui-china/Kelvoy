@@ -30,7 +30,10 @@ export async function runVideo(episode: Episode, shotNo?: number, context?: Stag
     aspect: episode.brief.aspect,
     prompt, duration_s: Math.max(3, Math.min(5, Math.ceil(shot.duration_s))),
     seed, generation_id: context.generation_id,
+    ...(context.execution_id ? { execution_id: context.execution_id } : {}),
+    ...(context.signal ? { signal: context.signal } : {}),
   });
+  context.signal?.throwIfAborted();
   const updatedShot = {
     ...shot,
     status: transitionShot(shot.status, { type: "clip_ready" }),

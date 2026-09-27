@@ -25,14 +25,25 @@ async function requireFile(path: string, what: string): Promise<string> {
   return path;
 }
 
-async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+export async function runCommand(cmd: string[], signal?: AbortSignal): Promise<{
+  code: number; stdout: string; stderr: string;
+}> {
+  signal?.throwIfAborted();
   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return { code, stdout, stderr };
+  const onAbort = () => proc.kill();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    if (signal?.aborted) proc.kill();
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    signal?.throwIfAborted();
+    return { code, stdout, stderr };
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
 
 /** 片头片尾的时长是素材属性，engine 量不到——这里用 ffprobe 读。 */
@@ -107,7 +118,8 @@ async function supportsDrawtextFilter(): Promise<boolean> {
   return code === 0 && /^\s*[.A-Z|]+\s+drawtext\s+/m.test(stdout);
 }
 
-async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths): Promise<void> {
+async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths,
+  signal?: AbortSignal): Promise<void> {
   const events = textOverlayEvents(plan, paths.intro_duration_s, paths.outro_duration_s);
   if (!events.length) return;
   const overlayImages = events.map((event, index) => ({
@@ -121,7 +133,7 @@ async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths): P
   if (!(await Bun.file(python).exists())) {
     throw new Error("合成文字图层需要受管理的 Python 环境；先运行 make install");
   }
-  const { code, stderr } = await runCommand([python, script, manifestPath]);
+  const { code, stderr } = await runCommand([python, script, manifestPath], signal);
   if (code !== 0) {
     throw new Error(`无法绘制成片文字图层：${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
   }
@@ -164,8 +176,10 @@ async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
 }
 
 export const ffmpegComposeProvider: ComposeProvider = {
-  async compose({ plan }) {
+  async compose({ plan, signal }) {
+    signal?.throwIfAborted();
     const paths = await resolvePaths(plan);
+    signal?.throwIfAborted();
     await mkdir(dirname(paths.output), { recursive: true });
     const needsText = Boolean(plan.title) || plan.ai_label ||
       (plan.subtitles_enabled && plan.cuts.some((cut) => Boolean(cut.caption)));
@@ -180,7 +194,7 @@ export const ffmpegComposeProvider: ComposeProvider = {
       }
       paths.overlay_ass = overlayPath;
     } else if (needsText && !(paths.font && await supportsDrawtextFilter())) {
-      await renderPngOverlays(plan, paths);
+      await renderPngOverlays(plan, paths, signal);
     }
 
     const stamped: ComposePlan = {
@@ -193,7 +207,7 @@ export const ffmpegComposeProvider: ComposeProvider = {
     };
 
     const args = buildFfmpegArgs(stamped, paths);
-    const { code, stderr } = await runCommand(["ffmpeg", ...args]);
+    const { code, stderr } = await runCommand(["ffmpeg", ...args], signal);
     if (code !== 0) {
       throw new Error(`ffmpeg 合成失败（退出码 ${code}）：\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
     }

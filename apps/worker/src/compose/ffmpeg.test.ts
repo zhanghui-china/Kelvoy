@@ -3,7 +3,16 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ComposePlan } from "@kelvoy/engine";
-import { ffmpegComposeProvider } from "./ffmpeg";
+import { ffmpegComposeProvider, runCommand } from "./ffmpeg";
+
+test("a cancelled execution terminates its running child process", async () => {
+  const controller = new AbortController();
+  const started = performance.now();
+  const running = runCommand(["/bin/sleep", "3"], controller.signal);
+  setTimeout(() => controller.abort(), 20);
+  await expect(running).rejects.toThrow();
+  expect(performance.now() - started).toBeLessThan(1000);
+});
 
 /**
  * 端到端跑一次真实 ffmpeg（M1-13 验收：成片时长 = Σ 单镜实际时长 + 片头片尾

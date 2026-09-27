@@ -1,4 +1,4 @@
-import { type Destination, type Episode, type EpisodeStatus, type RegenStage, type Task,
+import { type Destination, type Episode, type EpisodeStatus, type RegenStage, type ShotStatus, type Task,
   checkScriptRules, isLegalEpisodeStatusChange, isLegalShotStatusChange, mergeGeneratedShotResult,
   reviewAdvanceError } from "@kelvoy/engine";
 import { finalizeCredits, getCreditAction, getCreditBalance, getCreditPrice, reserveCredits } from "./credits";
@@ -11,6 +11,36 @@ function ownsLiveLease(row: LeaseRow | null, task: Task): boolean {
   return !!row && row.status === "processing" && !!task.lease_token &&
     row.lease_token === task.lease_token &&
     row.lease_until !== null && row.lease_until > Math.floor(Date.now() / 1000);
+}
+
+/** Fence the pre-inference shot transition with the same lease as result commit. */
+export function prepareTaskShot(task: Task, rowVersion: number, status: ShotStatus):
+  { ok: true; row_version: number } |
+  { ok: false; error: "lease_lost" | "not_found" | "version_conflict" | "illegal_transition" } {
+  return getDb().transaction(() => {
+    const lease = getDb().query<LeaseRow, [string]>(
+      "select status, lease_token, lease_until from tasks where task_id = ?",
+    ).get(task.task_id);
+    if (!ownsLiveLease(lease, task)) return { ok: false, error: "lease_lost" } as const;
+    const row = getDb().query<{ doc: string; row_version: number }, [string]>(
+      "select doc, row_version from episodes where episode_id = ?",
+    ).get(task.episode_id);
+    if (!row) return { ok: false, error: "not_found" } as const;
+    if (row.row_version !== rowVersion) return { ok: false, error: "version_conflict" } as const;
+    const episode = decodeEpisode(row.doc);
+    const index = episode.shots.findIndex((shot) => shot.no === task.shot_no);
+    if (index < 0) return { ok: false, error: "not_found" } as const;
+    const shot = episode.shots[index]!;
+    if (!isLegalShotStatusChange(shot.status, status)) {
+      return { ok: false, error: "illegal_transition" } as const;
+    }
+    const shots = [...episode.shots];
+    shots[index] = { ...shot, status };
+    getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
+      updated_at = datetime('now') where episode_id = ?`)
+      .run(JSON.stringify({ ...episode, shots }), task.episode_id);
+    return { ok: true, row_version: row.row_version + 1 } as const;
+  }).immediate();
 }
 
 export function createEpisodeWithScriptTask(episode: Episode):

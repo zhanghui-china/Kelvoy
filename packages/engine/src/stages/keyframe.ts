@@ -26,13 +26,17 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   const seed = generationSeed(context.generation_id, shotNo, "image");
   const generated: GeneratedAsset[] = [];
   for (let candidateNo = 0; candidateNo < candidateCount; candidateNo++) {
+    context.signal?.throwIfAborted();
     generated.push(await context.keyframe.generate({
       episode_id: episode.episode_id, shot_no: shotNo, candidate_no: candidateNo,
       aspect: episode.brief.aspect,
       prompt: shot.kf_prompt, refs, seed: (seed + candidateNo) >>> 0,
       generation_id: context.generation_id,
+      ...(context.execution_id ? { execution_id: context.execution_id } : {}),
+      ...(context.signal ? { signal: context.signal } : {}),
     }));
   }
+  context.signal?.throwIfAborted();
   if (generated.some((item) => item.model !== generated[0]?.model || item.version !== generated[0]?.version)) {
     throw new Error("同一镜的候选使用了不同模型版本");
   }

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { link, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { localImageRequest, localVideoRequest, type StageContext } from "@kelvoy/engine";
 import { callInference } from "../inference-client";
@@ -31,7 +31,7 @@ async function saveCached(episodeId: string, key: string, source: string,
   const temporary = `${path}.tmp-${crypto.randomUUID()}`;
   try {
     await writeFile(temporary, JSON.stringify({ ...asset, request_hash: hash }));
-    await rename(temporary, path);
+    await link(temporary, path);
   } finally {
     await rm(temporary, { force: true });
   }
@@ -67,8 +67,11 @@ async function requestOne(
   call: InferenceCall,
   route: "/image/" | "/video/",
   body: Parameters<InferenceCall>[1],
+  signal?: AbortSignal,
 ): Promise<{ source: string; model: string; version: string; seed: number; seconds: number }> {
-  const result = await call(route, body);
+  signal?.throwIfAborted();
+  const result = await call(route, body, { signal });
+  signal?.throwIfAborted();
   if (!result.ok) throw new Error(`local ${route} inference failed: ${JSON.stringify(result.error)}`);
   const response = result.response;
   const expectedPrefix = route === "/image/" ? "inference/image/" : "inference/video/";
@@ -85,36 +88,44 @@ async function requestOne(
 export function createLocalGenerationProviders(call: InferenceCall = callInference): Required<Pick<StageContext, "keyframe" | "video">> {
   return {
     keyframe: { async generate(input) {
+      input.signal?.throwIfAborted();
       safeId(input.episode_id);
       safeId(input.generation_id);
+      if (input.execution_id) safeId(input.execution_id);
       if (!Number.isInteger(input.candidate_no) || input.candidate_no < 0) throw new Error("invalid candidate index");
       const hashes = await Promise.all(input.refs.map(hashKey));
-      const key = `kf/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}_${input.candidate_no}.png`;
-      const fingerprint = requestHash({ input, hashes });
+      const key = `kf/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}_${input.candidate_no}.png`;
+      const { signal: _signal, ...requestInput } = input;
+      const fingerprint = requestHash({ input: requestInput, hashes });
       const cached = await readCached(input.episode_id, key, fingerprint);
       if (cached) return cached;
-      const response = await requestOne(call, "/image/", localImageRequest(input));
+      const response = await requestOne(call, "/image/", localImageRequest(input), input.signal);
+      input.signal?.throwIfAborted();
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       await saveCached(input.episode_id, key, response.source, fingerprint, asset);
       return asset;
     } },
     video: { async generate(input) {
+      input.signal?.throwIfAborted();
       safeId(input.episode_id);
       safeId(input.generation_id);
+      if (input.execution_id) safeId(input.execution_id);
       const direct = input.refs !== undefined;
       if (direct && input.refs?.length !== 2) throw new Error("direct video needs two references");
       if (!direct && !input.keyframe?.startsWith("kf/")) throw new Error("invalid keyframe path");
       const refs = direct ? input.refs! : [`${input.episode_id}/${input.keyframe}`];
       const hashes = await Promise.all(refs.map(hashKey));
-      const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}.mp4`;
-      const fingerprint = requestHash({ input, hashes });
+      const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}.mp4`;
+      const { signal: _signal, ...requestInput } = input;
+      const fingerprint = requestHash({ input: requestInput, hashes });
       const cached = await readCached(input.episode_id, key, fingerprint);
       if (cached) return cached;
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, refs,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
-      }));
+      }), input.signal);
+      input.signal?.throwIfAborted();
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       await saveCached(input.episode_id, key, response.source, fingerprint, asset);
