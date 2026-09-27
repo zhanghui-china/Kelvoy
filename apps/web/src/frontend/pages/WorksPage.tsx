@@ -13,8 +13,10 @@ export default function WorksPage() {
   const personasRes = useApiResource(listPersonas, []);
   const destinationsRes = useApiResource(listDestinations, []);
 
-  if (episodesRes.loading) return <p className="k-empty">加载中…</p>;
-  if (episodesRes.error) return <p className="k-error">加载失败：{episodesRes.error}</p>;
+  if (episodesRes.error) return <p className="k-error">作品加载失败：{episodesRes.error}</p>;
+  if (personasRes.error) return <p className="k-error">角色目录加载失败：{personasRes.error}</p>;
+  if (destinationsRes.error) return <p className="k-error">目的地目录加载失败：{destinationsRes.error}</p>;
+  if (episodesRes.loading || personasRes.loading || destinationsRes.loading) return <p className="k-empty">加载中…</p>;
 
   const episodes = episodesRes.data?.episodes ?? [];
   const personas = personasRes.data?.personas ?? [];
