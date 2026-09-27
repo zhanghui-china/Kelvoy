@@ -9,11 +9,19 @@ import pytest
 from inference.comfyui import ComfyUIError, generate
 
 
-@pytest.mark.parametrize("history", [
-    [], None, "unexpected", {"p1": []}, {"p1": {"status": []}},
-    {"p1": {"outputs": []}}, {"p1": {"outputs": {"40": []}}},
-    {"p1": {"outputs": {"40": {"gifs": "invalid"}}}},
-])
+@pytest.mark.parametrize(
+    "history",
+    [
+        [],
+        None,
+        "unexpected",
+        {"p1": []},
+        {"p1": {"status": []}},
+        {"p1": {"outputs": []}},
+        {"p1": {"outputs": {"40": []}}},
+        {"p1": {"outputs": {"40": {"gifs": "invalid"}}}},
+    ],
+)
 def test_invalid_history_returns_502_and_cancels_prompt(tmp_path, history):
     (tmp_path / "first.png").write_bytes(b"fixture")
     calls = []
@@ -34,8 +42,15 @@ def test_invalid_history_returns_502_and_cancels_prompt(tmp_path, history):
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(handler), base_url="http://comfy"
         ) as client:
-            await generate("video", "scene", ["first.png"], tmp_path, "http://comfy",
-                           client=client, timeout_s=0.05)
+            await generate(
+                "video",
+                "scene",
+                ["first.png"],
+                tmp_path,
+                "http://comfy",
+                client=client,
+                timeout_s=0.05,
+            )
 
     with pytest.raises(ComfyUIError) as failure:
         asyncio.run(run())
@@ -43,7 +58,9 @@ def test_invalid_history_returns_502_and_cancels_prompt(tmp_path, history):
     assert calls[-1] == "/api/jobs/p1/cancel"
 
 
-@pytest.mark.parametrize("upload", [[], None, {"name": 42}, {"name": ""}, {"name": "a.png", "subfolder": []}])
+@pytest.mark.parametrize(
+    "upload", [[], None, {"name": 42}, {"name": ""}, {"name": "a.png", "subfolder": []}]
+)
 def test_invalid_upload_cannot_submit_a_prompt(tmp_path, upload):
     (tmp_path / "first.png").write_bytes(b"fixture")
     calls = []
@@ -53,10 +70,18 @@ def test_invalid_upload_cannot_submit_a_prompt(tmp_path, upload):
         return httpx.Response(200, content=json.dumps(upload))
 
     async def run():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
-                                     base_url="http://comfy") as client:
-            await generate("video", "scene", ["first.png"], tmp_path, "http://comfy",
-                           client=client, timeout_s=0.05)
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await generate(
+                "video",
+                "scene",
+                ["first.png"],
+                tmp_path,
+                "http://comfy",
+                client=client,
+                timeout_s=0.05,
+            )
 
     with pytest.raises(ComfyUIError) as failure:
         asyncio.run(run())

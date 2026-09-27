@@ -1,4 +1,5 @@
 """Production deadlines and bounded targeted cancellation, without GPU work."""
+
 import asyncio
 
 import httpx
@@ -8,7 +9,9 @@ from inference import comfyui
 from inference.schemas import InferenceResponse
 
 
-@pytest.mark.parametrize("kind,expected", [("image", 240), ("video", 240), ("video_reference", 270)])
+@pytest.mark.parametrize(
+    "kind,expected", [("image", 240), ("video", 240), ("video_reference", 270)]
+)
 def test_default_deadline_depends_on_workflow(monkeypatch, tmp_path, kind, expected):
     seen = []
 
@@ -45,11 +48,20 @@ def test_stalled_cancel_preserves_original_failure(monkeypatch, tmp_path, caplog
         raise AssertionError(request.url)
 
     async def run():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
-                                     base_url="http://comfy") as client:
-            await asyncio.wait_for(comfyui.generate(
-                "video", "scene", ["first.png"], tmp_path, "http://comfy", client=client,
-            ), timeout=0.2)
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await asyncio.wait_for(
+                comfyui.generate(
+                    "video",
+                    "scene",
+                    ["first.png"],
+                    tmp_path,
+                    "http://comfy",
+                    client=client,
+                ),
+                timeout=0.2,
+            )
 
     with pytest.raises(comfyui.ComfyUIError, match="generation failed") as failure:
         asyncio.run(run())
@@ -58,9 +70,12 @@ def test_stalled_cancel_preserves_original_failure(monkeypatch, tmp_path, caplog
     assert "cancellation failed" in caplog.text
 
 
-@pytest.mark.parametrize("refs,kind", [(["frame.png"], "video"), (["person.png", "scene.png"], "video_reference")])
+@pytest.mark.parametrize(
+    "refs,kind", [(["frame.png"], "video"), (["person.png", "scene.png"], "video_reference")]
+)
 def test_video_endpoint_selects_workflow_before_deadline(monkeypatch, refs, kind):
     from fastapi.testclient import TestClient
+
     from inference.app import app
 
     seen = []
@@ -72,6 +87,8 @@ def test_video_endpoint_selects_workflow_before_deadline(monkeypatch, refs, kind
         return InferenceResponse(paths=["result"], model="test", version="1", seed=1, seconds=1)
 
     monkeypatch.setattr("inference.routers.video.generate_comfyui", capture)
-    response = TestClient(app).post("/video/", json={"prompt": "scene", "refs": refs, "size": "16:9"})
+    response = TestClient(app).post(
+        "/video/", json={"prompt": "scene", "refs": refs, "size": "16:9"}
+    )
     assert response.status_code == 200
     assert seen == [kind]
