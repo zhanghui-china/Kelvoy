@@ -4,6 +4,7 @@
  * artifacts to local disk, writes status back via @kelvoy/store.
  */
 import { consumeLoop } from "./queue/consumer";
+import { installShutdownHandlers } from "./queue/shutdown";
 import { cleanupIncompleteEpisodeMedia, cleanupStaleEpisodeTemps, cleanupStaleInferenceMedia } from "./storage/cleanup";
 
 const sweep = () => {
@@ -18,5 +19,10 @@ const sweep = () => {
   });
 };
 sweep();
-setInterval(sweep, 60 * 60 * 1000);
-consumeLoop();
+const controller = new AbortController();
+const uninstall = installShutdownHandlers(controller);
+const sweepTimer = setInterval(sweep, 60 * 60 * 1000);
+void consumeLoop(controller.signal).finally(() => {
+  clearInterval(sweepTimer);
+  uninstall();
+});
