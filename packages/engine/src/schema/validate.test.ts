@@ -118,6 +118,28 @@ describe("validateEpisode", () => {
     expect(result.valid).toBe(true);
   });
 
+  test("accepts the normal automatic-music default", () => {
+    const episode = { ...validEpisode(), music: { file: "", bpm: 0, license: "" } };
+    expect(validateEpisode(episode).valid).toBe(true);
+  });
+
+  test("rejects a whitespace-only music path", () => {
+    const episode = { ...validEpisode(), music: { file: "   ", bpm: 0, license: "" } };
+    expect(validateEpisode(episode).valid).toBe(false);
+  });
+
+  test("rejects duplicate shot and scene identities and dangling scene references", () => {
+    const episode = validEpisode();
+    episode.scenes.push({ ...episode.scenes[0]! });
+    episode.shots.push({ ...validShot(1), scene: "missing" });
+    const result = validateEpisode(episode);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((error) => error.includes("重复"))).toBe(true);
+      expect(result.errors.some((error) => error.includes("不存在"))).toBe(true);
+    }
+  });
+
   test("rejects an invalid episode status", () => {
     const episode = { ...validEpisode(), status: "not-a-status" };
     expect(validateEpisode(episode).valid).toBe(false);

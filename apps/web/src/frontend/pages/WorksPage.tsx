@@ -1,13 +1,14 @@
 import { Link } from "react-router-dom";
 import type { Episode, Persona } from "@kelvoy/engine";
-import { listEpisodes, listPersonas } from "../api/client";
+import type { EpisodeOverview } from "../../shared/episode-overview";
+import { listEpisodeOverviews, listPersonas } from "../api/client";
 import { episodeLabel } from "../episode-view";
 import { useApiResource } from "../hooks/useApiResource";
 import { EPISODE_STATUS_LABELS } from "../labels";
 
-// #42：完整作品列表。不做筛选/分页/搜索——一个账号的期数还是个位数。
+// #42：完整作品列表使用概览投影，详情和模型记录仅在期页面读取。
 export default function WorksPage() {
-  const episodesRes = useApiResource(listEpisodes, []);
+  const episodesRes = useApiResource(listEpisodeOverviews, []);
   const personasRes = useApiResource(listPersonas, []);
 
   if (episodesRes.loading) return <p className="k-empty">加载中…</p>;
@@ -18,12 +19,12 @@ export default function WorksPage() {
   return <WorksList episodes={episodes} personas={personas} />;
 }
 
-export function WorksList({ episodes, personas }: { episodes: Episode[]; personas: Persona[] }) {
+export function WorksList({ episodes, personas }: { episodes: (EpisodeOverview | Episode)[]; personas: Persona[] }) {
   const personaById = new Map(personas.map((p) => [p.persona_id, p]));
 
   // "我的作品·按系列"：FR-13 说系列是按 persona_id 归组的浏览视图，不是
   // 新增表——这里就是那句话的落地，没有 series 表可查。
-  const seriesGroups = new Map<string, Episode[]>();
+  const seriesGroups = new Map<string, (EpisodeOverview | Episode)[]>();
   for (const e of episodes) {
     const list = seriesGroups.get(e.persona_id) ?? [];
     list.push(e);

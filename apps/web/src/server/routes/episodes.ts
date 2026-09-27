@@ -13,6 +13,8 @@ import {
   createEpisodeWithScriptTask,
   estimateCreditQuote,
   getDestination,
+  getDestinationVersion,
+  getDestinationVersionInfo,
   getEpisode,
   getLatestFailedTask,
   getPersona,
@@ -20,8 +22,9 @@ import {
   getTemplate,
   getUserById,
   listEpisodes,
+  listEpisodeOverviews,
   patchEpisode,
-  upsertTemplate,
+  insertTemplate,
 } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
@@ -36,6 +39,10 @@ episodes.use("*", requireOwner);
 
 episodes.get("/", async (c) => {
   return c.json({ ok: true, episodes: await listEpisodes(c.get("ownerId")) });
+});
+
+episodes.get("/overview", async (c) => {
+  return c.json({ ok: true, episodes: await listEpisodeOverviews(c.get("ownerId")) });
 });
 
 episodes.post("/", async (c) => {
@@ -67,7 +74,9 @@ episodes.post("/", async (c) => {
     return c.json({ ok: false, error: "persona_not_found" }, 404);
   }
   if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
-  if (!template) return c.json({ ok: false, error: "template_not_found" }, 404);
+  if (!template || (template.owner_id !== null && template.owner_id !== c.get("ownerId"))) {
+    return c.json({ ok: false, error: "template_not_found" }, 404);
+  }
 
   // FR-01"缺字段给默认值"：新期仅开放 per_shot；
   // series_id/season/tone/banned 没有 PRD 原文默认值可抄，这里按合理取舍
@@ -177,7 +186,13 @@ episodes.get("/:id", async (c) => {
     ? revision : null;
   // Ownership is established above before reading any task from the queue.
   const failed_task = await getLatestFailedTask(result.episode);
-  return c.json({ ok: true, episode: result.episode, persona, row_version: result.row_version, failed_task });
+  const destinationRevision = await getDestinationVersionInfo(
+    result.episode.destination_id, result.episode.destination_version,
+  );
+  return c.json({ ok: true, episode: result.episode, persona,
+    destination: destinationRevision?.destination ?? null,
+    destination_history_approximate: destinationRevision?.compatibility_approximation ?? false,
+    row_version: result.row_version, failed_task });
 });
 
 episodes.patch("/:id", async (c) => {
@@ -234,7 +249,7 @@ episodes.post("/:id/save-as-template", async (c) => {
   }
 
   const [destination, persona] = await Promise.all([
-    getDestination(loaded.episode.destination_id),
+    getDestinationVersion(loaded.episode.destination_id, loaded.episode.destination_version),
     getPersonaVersion(loaded.episode.persona_id, loaded.episode.persona_version),
   ]);
   if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
@@ -250,7 +265,7 @@ episodes.post("/:id/save-as-template", async (c) => {
     outro: loaded.episode.render.outro,
     title_style: persona.style.title_style,
   };
-  await upsertTemplate(template);
+  insertTemplate(template);
   return c.json({ ok: true, template }, 201);
 });
 

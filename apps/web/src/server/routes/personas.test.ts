@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { close, createSession, createUser, getPersona, insertPersona, open } from "@kelvoy/store";
@@ -234,6 +234,23 @@ test("uploading 3-7 refs saves the files and appends to Persona.refs", async () 
     const file = Bun.file(join(process.env.KELVOY_PROJECTS_ROOT!, rel));
     expect(await file.exists()).toBe(true);
   }
+});
+
+test("concurrent ref uploads enforce the final limit and leave no orphan files", async () => {
+  const { cookie, ownerId } = await login("concurrent-refs");
+  await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
+  const app = buildApp();
+  const upload = () => {
+    const form = new FormData();
+    for (let i = 0; i < 4; i++) form.append("files", pngFile(`${i}.png`));
+    return app.request("/api/personas/c_mine/refs", { method: "POST", headers: { cookie }, body: form });
+  };
+  const results = await Promise.all([upload(), upload()]);
+  expect(results.map((res) => res.status).sort()).toEqual([201, 400]);
+  const saved = await getPersona("c_mine");
+  expect(saved?.refs).toHaveLength(4);
+  const files = await readdir(join(process.env.KELVOY_PROJECTS_ROOT!, "persona", "c_mine"));
+  expect(files).toHaveLength(4);
 });
 
 test("rejects non-image files", async () => {

@@ -1,7 +1,7 @@
 import { dequeueTask, insertEpisode, insertPersona, patchShot, upsertDestination } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode, Template } from "@kelvoy/engine";
-import { setupEpisodeRouteTests, buildApp, destinationFixture, fixture, login, personaFixture, shotFixture } from "./episode-test-fixtures";
+import { setupEpisodeRouteTests, buildApp, compliantShots, destinationFixture, fixture, login, personaFixture, shotFixture } from "./episode-test-fixtures";
 
 setupEpisodeRouteTests();
 
@@ -247,8 +247,11 @@ test("POST /:id/save-as-template 404s on someone else's episode", async () => {
 
 test("POST /:id/continue advances script_review -> assets and enqueues one whole-episode task", async () => {
   const { cookie, ownerId } = await login("dannei");
+  await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
   episode.status = "script_review";
+  episode.destination_id = "d_1";
+  episode.shots = compliantShots(24);
   await insertEpisode(episode);
 
   const app = buildApp();

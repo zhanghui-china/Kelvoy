@@ -185,7 +185,9 @@ export function validateMusic(input: unknown, path = "music"): string[] {
     return errors;
   }
   const m = input as Partial<EpisodeMusic>;
-  if (!isNonEmptyString(m.file)) errors.push(`${path}.file: 缺失或为空`);
+  if (m.file !== "" && !isNonEmptyString(m.file)) {
+    errors.push(`${path}.file: 必须是非空路径或空字符串`);
+  }
   if (!isFiniteNumber(m.bpm) || m.bpm < 0) errors.push(`${path}.bpm: 必须是 ≥0 的数字`);
   if (typeof m.license !== "string") errors.push(`${path}.license: 必须是字符串`);
   return errors;
@@ -283,6 +285,26 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
         for (const err of result.errors) errors.push(`shots[${i}].${err}`);
       }
     });
+  }
+
+  if (Array.isArray(e.scenes) && Array.isArray(e.shots)) {
+    const sceneIds = new Set<string>();
+    for (const [index, scene] of e.scenes.entries()) {
+      if (!isPlainObject(scene) || typeof scene.id !== "string") continue;
+      if (sceneIds.has(scene.id)) errors.push(`scenes[${index}].id: 重复`);
+      sceneIds.add(scene.id);
+    }
+    const shotNumbers = new Set<number>();
+    for (const [index, shot] of e.shots.entries()) {
+      if (!isPlainObject(shot)) continue;
+      if (typeof shot.no === "number") {
+        if (shotNumbers.has(shot.no)) errors.push(`shots[${index}].no: 重复`);
+        shotNumbers.add(shot.no);
+      }
+      if (typeof shot.scene === "string" && !sceneIds.has(shot.scene)) {
+        errors.push(`shots[${index}].scene: 引用的场景不存在`);
+      }
+    }
   }
 
   if (!Array.isArray(e.removed_shots)) {

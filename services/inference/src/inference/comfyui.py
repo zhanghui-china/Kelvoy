@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import random
 import time
 import uuid
@@ -20,12 +21,25 @@ TEMPLATES = {
     "video": ("2_0_Image2Video_MinimaxH3_api.json", "40", "gifs", ".mp4"),
     "video_reference": ("2_2_DualRef2Video_MinimaxH3_api.json", "40", "gifs", ".mp4"),
 }
+MAX_MEDIA_BYTES = 512 * 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 class ComfyUIError(Exception):
     def __init__(self, status: int, message: str):
         self.status = status
         super().__init__(message)
+
+
+async def cancel_prompt(client: httpx.AsyncClient, prompt_id: str) -> None:
+    try:
+        response = await client.post(f"/api/jobs/{prompt_id}/cancel")
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("cancelled") is not True:
+            logger.warning("ComfyUI did not confirm cancellation for prompt %s", prompt_id)
+    except (httpx.HTTPError, ValueError) as error:
+        logger.warning("ComfyUI cancellation failed for prompt %s: %s", prompt_id, error)
 
 
 def resolve_reference(projects_root: Path, key: str) -> Path:
@@ -120,7 +134,9 @@ async def generate(
         raise ValueError("unsupported workflow")
     expected_counts = {"image": (1, 2), "video": (1,), "video_reference": (2,)}
     if len(refs) not in expected_counts[kind]:
-        raise ValueError("image needs persona and optional landmark; video needs its required references")
+        raise ValueError(
+            "image needs persona and optional landmark; video needs its required references"
+        )
     if not prompt.strip():
         raise ValueError("prompt is required")
     if kind in ("video", "video_reference") and duration_s not in (3, 4, 5):
@@ -184,22 +200,38 @@ async def generate(
                     item = entries[0]
                     if not item["filename"].lower().endswith(extension):
                         raise ComfyUIError(502, "ComfyUI returned an unexpected media type")
-                    media = await client.get(
-                        "/view",
-                        params={
-                            "filename": item["filename"],
-                            "subfolder": item.get("subfolder", ""),
-                            "type": item.get("type", "output"),
-                        },
-                    )
-                    media.raise_for_status()
-                    if not media.content:
-                        raise ComfyUIError(502, "ComfyUI returned an empty file")
                     media_kind = "image" if kind == "image" else "video"
                     output_dir = projects_root.resolve() / "inference" / media_kind
                     output_dir.mkdir(parents=True, exist_ok=True)
                     relative = Path("inference") / media_kind / f"{uuid.uuid4().hex}{extension}"
-                    (projects_root.resolve() / relative).write_bytes(media.content)
+                    target = projects_root.resolve() / relative
+                    temporary = target.with_name(f"{target.name}.tmp-{uuid.uuid4().hex}")
+                    try:
+                        async with client.stream(
+                            "GET",
+                            "/view",
+                            params={
+                                "filename": item["filename"],
+                                "subfolder": item.get("subfolder", ""),
+                                "type": item.get("type", "output"),
+                            },
+                        ) as media:
+                            media.raise_for_status()
+                            length = media.headers.get("content-length")
+                            if length and int(length) > MAX_MEDIA_BYTES:
+                                raise ComfyUIError(502, "ComfyUI media exceeds size limit")
+                            size = 0
+                            with temporary.open("wb") as output:
+                                async for chunk in media.aiter_bytes():
+                                    size += len(chunk)
+                                    if size > MAX_MEDIA_BYTES:
+                                        raise ComfyUIError(502, "ComfyUI media exceeds size limit")
+                                    output.write(chunk)
+                            if size == 0:
+                                raise ComfyUIError(502, "ComfyUI returned an empty file")
+                        temporary.replace(target)
+                    finally:
+                        temporary.unlink(missing_ok=True)
                     return InferenceResponse(
                         paths=[relative.as_posix()],
                         model="Qwen-Image-2.1" if kind == "image" else "MiniMax-H3",
@@ -213,23 +245,21 @@ async def generate(
         raise ComfyUIError(504, "ComfyUI generation timed out")
     except (ComfyUIError, asyncio.CancelledError):
         if prompt_id:
-            try:
-                await client.post(f"/api/jobs/{prompt_id}/cancel")
-            except httpx.HTTPError:
-                pass
+            await cancel_prompt(client, prompt_id)
         raise
     except httpx.HTTPError as exc:
         if prompt_id:
-            try:
-                await client.post(f"/api/jobs/{prompt_id}/cancel")
-            except httpx.HTTPError:
-                pass
+            await cancel_prompt(client, prompt_id)
         status = (
             502
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500
             else 503
         )
         raise ComfyUIError(status, f"ComfyUI request failed: {exc}") from exc
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        if prompt_id:
+            await cancel_prompt(client, prompt_id)
+        raise ComfyUIError(502, f"Invalid ComfyUI response or media: {type(exc).__name__}") from exc
     finally:
         if own_client:
             await client.aclose()

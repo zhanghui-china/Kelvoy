@@ -264,6 +264,8 @@ flowchart LR
 { "session_id": "sess_...", "user_id": "u_123", "expires_at": "2026-09-30T10:00:00+08:00" }
 ```
 
+期的 `music.file` 允许空字符串，表示合成时按 `brief.tone` 从授权曲库自动选曲；此时新期默认 `bpm=0`、`license=""`。`scenes[].id` 与 `shots[].no` 在各自数组内必须唯一，每镜 `scene` 必须引用本期已有场景。导入和写入入口应遵守这些结构约束，避免同镜编号批量覆盖。
+
 `shot.model.*.provider` ∈ `local` / `kling` / `jimeng` / …；`attempts` 含本地重试与溢出总次数；复现键 = (episode_id, shot_no, stage, provider, model, version, seed, prompt 哈希, ref_hashes)。
 
 ## 7. 模型与工具适配层

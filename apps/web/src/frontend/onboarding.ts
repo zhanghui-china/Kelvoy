@@ -1,4 +1,5 @@
 import type { Episode } from "@kelvoy/engine";
+import type { EpisodeOverview } from "../shared/episode-overview";
 
 export interface OnboardingState {
   completed: [boolean, boolean, boolean, boolean, boolean];
@@ -8,7 +9,7 @@ export interface OnboardingState {
 }
 
 /** Account progress is recomputed from owned episodes, never stored as a second checklist. */
-export function deriveOnboarding(episodes: Episode[]): OnboardingState {
+export function deriveOnboarding(episodes: (Episode | EpisodeOverview)[]): OnboardingState {
   const byNewest = [...episodes].sort((a, b) => b.created_at.localeCompare(a.created_at));
   const next = byNewest.find((episode) => episode.status !== "done") ?? byNewest[0];
   const scriptPassed = new Set<Episode["status"]>([
@@ -21,11 +22,14 @@ export function deriveOnboarding(episodes: Episode[]): OnboardingState {
   const completed: OnboardingState["completed"] = [
     episodes.length > 0,
     episodes.some((episode) => scriptPassed.has(episode.status) ||
-      episode.shots.some((shot) => shot.status !== "draft")),
+      ("any_shot_started" in episode ? episode.any_shot_started
+        : episode.shots.some((shot) => shot.status !== "draft"))),
     episodes.some((episode) => keyframesPassed.has(episode.status) ||
-      (episode.shots.length > 0 && episode.shots.every((shot) => !!shot.kf_selected))),
+      ("all_keyframes_selected" in episode ? episode.all_keyframes_selected
+        : episode.shots.length > 0 && episode.shots.every((shot) => !!shot.kf_selected))),
     episodes.some((episode) => clipsPassed.has(episode.status) ||
-      (episode.shots.length > 0 && episode.shots.every((shot) => shot.status === "approved"))),
+      ("all_shots_approved" in episode ? episode.all_shots_approved
+        : episode.shots.length > 0 && episode.shots.every((shot) => shot.status === "approved"))),
     episodes.some((episode) => episode.status === "done"),
   ];
   return {

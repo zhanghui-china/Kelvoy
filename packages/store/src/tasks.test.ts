@@ -92,6 +92,7 @@ test("expired processing tasks are recovered with the same identity and a new le
   const first = await dequeueTask();
   expect(first?.lease_token).toBeTruthy();
   getDb().query("update tasks set lease_until = 1 where task_id = ?").run(queued.task_id);
+  expect(await renewTaskLease(queued.task_id, first!.lease_token!)).toBe(false);
   const recovered = await dequeueTask();
   expect(recovered?.task_id).toBe(first?.task_id);
   expect(recovered?.attempt).toBe(2);

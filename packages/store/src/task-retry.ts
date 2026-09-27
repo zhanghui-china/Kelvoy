@@ -28,7 +28,9 @@ export function submitFailedTaskRetry(input: {
       : failed.stage === "assets" ? "assets"
       : failed.stage === "keyframe" ? "keyframing"
       : failed.stage === "video" ? "clipping" : "composing";
-    if (episode.status !== "failed" && episode.status !== target) {
+    const reviewStatus = failed.stage === "keyframe" ? "kf_review"
+      : failed.stage === "video" ? "clip_review" : null;
+    if (episode.status !== "failed" && episode.status !== target && episode.status !== reviewStatus) {
       return { ok: false, error: "illegal_transition" } as const;
     }
     if (episode.status === "failed" && !isLegalEpisodeStatusChange("failed", target)) {
@@ -77,7 +79,8 @@ export function submitFailedTaskRetry(input: {
     if (retired.changes !== 1) throw new Error("failed task changed during retry");
     getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
       updated_at = datetime('now') where episode_id = ?`)
-      .run(JSON.stringify({ ...episode, status: target, failure_reason: null }), input.episode_id);
+      .run(JSON.stringify({ ...episode, status: episode.status === reviewStatus ? reviewStatus : target,
+        failure_reason: null }), input.episode_id);
     return { ok: true, row_version: row.row_version + 1, stage, shot_no: failed.shot_no } as const;
   }).immediate();
 }

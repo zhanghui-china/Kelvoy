@@ -11,11 +11,19 @@ test("runStage dispatches to brief (implemented, M1-10) and advances draft -> sc
   expect(updated.status).toBe("scripting");
 });
 
+test("a stage cannot run from a different pipeline phase", async () => {
+  await expect(runStage("brief", { status: "script_review" } as Episode))
+    .rejects.toThrow("brief 阶段状态不正确");
+  await expect(runStage("script", { status: "draft" } as Episode))
+    .rejects.toThrow("script 阶段状态不正确");
+});
+
 test("runStage blocks new generation for a legacy grid episode", async () => {
   await expect(runStage("brief", { mode: "grid", status: "draft" } as Episode))
     .rejects.toThrow("网格模式尚未完成");
 });
 
 test("runStage passes shotNo to a per-shot stage and requires worker context", async () => {
-  await expect(runStage("keyframe", {} as Episode, 3)).rejects.toThrow("Worker 推理能力");
+  await expect(runStage("keyframe", { status: "keyframing" } as Episode, 3))
+    .rejects.toThrow("Worker 推理能力");
 });

@@ -53,6 +53,22 @@ test("lists only the logged-in user's own episodes", async () => {
   expect(body.episodes.map((e) => e.episode_id)).toEqual(["e_mine"]);
 });
 
+test("overview list preserves review counts without sending prompts or media keys", async () => {
+  const { cookie, ownerId } = await login("overview-owner");
+  await insertEpisode({ ...fixture("e_overview", ownerId),
+    shots: [shotFixture(1, { status: "approved", kf_selected: "kf/private.png",
+      kf_prompt: "private prompt", candidates: ["kf/private.png"] })] });
+  const app = buildApp();
+  const res = await app.request("/api/episodes/overview", { headers: { cookie } });
+  expect(res.status).toBe(200);
+  const body = await res.json() as { episodes: { shot_count: number; approved_shot_count: number }[] };
+  expect(body.episodes[0]?.shot_count).toBe(1);
+  expect(body.episodes[0]?.approved_shot_count).toBe(1);
+  expect(JSON.stringify(body)).not.toContain("private prompt");
+  expect(JSON.stringify(body)).not.toContain("kf/private.png");
+  expect((await app.request("/api/episodes/overview")).status).toBe(401);
+});
+
 test("gets one episode by id with its row_version, for owner", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertEpisode(fixture("e_1", ownerId));
@@ -63,6 +79,18 @@ test("gets one episode by id with its row_version, for owner", async () => {
   const body = (await res.json()) as { episode: Episode; row_version: number };
   expect(body.episode.episode_id).toBe("e_1");
   expect(body.row_version).toBe(1);
+});
+
+test("episode detail uses its destination revision instead of the current catalog", async () => {
+  const { cookie, ownerId } = await login("destination-history");
+  await upsertDestination(destinationFixture("d_history"));
+  await insertEpisode({ ...fixture("e_history", ownerId), destination_id: "d_history",
+    destination_version: 1 });
+  await upsertDestination({ ...destinationFixture("d_history"), version: 2, name: "新版目的地" });
+  const res = await buildApp().request("/api/episodes/e_history", { headers: { cookie } });
+  const body = await res.json();
+  expect(body.destination.name).toBe(destinationFixture("d_history").name);
+  expect(body.destination_history_approximate).toBe(false);
 });
 
 test("detail includes failed stage for owner but hides it from another account", async () => {
@@ -207,6 +235,22 @@ test("POST creates a fixed-cut draft with intro/outro off and enqueues a brief t
   const task = await dequeueTask();
   expect(task?.episode_id).toBe(episode.episode_id);
   expect(task?.stage).toBe("brief");
+});
+
+test("POST cannot use another account's private template", async () => {
+  const { cookie, ownerId } = await login("private-template-requester");
+  await insertPersona(personaFixture("c_1", ownerId));
+  await upsertDestination(destinationFixture("d_1"));
+  await upsertTemplate({ ...templateFixture("t_private"), owner_id: "u_someone_else" });
+
+  const response = await buildApp().request("/api/episodes", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ persona_id: "c_1", destination_id: "d_1", template_id: "t_private" }),
+  });
+  expect(response.status).toBe(404);
+  expect((await response.json()).error).toBe("template_not_found");
+  expect(await dequeueTask()).toBeNull();
 });
 
 test("POST blocks an unfunded account before creating the project", async () => {

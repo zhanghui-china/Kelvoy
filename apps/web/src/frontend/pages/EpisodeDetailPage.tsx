@@ -1,8 +1,8 @@
 import { useParams } from "react-router-dom";
 import type { Destination, Episode, Persona } from "@kelvoy/engine";
-import { getEpisode, listDestinations } from "../api/client";
+import { getEpisode } from "../api/client";
 import type { FailedTaskSummary } from "../api/client";
-import { useApiResource, usePolledApiResource } from "../hooks/useApiResource";
+import { usePolledApiResource } from "../hooks/useApiResource";
 import { EPISODE_STATUS_LABELS } from "../labels";
 import { episodeLabel } from "../episode-view";
 import ClipReview from "../review/ClipReview";
@@ -21,13 +21,11 @@ import "../review/review.css";
  * 审片台（M2-9/#31，FR-05）。这一页只负责取数据、3 秒轮询、按 status 分发
  * 视图；三个审核点各自的交互都在 frontend/review/ 下。
  *
- * 目的地从共享列表读取；角色由期详情接口按 persona_version 返回不可变
- * 快照，避免官方角色更新后审片台显示新版本的参考图。
+ * 目的地和角色均由期详情接口按记录的版本返回快照。
  */
 export default function EpisodeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { loading, data, error, refresh } = usePolledApiResource(() => getEpisode(id!), [id]);
-  const destinations = useApiResource(listDestinations, []);
 
   const mutation = useEpisodeMutation(data?.row_version ?? 0, refresh);
 
@@ -36,16 +34,16 @@ export default function EpisodeDetailPage() {
   if (!data) return null;
 
   const episode: Episode = data.episode;
-  const destination =
-    destinations.data?.destinations.find((d) => d.destination_id === episode.destination_id) ?? null;
-  return <EpisodeDetailContent episode={episode} destination={destination} persona={data.persona}
+  return <EpisodeDetailContent episode={episode} destination={data.destination} persona={data.persona}
+    destinationHistoryApproximate={data.destination_history_approximate}
     failedTask={data.failed_task} mutation={mutation} />;
 }
 
-export function EpisodeDetailContent({ episode, destination, persona, failedTask, mutation }: {
+export function EpisodeDetailContent({ episode, destination, persona, destinationHistoryApproximate, failedTask, mutation }: {
   episode: Episode;
   destination: Destination | null;
   persona: Persona | null;
+  destinationHistoryApproximate?: boolean;
   failedTask?: FailedTaskSummary | null;
   mutation: EpisodeMutation;
 }) {
@@ -66,6 +64,9 @@ export function EpisodeDetailContent({ episode, destination, persona, failedTask
         <span className="k-card-meta">预计完整创作：{episode.estimated_credits} 积分</span>
         <span className="k-card-meta">{episode.shots.length} 镜 · 每 3 秒自动刷新</span>
       </div>
+      {destinationHistoryApproximate && <p className="k-card-meta">
+        此期使用旧数据创建：原始目的地版本已无法恢复，显示的是迁移时保存的近似资料。
+      </p>}
       <StageSteps status={episode.status} failedTask={failedTask} videoSource={episode.video_source} />
 
       {episode.status === "script_review" && (

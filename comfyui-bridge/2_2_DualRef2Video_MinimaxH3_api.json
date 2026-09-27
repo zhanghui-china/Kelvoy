@@ -7,52 +7,11 @@
       "device": "default"
     }
   },
-  "16": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "3",
-        0
-      ]
-    }
-  },
-  "30": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "video VAE",
-      "VAE": [
-        "4",
-        0
-      ]
-    }
-  },
-  "31": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "audio VAE",
-      "VAE": [
-        "5",
-        0
-      ]
-    }
-  },
   "2": {
     "class_type": "UNETLoader",
     "inputs": {
       "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
       "weight_dtype": "default"
-    }
-  },
-  "32": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "video VAE"
-    }
-  },
-  "39": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "audio VAE"
     }
   },
   "76": {
@@ -84,22 +43,6 @@
       "trim_to_audio": false,
       "pingpong": false,
       "save_output": true,
-      "videopreview": {
-        "paused": false,
-        "hidden": false,
-        "params": {
-          "score": 78,
-          "filename": "minimax h3 ref2v_00002-audio.mp4",
-          "cos_url": "https://rh-images.xiaoyaoyou.com//d56d31b3752039219c3230c269ddbcc7/output/minimax h3 flf2v_00001_p82-audio_svksr_1787411112.mp4",
-          "workflow": "minimax h3 ref2v_00002.png",
-          "fullpath": "/home/Developer/ComfyUI/output/minimax h3 ref2v_00002-audio.mp4",
-          "format": "video/h264-mp4",
-          "subfolder": "",
-          "label": "Porn",
-          "type": "output",
-          "frame_rate": 24
-        }
-      },
       "images": [
         "37",
         0
@@ -118,7 +61,7 @@
         0
       ],
       "vae": [
-        "39",
+        "5",
         0
       ]
     }
@@ -131,7 +74,7 @@
         0
       ],
       "vae": [
-        "32",
+        "4",
         0
       ]
     }
@@ -162,11 +105,11 @@
       ],
       "ref_image_size": "max",
       "vae": [
-        "32",
+        "4",
         0
       ],
       "audio_vae": [
-        "39",
+        "5",
         0
       ],
       "ref_images.ref_image_0": [
@@ -175,6 +118,10 @@
       ],
       "ref_images.ref_image_1": [
         "92",
+        0
+      ],
+      "clip": [
+        "3",
         0
       ]
     }
@@ -230,6 +177,10 @@
       "latent_image": [
         "77",
         1
+      ],
+      "model": [
+        "88",
+        0
       ]
     }
   },
@@ -253,15 +204,6 @@
       ]
     }
   },
-  "89": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "88",
-        0
-      ]
-    }
-  },
   "90": {
     "class_type": "ComfyMathExpression",
     "inputs": {
@@ -270,6 +212,13 @@
         "76",
         0
       ]
+    }
+  },
+  "92": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "2026-09-10__frieren_peach_con_free5__linie.png",
+      "upload": "image"
     }
   },
   "91": {
@@ -288,13 +237,6 @@
         "86",
         0
       ]
-    }
-  },
-  "92": {
-    "class_type": "LoadImage",
-    "inputs": {
-      "image": "2026-09-10__frieren_peach_con_free5__linie.png",
-      "upload": "image"
     }
   }
 }

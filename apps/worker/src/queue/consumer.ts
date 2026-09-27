@@ -14,14 +14,14 @@ import {
   dequeueTask,
   enqueueTask,
   failTaskWithCredits,
-  getDestination,
+  getDestinationVersion,
   getEpisode,
   getPersonaVersion,
   hasActiveStageTasks,
-  patchEpisode,
   patchShot,
   replaceEpisode,
   renewTaskLease,
+  requeueTaskAfterCommitConflict,
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders } from "../generation/local";
@@ -81,7 +81,7 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
  */
 export async function buildStageContext(stage: StageName, episode: Episode, task?: Task): Promise<StageContext> {
   const [destination, persona] = await Promise.all([
-    getDestination(episode.destination_id),
+    getDestinationVersion(episode.destination_id, episode.destination_version),
     getPersonaVersion(episode.persona_id, episode.persona_version),
   ]);
   const context: StageContext = {};
@@ -151,7 +151,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       return;
     }
     if (prepared.kind === "conflict") {
-      failTaskWithCredits(task, task.attempt < MAX_LOCAL_ATTEMPTS);
+      requeueTaskAfterCommitConflict(task);
       return;
     }
     current = { ok: true, episode: prepared.episode, row_version: prepared.row_version };
@@ -163,12 +163,14 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       context,
     );
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
-    const written = completeTaskWithEpisode(task, current.row_version, updated);
+    const written = completeTaskWithEpisode(task, current.row_version, updated, current.episode);
     if (!written.ok) {
-      // Lost a write race or the transition became illegal between our
-      // read and write — requeue so the next attempt re-reads fresh state,
-      // same MAX_LOCAL_ATTEMPTS budget as a stage failure.
-      failTaskWithCredits(task, task.attempt < MAX_LOCAL_ATTEMPTS);
+      if (written.error === "version_conflict") requeueTaskAfterCommitConflict(task);
+      else if (written.error === "illegal_transition") {
+        failTaskWithCredits(task, false, "生成期间输入发生变化，请重试。");
+      } else if (written.error === "not_found") {
+        completeTaskWithoutEpisode(task);
+      }
       return;
     }
 
@@ -182,30 +184,11 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
   } catch (err) {
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     if (err instanceof ContentBlockedError) {
-      // 内容审核拦截是确定性失败，重试也还是命中同样的词——不重试，直接
-      // 把期标成 failed（同 packages/cli/src/run-stage.ts 的失败写回方式）。
-      failTaskWithCredits(task, false);
-      await patchEpisode(task.episode_id, current.row_version,
-        { status: "failed", failure_reason: failureReason(err) });
+      failTaskWithCredits(task, false, failureReason(err));
       return;
     }
     const retry = task.attempt < MAX_LOCAL_ATTEMPTS;
-    failTaskWithCredits(task, retry);
-    if (!retry) {
-      const fresh = await getEpisode(task.episode_id);
-      if (fresh.ok) {
-        const target = generationStatus(task.stage);
-        const shot = fresh.episode.shots.find((item) => item.no === task.shot_no);
-        if (target && shot?.status === target) {
-          const patched = await patchShot(task.episode_id, shot.no, fresh.row_version, { status: "failed" });
-          if (patched.ok) await patchEpisode(task.episode_id, patched.row_version,
-            { failure_reason: failureReason(err) });
-        } else if (!target && ["scripting", "assets", "composing"].includes(fresh.episode.status)) {
-          await patchEpisode(task.episode_id, fresh.row_version,
-            { status: "failed", failure_reason: failureReason(err) });
-        }
-      }
-    }
+    failTaskWithCredits(task, retry, retry ? undefined : failureReason(err));
   }
 }
 
@@ -225,9 +208,10 @@ async function handleScriptActionTask(task: Task, overrides: Partial<StageContex
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const written = completeTaskWithEpisode(task, current.row_version, updated);
     if (!written.ok) {
-      const retry = task.attempt < MAX_LOCAL_ATTEMPTS;
-      if (!retry) await clearFailedScriptAction(task);
-      failTaskWithCredits(task, retry);
+      if (written.error === "version_conflict") requeueTaskAfterCommitConflict(task);
+      else if (written.error === "illegal_transition" || written.error === "not_found") {
+        completeTaskWithoutEpisode(task);
+      }
       return;
     }
   } catch (error) {

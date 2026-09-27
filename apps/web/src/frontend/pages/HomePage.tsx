@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { Destination, DestinationType, Episode } from "@kelvoy/engine";
+import type { Destination, DestinationType } from "@kelvoy/engine";
+import type { EpisodeOverview } from "../../shared/episode-overview";
 import { AssetImage } from "../AssetImage";
-import { getMySettings, listDestinations, listEpisodes, listPersonas, updateMySettings } from "../api/client";
+import { getMySettings, listDestinations, listEpisodeOverviews, listPersonas, updateMySettings } from "../api/client";
 import { OnboardingChecklist } from "../OnboardingChecklist";
 import { GuideTip } from "../GuideTip";
 import { deriveOnboarding } from "../onboarding";
@@ -21,7 +22,7 @@ const CAPABILITIES = [
 ];
 
 export default function HomePage() {
-  const episodesRes = useApiResource(listEpisodes, []);
+  const episodesRes = useApiResource(listEpisodeOverviews, []);
   const personasRes = useApiResource(listPersonas, []);
   const destinationsRes = useApiResource(listDestinations, []);
   const [settingsRetry, setSettingsRetry] = useState(0);
@@ -59,7 +60,7 @@ export default function HomePage() {
     else setDismissError("引导状态保存失败，请重试。");
   }
 
-  function episodeMeta(e: Episode): string {
+  function episodeMeta(e: EpisodeOverview): string {
     const persona = personaById.get(e.persona_id)?.name ?? e.persona_id;
     const destination = destinationById.get(e.destination_id)?.name ?? e.destination_id;
     return `${persona} · ${destination} · ${EPISODE_STATUS_LABELS[e.status]}`;

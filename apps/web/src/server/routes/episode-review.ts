@@ -4,11 +4,12 @@ import {
   checkScriptRules,
   removeShot,
   reorderShots,
+  reviewAdvanceError,
   transitionEpisode,
   validatePatchShotRequest,
 } from "@kelvoy/engine";
 import {
-  getDestination,
+  getDestinationVersion,
   patchShot,
   replaceEpisode,
   setShare,
@@ -151,7 +152,7 @@ review.patch("/:id/shots/:no", async (c) => {
   // FR-02 的 landmark_reference 规则：改地标引用时立刻查，不要等到删镜/
   // 重排时才由 checkScriptRules 把一个早就写坏的值报出来。
   if (patch.landmark !== undefined && patch.landmark !== null) {
-    const destination = await getDestination(loaded.episode.destination_id);
+    const destination = await getDestinationVersion(loaded.episode.destination_id, loaded.episode.destination_version);
     if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
     if (!destination.landmarks.some((l) => l.id === patch.landmark)) {
       return c.json({ ok: false, error: "landmark_reference" }, 400);
@@ -195,7 +196,7 @@ review.post("/:id/shots/reorder", async (c) => {
 
   // 顺序一变 size_run（同景别不得连续 >2 镜）就可能违规，和删镜一样必须
   // 重跑 FR-02，违规就整单驳回、一行都不写。
-  const destination = await getDestination(loaded.episode.destination_id);
+  const destination = await getDestinationVersion(loaded.episode.destination_id, loaded.episode.destination_version);
   if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
   const violations = checkScriptRules(updated.shots, destination);
   if (violations.length > 0) {
@@ -225,18 +226,8 @@ review.post("/:id/continue", async (c) => {
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
 
   if (!REVIEW_GATE_ADVANCE.includes(loaded.episode.status)) return c.json({ ok: false, error: "illegal_transition" }, 400);
-  if (loaded.episode.status === "kf_review" &&
-      (!loaded.episode.shots.some((shot) => shot.status === "kf_selected") ||
-       loaded.episode.shots.some((shot) =>
-        !(shot.status === "approved" && !!shot.clip) &&
-        (shot.status !== "kf_selected" || !shot.kf_selected || !shot.candidates.includes(shot.kf_selected))))) {
-    return c.json({ ok: false, error: "keyframes_not_selected" }, 400);
-  }
-  if ((loaded.episode.status === "clip_review" || loaded.episode.status === "compose_ready") &&
-      (loaded.episode.shots.length === 0 || loaded.episode.shots.some((shot) =>
-        shot.status !== "approved" || !shot.clip))) {
-    return c.json({ ok: false, error: "clips_not_approved" }, 400);
-  }
+  const reviewError = reviewAdvanceError(loaded.episode);
+  if (reviewError) return c.json({ ok: false, error: reviewError }, 400);
   const nextStatus = loaded.episode.status === "clip_review" && loaded.episode.cut_policy === "fixed_1s"
     ? transitionEpisode(loaded.episode.status, { type: "prepare_compose" })
     : transitionEpisode(loaded.episode.status, { type: "advance" });
@@ -300,7 +291,7 @@ review.post("/:id/shots/:no/remove", async (c) => {
 
   // FR-02 是固定产品规则（不是 M0 待测数字），删镜后一样要过——不重新校验
   // 的话，删掉唯一的地标镜之类会静默产出一份不合规的分镜表。
-  const destination = await getDestination(loaded.episode.destination_id);
+  const destination = await getDestinationVersion(loaded.episode.destination_id, loaded.episode.destination_version);
   if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
   const violations = checkScriptRules(updated.shots, destination);
   if (violations.length > 0) {

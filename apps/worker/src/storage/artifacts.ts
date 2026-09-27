@@ -1,5 +1,6 @@
 import { mkdir, copyFile, rename, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { realpathSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 /**
  * Local artifact storage (ADR-0004): no object storage/SDK, just files on
@@ -20,8 +21,11 @@ export async function saveArtifact(
   relativeKey: string,
   sourcePath: string,
 ): Promise<string> {
-  const destPath = join(projectsRoot(), episodeId, relativeKey);
+  await mkdir(projectsRoot(), { recursive: true });
+  const destPath = artifactPath(episodeId, relativeKey);
   await mkdir(dirname(destPath), { recursive: true });
+  // mkdir can follow an existing symlink. Recheck the concrete parent before writing.
+  artifactPath(episodeId, relativeKey);
   const tempPath = `${destPath}.tmp-${crypto.randomUUID()}`;
   try {
     await copyFile(sourcePath, tempPath);
@@ -34,7 +38,36 @@ export async function saveArtifact(
 
 /** Resolves a stored relative key back to its full path on disk. */
 export function artifactPath(episodeId: string, relativeKey: string): string {
-  return join(projectsRoot(), episodeId, relativeKey);
+  if (!/^[A-Za-z0-9_-]+$/.test(episodeId) || !relativeKey || isAbsolute(relativeKey) ||
+      relativeKey.split(/[\\/]/).some((part) => part === ".." || part === "")) {
+    throw new Error("invalid episode artifact key");
+  }
+  const root = resolve(projectsRoot());
+  const episodeRoot = resolve(root, episodeId);
+  const target = resolve(episodeRoot, relativeKey);
+  const inside = relative(episodeRoot, target);
+  if (!inside || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
+    throw new Error("invalid episode artifact key");
+  }
+  try {
+    const realRoot = realpathSync(root);
+    let existing = target;
+    while (existing !== root) {
+      try {
+        const concrete = realpathSync(existing);
+        const realInside = relative(realRoot, concrete);
+        if (!realInside || realInside === ".." || realInside.startsWith(`..${sep}`) ||
+            isAbsolute(realInside)) throw new Error("episode artifact escapes projects root");
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        existing = dirname(existing);
+      }
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return target;
 }
 
 /**
@@ -47,5 +80,23 @@ export function artifactPath(episodeId: string, relativeKey: string): string {
 export function sharedAssetPath(relativeKey: string): string {
   // Older official role records used a style name before the actual LUT was
   // packaged. Keep those immutable role snapshots usable during compose.
-  return join(projectsRoot(), relativeKey === "warm_natural" ? "lut/warm_film.cube" : relativeKey);
+  const key = relativeKey === "warm_natural" ? "lut/warm_film.cube" : relativeKey;
+  if (isAbsolute(key) || key.split(/[\\/]/).some((part) => part === ".." || part === "")) {
+    throw new Error("invalid shared asset key");
+  }
+  const root = resolve(projectsRoot());
+  const path = resolve(root, key);
+  const inside = relative(root, path);
+  if (!inside || inside.startsWith("..") || isAbsolute(inside)) throw new Error("invalid shared asset key");
+  try {
+    const realRoot = realpathSync(root);
+    const realPath = realpathSync(path);
+    const realInside = relative(realRoot, realPath);
+    if (!realInside || realInside.startsWith("..") || isAbsolute(realInside)) {
+      throw new Error("shared asset escapes projects root");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return path;
 }

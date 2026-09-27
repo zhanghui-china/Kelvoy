@@ -16,6 +16,7 @@ import type {
   Template,
   UserSettings,
 } from "@kelvoy/engine";
+import type { EpisodeOverview } from "../../shared/episode-overview";
 
 // Typed wrapper around the /api/* routes apps/web/src/server/routes/*.ts
 // actually serve. M2-7 scoped this to read-only pages (auth +
@@ -168,8 +169,13 @@ export function listEpisodes() {
   return apiFetch<{ episodes: Episode[] }>("/api/episodes");
 }
 
+export function listEpisodeOverviews() {
+  return apiFetch<{ episodes: EpisodeOverview[] }>("/api/episodes/overview");
+}
+
 export function getEpisode(episodeId: string) {
-  return apiFetch<{ episode: Episode; persona: Persona | null; row_version: number; failed_task?: FailedTaskSummary | null }>(
+  return apiFetch<{ episode: Episode; persona: Persona | null; destination: Destination | null;
+    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
   );
 }

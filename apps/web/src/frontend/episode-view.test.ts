@@ -1,6 +1,7 @@
 import type { Episode, Shot, ShotStatus } from "@kelvoy/engine";
 import { expect, test } from "bun:test";
 import { episodeLabel, weekRange, weekStats } from "./episode-view";
+import type { EpisodeOverview } from "../shared/episode-overview";
 
 function shot(no: number, status: ShotStatus): Shot {
   return {
@@ -107,6 +108,17 @@ test("weekStats counts only episodes created inside the current week", () => {
   ];
 
   expect(weekStats(episodes, now)).toEqual({ doneEpisodes: 1, gpuMinutes: 17, approvedShots: 3 });
+  const overviews: EpisodeOverview[] = episodes.map((episode) => ({
+    episode_id: episode.episode_id, name: episode.name, status: episode.status,
+    persona_id: episode.persona_id, destination_id: episode.destination_id,
+    created_at: episode.created_at, credits_used: episode.credits_used,
+    render: { title: episode.render.title }, shot_count: episode.shots.length,
+    approved_shot_count: episode.shots.filter((item) => item.status === "approved").length,
+    any_shot_started: episode.shots.some((item) => item.status !== "draft"),
+    all_keyframes_selected: episode.shots.length > 0 && episode.shots.every((item) => !!item.kf_selected),
+    all_shots_approved: episode.shots.length > 0 && episode.shots.every((item) => item.status === "approved"),
+  }));
+  expect(weekStats(overviews, now)).toEqual(weekStats(episodes, now));
 });
 
 test("weekStats returns zeros with no episodes, and skips unparseable created_at", () => {

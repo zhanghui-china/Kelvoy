@@ -76,6 +76,26 @@ export async function updatePersona(
   }).immediate();
 }
 
+/** Append uploaded refs against the latest stored revision under one writer lock. */
+export function appendPersonaRefs(input: {
+  persona_id: string; owner_id: string; refs: string[]; min: number; max: number;
+}): { ok: true; persona: Persona } | { ok: false; error: "not_found" | "invalid_ref_count" } {
+  const database = getDb();
+  return database.transaction(() => {
+    const current = readPersona(input.persona_id);
+    if (!current || current.owner_id !== input.owner_id) return { ok: false, error: "not_found" } as const;
+    const count = current.refs.length + input.refs.length;
+    if (count < input.min || count > input.max) return { ok: false, error: "invalid_ref_count" } as const;
+    const updated = { ...current, version: current.version + 1, refs: [...current.refs, ...input.refs] };
+    const doc = JSON.stringify(updated);
+    database.query("update personas set version = ?, doc = ?, updated_at = datetime('now') where persona_id = ?")
+      .run(updated.version, doc, input.persona_id);
+    database.query("insert into persona_versions (persona_id, version, doc) values (?, ?, ?)")
+      .run(input.persona_id, updated.version, doc);
+    return { ok: true, persona: updated } as const;
+  }).immediate();
+}
+
 /** Internal catalog write. Public routes never call this entry point. */
 export async function upsertOfficialPersona(input: Persona): Promise<{ persona: Persona; changed: boolean }> {
   if (input.owner_id !== null) throw new Error("official persona must have owner_id null");

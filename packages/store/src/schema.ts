@@ -17,6 +17,19 @@ create table if not exists destinations (
   updated_at text not null default (datetime('now'))
 );
 
+create table if not exists destination_versions (
+  destination_id text not null,
+  version integer not null,
+  doc text not null,
+  compatibility_approximation integer not null default 0,
+  primary key (destination_id, version)
+);
+
+create table if not exists schema_migrations (
+  migration_id text primary key,
+  applied_at text not null default (datetime('now'))
+);
+
 create table if not exists personas (
   persona_id text primary key,
   owner_id text,

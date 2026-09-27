@@ -113,7 +113,8 @@ export async function dequeueTask(): Promise<Task | null> {
 export async function renewTaskLease(taskId: string, leaseToken: string): Promise<boolean> {
   const result = getDb().query(
     `update tasks set lease_until = ?, updated_at = datetime('now')
-     where task_id = ? and lease_token = ? and status = 'processing'`,
+     where task_id = ? and lease_token = ? and status = 'processing'
+       and lease_until > unixepoch('now')`,
   ).run(Math.floor(Date.now() / 1000) + TASK_LEASE_SECONDS, taskId, leaseToken);
   return result.changes === 1;
 }

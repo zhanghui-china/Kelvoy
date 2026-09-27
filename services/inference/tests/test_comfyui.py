@@ -8,16 +8,49 @@ import httpx
 import pytest
 
 from inference.comfyui import (
+    TEMPLATES,
     ComfyUIError,
+    build_dual_ref_video_workflow,
     build_image_workflow,
     build_video_workflow,
-    build_dual_ref_video_workflow,
     generate,
     resolve_reference,
 )
 from inference.config import Settings
 
 BRIDGE = Path(__file__).resolve().parents[3] / "comfyui-bridge"
+
+
+@pytest.mark.parametrize("template_kind", TEMPLATES)
+def test_production_workflow_graph_is_explicit_and_connected(template_kind):
+    filename, output_node, _, _ = TEMPLATES[template_kind]
+    workflow = json.loads((BRIDGE / filename).read_text())
+    forbidden = {"GetNode", "SetNode", "Anything Everywhere"}
+    assert not {node["class_type"] for node in workflow.values()} & forbidden
+
+    reachable = set()
+
+    def visit(node_id):
+        if node_id in reachable:
+            return
+        assert node_id in workflow
+        reachable.add(node_id)
+        for value in workflow[node_id]["inputs"].values():
+            if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
+                assert value[0] in workflow
+                visit(value[0])
+
+    visit(output_node)
+    assert reachable == set(workflow)
+
+
+def test_dual_reference_video_has_explicit_model_and_clip_inputs():
+    template = json.loads((BRIDGE / TEMPLATES["video_reference"][0]).read_text())
+    workflow = build_dual_ref_video_workflow(
+        template, ["person.png", "scene.jpg"], "walk", 5, 42, "9:16"
+    )
+    assert workflow["49"]["inputs"]["model"] == ["88", 0]
+    assert workflow["77"]["inputs"]["clip"] == ["3", 0]
 
 
 def test_inference_service_uses_shared_projects_root(monkeypatch, tmp_path):
@@ -194,6 +227,94 @@ def test_generate_cancels_failed_prompt_without_touching_other_jobs(tmp_path):
             )
         if request.url.path == "/api/jobs/p1/cancel":
             return httpx.Response(200, json={"cancelled": True})
+        raise AssertionError(request.url)
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await generate("video", "scene", ["first.png"], tmp_path, "http://comfy", client=client)
+
+    with pytest.raises(ComfyUIError, match="generation failed"):
+        asyncio.run(run())
+    assert calls[-1] == "/api/jobs/p1/cancel"
+
+
+def test_generate_rejects_oversized_media_and_cleans_temporary_file(tmp_path, monkeypatch):
+    from inference import comfyui
+
+    monkeypatch.setattr(comfyui, "MAX_MEDIA_BYTES", 4)
+    (tmp_path / "first.png").write_bytes(b"fixture")
+
+    def handler(request):
+        if request.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "first.png"})
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "p1"})
+        if request.url.path == "/history/p1":
+            return httpx.Response(200, json={"p1": {"outputs": {"40": {
+                "gifs": [{"filename": "result.mp4"}]
+            }}}})
+        if request.url.path == "/view":
+            return httpx.Response(200, content=b"12345")
+        if request.url.path == "/api/jobs/p1/cancel":
+            return httpx.Response(200, json={"cancelled": True})
+        raise AssertionError(request.url)
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await generate("video", "scene", ["first.png"], tmp_path, "http://comfy", client=client)
+
+    with pytest.raises(ComfyUIError, match="size limit"):
+        asyncio.run(run())
+    assert list((tmp_path / "inference" / "video").glob("*")) == []
+
+
+def test_bad_comfy_response_still_attempts_cancel_and_returns_server_error(tmp_path):
+    (tmp_path / "first.png").write_bytes(b"fixture")
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "first.png"})
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "p1"})
+        if request.url.path == "/history/p1":
+            return httpx.Response(200, json={"p1": {"outputs": {"40": {"gifs": [{}]}}}})
+        if request.url.path == "/api/jobs/p1/cancel":
+            return httpx.Response(500, json={"error": "cancel unavailable"})
+        raise AssertionError(request.url)
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await generate("video", "scene", ["first.png"], tmp_path, "http://comfy", client=client)
+
+    with pytest.raises(ComfyUIError) as failure:
+        asyncio.run(run())
+    assert failure.value.status == 502
+    assert calls[-1] == "/api/jobs/p1/cancel"
+
+
+@pytest.mark.parametrize("cancel_response", [None, [], "unexpected"])
+def test_non_object_cancel_response_preserves_generation_error(tmp_path, cancel_response):
+    (tmp_path / "first.png").write_bytes(b"fixture")
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "first.png"})
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "p1"})
+        if request.url.path == "/history/p1":
+            return httpx.Response(200, json={"p1": {"status": {"status_str": "error"}}})
+        if request.url.path == "/api/jobs/p1/cancel":
+            return httpx.Response(200, json=cancel_response)
         raise AssertionError(request.url)
 
     async def run():

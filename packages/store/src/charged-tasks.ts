@@ -1,7 +1,17 @@
-import { type Episode, type EpisodeStatus, type RegenStage, type Task,
-  isLegalEpisodeStatusChange, isLegalShotStatusChange } from "@kelvoy/engine";
+import { type Destination, type Episode, type EpisodeStatus, type RegenStage, type Task,
+  checkScriptRules, isLegalEpisodeStatusChange, isLegalShotStatusChange, mergeGeneratedShotResult,
+  reviewAdvanceError } from "@kelvoy/engine";
 import { finalizeCredits, getCreditAction, getCreditBalance, getCreditPrice, reserveCredits } from "./credits";
 import { getDb } from "./db";
+import { decodeEpisode } from "./episode-codec";
+
+type LeaseRow = { status: string; lease_token: string | null; lease_until: number | null };
+
+function ownsLiveLease(row: LeaseRow | null, task: Task): boolean {
+  return !!row && row.status === "processing" && !!task.lease_token &&
+    row.lease_token === task.lease_token &&
+    row.lease_until !== null && row.lease_until > Math.floor(Date.now() / 1000);
+}
 
 export function createEpisodeWithScriptTask(episode: Episode):
   { ok: true; task_id: string } | { ok: false; error: "insufficient_credits" | "not_found" } {
@@ -25,7 +35,7 @@ export function createEpisodeWithScriptTask(episode: Episode):
 export function submitReviewAdvance(input: {
   episode_id: string; owner_id: string; row_version: number; next_status: EpisodeStatus;
 }): { ok: true; row_version: number } |
-  { ok: false; error: "not_found" | "version_conflict" | "illegal_transition" | "insufficient_credits"; current_row_version?: number } {
+  { ok: false; error: "not_found" | "version_conflict" | "illegal_transition" | "script_rule_violation" | "insufficient_credits"; current_row_version?: number } {
   return getDb().transaction(() => {
     const row = getDb().query<{ doc: string; row_version: number }, [string, string]>(
       "select doc, row_version from episodes where episode_id = ? and owner_id = ?",
@@ -33,9 +43,20 @@ export function submitReviewAdvance(input: {
     if (!row) return { ok: false, error: "not_found" } as const;
     if (row.row_version !== input.row_version) return { ok: false, error: "version_conflict",
       current_row_version: row.row_version } as const;
-    const episode = JSON.parse(row.doc) as Episode;
+    const episode = decodeEpisode(row.doc);
     if (!isLegalEpisodeStatusChange(episode.status, input.next_status)) {
       return { ok: false, error: "illegal_transition" } as const;
+    }
+    if (episode.script_pending_task_id) return { ok: false, error: "illegal_transition" } as const;
+    if (reviewAdvanceError(episode)) return { ok: false, error: "illegal_transition" } as const;
+    if (episode.status === "script_review") {
+      const revision = getDb().query<{ doc: string }, [string, number]>(
+        "select doc from destination_versions where destination_id = ? and version = ?",
+      ).get(episode.destination_id, episode.destination_version);
+      if (!revision) return { ok: false, error: "not_found" } as const;
+      if (checkScriptRules(episode.shots, JSON.parse(revision.doc) as Destination).length > 0) {
+        return { ok: false, error: "script_rule_violation" } as const;
+      }
     }
     const chargedTasks: { id: string; stage: "keyframe" | "video" | "compose";
       shot_no?: number; units: number; held: boolean }[] = [];
@@ -93,7 +114,7 @@ export function submitShotRegeneration(input: {
     if (!row) return { ok: false, error: "not_found" } as const;
     if (row.row_version !== input.row_version) return { ok: false,
       error: "version_conflict", current_row_version: row.row_version } as const;
-    const episode = JSON.parse(row.doc) as Episode;
+    const episode = decodeEpisode(row.doc);
     const shot = episode.shots.find((item) => item.no === input.shot_no);
     if (!shot) return { ok: false, error: "not_found" } as const;
     const nextStatus = input.stage === "keyframe" ? "kf_review" : "clip_review";
@@ -129,53 +150,62 @@ export function submitShotRegeneration(input: {
 }
 
 /** Episode write, task completion and credit settlement share one commit. */
-export function completeTaskWithEpisode(task: Task, rowVersion: number, updated: Episode):
+export function completeTaskWithEpisode(task: Task, rowVersion: number, updated: Episode, started?: Episode):
   { ok: true; row_version: number } | { ok: false; error: "not_found" | "version_conflict" | "illegal_transition" | "lease_lost" } {
   return getDb().transaction(() => {
-    const taskRow = getDb().query<{ status: string; lease_token: string | null }, [string]>(
-      "select status, lease_token from tasks where task_id = ?",
+    const taskRow = getDb().query<LeaseRow, [string]>(
+      "select status, lease_token, lease_until from tasks where task_id = ?",
     ).get(task.task_id);
-    if (!taskRow || taskRow.status !== "processing" || (task.lease_token && taskRow.lease_token !== task.lease_token)) {
+    if (!ownsLiveLease(taskRow, task)) {
       return { ok: false, error: "lease_lost" } as const;
     }
     const row = getDb().query<{ doc: string; row_version: number }, [string]>(
       "select doc, row_version from episodes where episode_id = ?",
     ).get(task.episode_id);
     if (!row) return { ok: false, error: "not_found" } as const;
-    if (row.row_version !== rowVersion) return { ok: false, error: "version_conflict" } as const;
-    const before = JSON.parse(row.doc) as Episode;
-    if (before.status !== updated.status && !isLegalEpisodeStatusChange(before.status, updated.status)) {
+    const before = decodeEpisode(row.doc);
+    const isShotTask = task.stage === "keyframe" || task.stage === "video";
+    const merged = isShotTask && started && task.shot_no !== undefined
+      ? mergeGeneratedShotResult(task.stage, task.shot_no, started, before, updated) : null;
+    if (isShotTask && started && !merged) {
+      return { ok: false, error: "illegal_transition" } as const;
+    }
+    if (row.row_version !== rowVersion && !merged) {
+      return { ok: false, error: "version_conflict" } as const;
+    }
+    const committed = merged ?? updated;
+    if (before.status !== committed.status && !isLegalEpisodeStatusChange(before.status, committed.status)) {
       return { ok: false, error: "illegal_transition" } as const;
     }
     const action = getCreditAction(task.task_id);
     const charged = action?.status === "reserved" ? action.price : 0;
-    const withCredits = { ...updated, credits_used: (before.credits_used ?? 0) + charged };
+    const withCredits = { ...committed, credits_used: (before.credits_used ?? 0) + charged };
     getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
       updated_at = datetime('now') where episode_id = ?`).run(JSON.stringify(withCredits), task.episode_id);
     // Uncharged tasks have no credit action; that is expected for brief/assets.
     finalizeCredits(task.task_id, "settled");
     getDb().query(`update tasks set status = 'done', lease_token = null, lease_until = null,
       updated_at = datetime('now') where task_id = ?`).run(task.task_id);
-    if (task.stage === "brief" && updated.status === "scripting") {
+    if (task.stage === "brief" && committed.status === "scripting") {
       getDb().query(`insert or ignore into tasks (task_id, episode_id, stage, attempt, status)
         values (?, ?, 'script', 1, 'pending')`)
         .run(`tk_script_${task.episode_id}`, task.episode_id);
     }
-    if (task.stage === "assets" && (updated.status === "keyframing" || updated.status === "clipping")) {
+    if (task.stage === "assets" && (committed.status === "keyframing" || committed.status === "clipping")) {
       getDb().query(`update tasks set status = 'pending', updated_at = datetime('now')
         where episode_id = ? and stage = ? and status = 'held'`)
-        .run(task.episode_id, updated.status === "clipping" ? "video" : "keyframe");
+        .run(task.episode_id, committed.status === "clipping" ? "video" : "keyframe");
     }
-    return { ok: true, row_version: rowVersion + 1 } as const;
+    return { ok: true, row_version: row.row_version + 1 } as const;
   }).immediate();
 }
 
 export function completeTaskWithoutEpisode(task: Task): void {
   getDb().transaction(() => {
-    const row = getDb().query<{ status: string; lease_token: string | null }, [string]>(
-      "select status, lease_token from tasks where task_id = ?",
+    const row = getDb().query<LeaseRow, [string]>(
+      "select status, lease_token, lease_until from tasks where task_id = ?",
     ).get(task.task_id);
-    if (!row || row.status !== "processing" || (task.lease_token && row.lease_token !== task.lease_token)) return;
+    if (!ownsLiveLease(row, task)) return;
     // A stale/duplicate task made no new output, so its reservation is refunded.
     finalizeCredits(task.task_id, "released");
     getDb().query(`update tasks set status = 'done', lease_token = null, lease_until = null,
@@ -183,17 +213,49 @@ export function completeTaskWithoutEpisode(task: Task): void {
   }).immediate();
 }
 
-export function failTaskWithCredits(task: Task, requeue: boolean): boolean {
+/** Retry a DB write race without charging it as a model invocation failure. */
+export function requeueTaskAfterCommitConflict(task: Task): boolean {
+  const result = getDb().query(`update tasks set status = 'pending',
+    lease_token = null, lease_until = null, updated_at = datetime('now')
+    where task_id = ? and status = 'processing' and lease_token = ?
+      and lease_until > unixepoch('now')`)
+    .run(task.task_id, task.lease_token ?? "");
+  return result.changes === 1;
+}
+
+export function failTaskWithCredits(task: Task, requeue: boolean, failureReason?: string): boolean {
   return getDb().transaction(() => {
-    const row = getDb().query<{ status: string; lease_token: string | null }, [string]>(
-      "select status, lease_token from tasks where task_id = ?",
+    const row = getDb().query<LeaseRow, [string]>(
+      "select status, lease_token, lease_until from tasks where task_id = ?",
     ).get(task.task_id);
-    if (!row || row.status !== "processing" || (task.lease_token && row.lease_token !== task.lease_token)) return false;
+    if (!ownsLiveLease(row, task)) return false;
     if (requeue) {
       getDb().query(`update tasks set status = 'pending', attempt = attempt + 1,
         lease_token = null, lease_until = null, updated_at = datetime('now') where task_id = ?`)
         .run(task.task_id);
     } else {
+      if (failureReason) {
+        const episodeRow = getDb().query<{ doc: string }, [string]>(
+          "select doc from episodes where episode_id = ?",
+        ).get(task.episode_id);
+        if (episodeRow) {
+          const episode = decodeEpisode(episodeRow.doc);
+          const target = task.stage === "keyframe" ? "generating_kf"
+            : task.stage === "video" ? "generating_clip" : null;
+          const shot = episode.shots.find((item) => item.no === task.shot_no);
+          let updated: Episode | null = null;
+          if (target && shot?.status === target) {
+            updated = { ...episode, failure_reason: failureReason,
+              shots: episode.shots.map((item) => item.no === task.shot_no
+                ? { ...item, status: "failed" as const } : item) };
+          } else if (!target && ["brief", "script", "assets", "compose"].includes(task.stage)) {
+            updated = { ...episode, status: "failed", failure_reason: failureReason };
+          }
+          if (updated) getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
+            updated_at = datetime('now') where episode_id = ?`)
+            .run(JSON.stringify(updated), task.episode_id);
+        }
+      }
       finalizeCredits(task.task_id, "released");
       if (task.stage === "brief") finalizeCredits(`tk_script_${task.episode_id}`, "released");
       if (task.stage === "assets") {

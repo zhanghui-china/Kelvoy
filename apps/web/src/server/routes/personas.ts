@@ -1,8 +1,8 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { validateCreatePersonaRequest, validatePersonaPatchRequest } from "@kelvoy/engine";
 import type { Persona } from "@kelvoy/engine";
-import { getPersona, insertPersona, listPersonas, updatePersona } from "@kelvoy/store";
+import { appendPersonaRefs, getPersona, insertPersona, listPersonas, updatePersona } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 
@@ -106,15 +106,23 @@ personas.post("/:id/refs", async (c) => {
   await mkdir(dir, { recursive: true });
 
   const newRefs: string[] = [];
-  for (const file of files) {
-    const relPath = join("persona", personaId, `${crypto.randomUUID()}${EXT_BY_MIME[file.type]}`);
-    await Bun.write(join(projectsRoot(), relPath), file);
-    newRefs.push(relPath);
+  try {
+    for (const file of files) {
+      const relPath = join("persona", personaId, `${crypto.randomUUID()}${EXT_BY_MIME[file.type]}`);
+      newRefs.push(relPath);
+      await Bun.write(join(projectsRoot(), relPath), file);
+    }
+    const updated = appendPersonaRefs({ persona_id: personaId, owner_id: c.get("ownerId"),
+      refs: newRefs, min: MIN_REFS, max: MAX_REFS });
+    if (!updated.ok) {
+      await Promise.all(newRefs.map((ref) => rm(join(projectsRoot(), ref), { force: true })));
+      return c.json({ ok: false, error: updated.error }, updated.error === "not_found" ? 404 : 400);
+    }
+    return c.json({ ok: true, persona: updated.persona }, 201);
+  } catch (error) {
+    await Promise.allSettled(newRefs.map((ref) => rm(join(projectsRoot(), ref), { force: true })));
+    throw error;
   }
-
-  const updated = await updatePersona(personaId, { refs: [...current.refs, ...newRefs] });
-  if (!updated.ok) return c.json({ ok: false, error: updated.error }, 404);
-  return c.json({ ok: true, persona: updated.persona }, 201);
 });
 
 export default personas;

@@ -23,13 +23,18 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
   db.exec("pragma journal_mode = WAL;");
   db.exec(SCHEMA);
   applyColumnMigrations(db);
-  migratePersonaOwnershipAndVersions(db);
+  db.exec("create index if not exists idx_tasks_status_created_lease on tasks(status, created_at, lease_until)");
+  migrateLegacyCatalogVersions(db);
   return db;
 }
 
-/** Legacy rows had NOT NULL owners and no historical persona documents. */
-function migratePersonaOwnershipAndVersions(database: Database): void {
+/** Capture legacy catalog snapshots once; missing historical revisions remain marked approximations. */
+function migrateLegacyCatalogVersions(database: Database): void {
   database.transaction(() => {
+    const migrated = database.query<{ migration_id: string }, [string]>(
+      "select migration_id from schema_migrations where migration_id = ?",
+    ).get("legacy_catalog_versions_v1");
+    if (migrated) return;
     const owner = database.query<{ name: string; notnull: number }, []>("pragma table_info(personas)").all()
       .find((column) => column.name === "owner_id");
     if (owner?.notnull) {
@@ -59,6 +64,25 @@ function migratePersonaOwnershipAndVersions(database: Database): void {
         (persona_id, version, doc, compatibility_approximation) values (?, ?, ?, 1)`)
         .run(row.persona_id, row.persona_version, JSON.stringify(approximation));
     }
+    database.exec(`insert or ignore into destination_versions (destination_id, version, doc)
+      select destination_id, version, doc from destinations`);
+    const destinations = database.query<{ destination_id: string; destination_version: number }, []>(
+      `select distinct json_extract(doc, '$.destination_id') as destination_id,
+        json_extract(doc, '$.destination_version') as destination_version from episodes
+       where json_valid(doc) and destination_id is not null and destination_version is not null`,
+    ).all();
+    for (const row of destinations) {
+      const current = database.query<{ doc: string }, [string]>(
+        "select doc from destinations where destination_id = ?",
+      ).get(row.destination_id);
+      if (!current) continue;
+      const approximation = { ...JSON.parse(current.doc), version: row.destination_version };
+      database.query(`insert or ignore into destination_versions
+        (destination_id, version, doc, compatibility_approximation) values (?, ?, ?, 1)`)
+        .run(row.destination_id, row.destination_version, JSON.stringify(approximation));
+    }
+    database.query("insert into schema_migrations (migration_id) values (?)")
+      .run("legacy_catalog_versions_v1");
   }).immediate();
 }
 

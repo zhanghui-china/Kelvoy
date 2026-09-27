@@ -117,7 +117,11 @@ async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths): P
   const manifestPath = `${paths.output}.overlay.json`;
   await writeFile(manifestPath, JSON.stringify({ width: plan.res.w, height: plan.res.h, events: overlayImages }));
   const script = resolve(import.meta.dir, "../../../../scripts/render-text-overlays.py");
-  const { code, stderr } = await runCommand(["python3", script, manifestPath]);
+  const python = resolve(import.meta.dir, "../../../../services/inference/.venv/bin/python");
+  if (!(await Bun.file(python).exists())) {
+    throw new Error("合成文字图层需要受管理的 Python 环境；先运行 make install");
+  }
+  const { code, stderr } = await runCommand([python, script, manifestPath]);
   if (code !== 0) {
     throw new Error(`无法绘制成片文字图层：${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
   }

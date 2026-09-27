@@ -166,9 +166,16 @@ export function validateCreateTemplateRequest(input: unknown): ValidationResult<
   }
   const t = input as Partial<Template>;
   validateTemplateFields(t, errors);
+  const allowed = new Set(["name", "skeleton", "lut", "intro", "outro", "title_style"]);
+  for (const key of Object.keys(input)) {
+    if (!allowed.has(key)) errors.push(`${key}: 不允许的字段`);
+  }
 
   if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, value: t as CreateTemplateRequest };
+  return { valid: true, value: {
+    name: t.name!, skeleton: t.skeleton!, lut: t.lut!,
+    intro: t.intro!, outro: t.outro!, title_style: t.title_style!,
+  } };
 }
 
 /**

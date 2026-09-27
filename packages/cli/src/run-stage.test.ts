@@ -75,6 +75,15 @@ test("stage failure from a non-generating status (draft) reports the error witho
   expect(after.ok && after.episode.status).toBe("draft");
 });
 
+test("an invalid or out-of-phase CLI stage does not change a generating episode", async () => {
+  await insertEpisode(fixtureEpisode("e_phase", "scripting"));
+  expect((await runEpisodeStage("e_phase", "brief")).ok).toBe(false);
+  expect((await runEpisodeStage("e_phase", "typo" as never)).ok).toBe(false);
+  const loaded = await getEpisode("e_phase");
+  expect(loaded.ok && loaded.episode.status).toBe("scripting");
+  expect(loaded.ok && loaded.row_version).toBe(1);
+});
+
 test("stage failure from a generating status marks the episode failed", async () => {
   await insertEpisode(fixtureEpisode("e_scripting", "scripting"));
   const result = await runEpisodeStage("e_scripting", "script");

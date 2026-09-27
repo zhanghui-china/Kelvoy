@@ -6,6 +6,7 @@ import {
   isLegalShotStatusChange,
 } from "@kelvoy/engine";
 import { getDb } from "./db";
+import { decodeEpisode } from "./episode-codec";
 
 /**
  * Episode storage (ADR-0004): the one place that owns SQLite access for
@@ -18,19 +19,6 @@ import { getDb } from "./db";
 interface EpisodeRow {
   doc: string;
   row_version: number;
-}
-
-/** Old JSON rows predate these fields. Resolve them at the storage boundary. */
-function decodeEpisode(doc: string): Episode {
-  const episode = JSON.parse(doc) as Episode;
-  return {
-    ...episode,
-    name: episode.name ?? (episode.render.title || episode.destination_id),
-    candidate_count: episode.candidate_count ?? 2,
-    cut_policy: episode.cut_policy ?? "beat_aligned",
-    brief: { ...episode.brief, aspect: episode.brief.aspect ?? "9:16",
-      requirements: episode.brief.requirements ?? "" },
-  };
 }
 
 export type GetEpisodeResult =
@@ -70,6 +58,43 @@ export async function listEpisodes(ownerId: string): Promise<Episode[]> {
     )
     .all(ownerId);
   return rows.map((row) => decodeEpisode(row.doc));
+}
+
+/** Small list projection: no prompts, candidate paths, or model provenance leave the DB. */
+export async function listEpisodeOverviews(ownerId: string): Promise<{
+  episode_id: string; name: string; status: Episode["status"]; persona_id: string;
+  destination_id: string; created_at: string; credits_used: number;
+  render: { title: string }; shot_count: number; approved_shot_count: number;
+  any_shot_started: boolean; all_keyframes_selected: boolean; all_shots_approved: boolean;
+}[]> {
+  const rows = getDb().query<{
+    episode_id: string; name: string | null; status: Episode["status"];
+    persona_id: string; destination_id: string; created_at: string;
+    credits_used: number | null; title: string | null; shots: string;
+  }, [string]>(`select episode_id,
+    json_extract(doc, '$.name') as name,
+    json_extract(doc, '$.status') as status,
+    json_extract(doc, '$.persona_id') as persona_id,
+    json_extract(doc, '$.destination_id') as destination_id,
+    json_extract(doc, '$.created_at') as created_at,
+    json_extract(doc, '$.credits_used') as credits_used,
+    json_extract(doc, '$.render.title') as title,
+    json_extract(doc, '$.shots') as shots
+    from episodes where owner_id = ? order by episode_id`).all(ownerId);
+  return rows.map((row) => {
+    const shots = JSON.parse(row.shots ?? "[]") as Episode["shots"];
+    return {
+      episode_id: row.episode_id, name: row.name ?? row.title ?? row.destination_id,
+      status: row.status, persona_id: row.persona_id, destination_id: row.destination_id,
+      created_at: row.created_at, credits_used: row.credits_used ?? 0,
+      render: { title: row.title ?? "" },
+      shot_count: shots.length,
+      approved_shot_count: shots.filter((shot) => shot.status === "approved").length,
+      any_shot_started: shots.some((shot) => shot.status !== "draft"),
+      all_keyframes_selected: shots.length > 0 && shots.every((shot) => !!shot.kf_selected),
+      all_shots_approved: shots.length > 0 && shots.every((shot) => shot.status === "approved"),
+    };
+  });
 }
 
 /**
