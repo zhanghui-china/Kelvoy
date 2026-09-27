@@ -11,6 +11,9 @@
   text-align: center;
 }
 
+.k-share-page h1 { max-width: 100%; overflow-wrap: anywhere; }
+.k-share-state { min-height: 60vh; justify-content: center; }
+
 .k-share-video {
   height: auto;
   max-width: 360px;
