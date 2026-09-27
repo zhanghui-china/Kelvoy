@@ -1,9 +1,8 @@
 import type { Destination } from "@kelvoy/engine";
+import { Link } from "react-router-dom";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import { AssetImage } from "../AssetImage";
 
-// 全页唯一的动态数据（#45 验收项）：真实调 GET /api/destinations，数量和每
-// 条的地标数 / 参考图张数都是算出来的，不编 §3 首批五个景区的名字。
 interface Props {
   loading: boolean;
   error: string | null;
@@ -12,43 +11,40 @@ interface Props {
 
 export default function LandingDestinations({ loading, error, destinations }: Props) {
   return (
-    <section id="destinations" className="k-lp-section">
-      <div className="k-lp-section-head">
-        <div className="k-eyebrow">目的地库</div>
-        <h2>
-          已入库 <span className="k-mono">{loading || error ? "—" : destinations.length}</span> 个目的地
-        </h2>
+    <section id="destinations" className="k-lp-section k-lp-destinations">
+      <div className="k-lp-section-head k-lp-section-head-center">
+        <span className="k-lp-section-tag">真实目的地库</span>
+        <h2>下一站，去哪里？</h2>
+        <p>{loading || error ? "正在读取目的地…" : `目前有 ${destinations.length} 个目的地可供选择，每一处都关联实景参考。`}</p>
       </div>
       {loading ? (
-        <p className="k-empty">加载中…</p>
+        <p className="k-lp-state" role="status">目的地加载中…</p>
       ) : error ? (
-        <p className="k-error">加载失败：{error}</p>
+        <p className="k-lp-state k-lp-state-error" role="alert">目的地加载失败：{error}</p>
       ) : destinations.length === 0 ? (
-        <p className="k-empty">目的地库建设中，敬请期待。</p>
+        <p className="k-lp-state">目的地库建设中，请稍后再来看看。</p>
       ) : (
         <div className="k-lp-dest-grid">
           {destinations.map((d) => {
             const refCount = d.landmarks.reduce((sum, l) => sum + l.refs.length, 0);
+            const firstRef = d.landmarks[0]?.refs[0];
             return (
-              <div className="k-card k-lp-dest-card" key={d.destination_id}>
-                <div className="k-lp-dest-image">{d.landmarks[0]?.refs[0] ? <AssetImage src={`/api/destinations/${encodeURIComponent(d.destination_id)}/assets/${d.landmarks[0].refs[0]}`} alt={`${d.name}实景`} /> : <div className="k-media-missing">暂无实景参考图</div>}</div>
-                <div className="k-card-title">
-                  {d.city} · {d.name}
+              <article className="k-lp-dest-card" key={d.destination_id}>
+                <div className="k-lp-dest-image">
+                  {firstRef ? <AssetImage src={`/api/destinations/${encodeURIComponent(d.destination_id)}/assets/${firstRef}`} alt={`${d.name}实景参考图`} /> : <div className="k-lp-dest-placeholder">暂无实景参考图</div>}
+                  <span className="k-lp-dest-type">{DESTINATION_TYPE_LABELS[d.type] ?? d.type}</span>
                 </div>
-                <span className="k-pill">{DESTINATION_TYPE_LABELS[d.type] ?? d.type}</span>
-                <div className="k-lp-dest-stats">
-                  <span>
-                    <span className="k-mono">{d.landmarks.length}</span> 个地标
-                  </span>
-                  <span>
-                    <span className="k-mono">{refCount}</span> 张参考图
-                  </span>
+                <div className="k-lp-dest-info">
+                  <h3>{d.name}</h3>
+                  <p>{d.city}</p>
+                  <div className="k-lp-dest-stats"><span>{d.landmarks.length} 个地标</span><span>{refCount} 张参考图</span></div>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
       )}
+      <div className="k-lp-dest-action"><Link to="/login" className="k-lp-button-secondary">登录后选择目的地 <span aria-hidden="true">→</span></Link></div>
     </section>
   );
 }

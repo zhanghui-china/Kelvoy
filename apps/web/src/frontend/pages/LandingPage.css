@@ -1,309 +1,150 @@
-/* 官网单页 + 锚点导航（#45 M2-17）。独立文件而不是加进 index.css——那边
-   M2-12 刚定稿、五个并行 issue 都在改，这次布局跟旧 .k-landing-nav 等
-   class 差异太大，换一套 .k-lp- 前缀避免撞名。复用 index.css 已有的跨页
-   工具类：.k-eyebrow / .k-card / .k-card-title / .k-pill(-accent) / .k-btn(-primary)
-   / .k-mono / .k-empty / .k-error，颜色变量全部走 :root 里已有的 token，
-   这里不重定义任何一个。 */
-
 .k-lp-page {
-  --k-lp-nav-h: 64px;
+  --lp-blue: #2563eb;
+  --lp-ink: #111827;
+  --lp-muted: #64748b;
+  --lp-border: #e5eaf2;
+  color: var(--lp-ink);
+  background: #fff;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  overflow-x: clip;
 }
-
-/* 导航：sticky 而不是 fixed——page 顶部没有其它元素，sticky 效果等价于
-   固定，还省了给 hero 手动加 padding-top 抵消脱离文档流的高度。 */
-.k-lp-nav {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  height: var(--k-lp-nav-h);
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0 1.5rem;
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
+.k-lp-page *, .k-lp-page *::before, .k-lp-page *::after { box-sizing: border-box; }
+.k-lp-page h1, .k-lp-page h2, .k-lp-page h3, .k-lp-page p { margin-top: 0; }
+.k-lp-page a { text-decoration: none; }
+.k-lp-page a:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+.k-lp-nav { position: sticky; top: 0; z-index: 20; height: 72px; display: flex; align-items: center; gap: 30px; padding: 0 max(24px, calc((100vw - 1200px)/2)); border-bottom: 1px solid #e9eef5; background: #ffffffee; backdrop-filter: blur(16px); }
+.k-lp-nav-brand, .k-lp-footer-brand { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; font-size: 18px; font-weight: 750; color: var(--lp-ink); }
+.k-lp-logo-mark { width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: 10px; background: var(--lp-blue); color: white; font-size: 18px; box-shadow: 0 6px 14px #2563eb30; }
+.k-lp-brand-en { margin-left: 5px; font-size: 15px; font-weight: 650; }
+.k-lp-nav-links { margin-left: auto; display: flex; align-items: center; gap: 30px; }
+.k-lp-nav-links a { color: #46546a; font-size: 14px; font-weight: 550; white-space: nowrap; }
+.k-lp-nav-links a:hover, .k-lp-footer nav a:hover { color: var(--lp-blue); }
+.k-lp-button { min-height: 42px; padding: 0 19px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; color: #fff; background: var(--lp-blue); font-size: 14px; font-weight: 650; box-shadow: 0 8px 18px #2563eb29; transition: transform .2s, background .2s; white-space: nowrap; }
+.k-lp-button:hover { transform: translateY(-2px); background: #1d4ed8; color: #fff; }
+.k-lp-button-large { min-height: 52px; padding: 0 25px; font-size: 15px; }
+.k-lp-button-secondary { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; color: #334155; font-size: 14px; font-weight: 650; }
+.k-lp-button-secondary:hover { color: var(--lp-blue); }
+#top, .k-lp-section, .k-lp-feature-band { scroll-margin-top: 84px; }
+.k-lp-hero { position: relative; min-height: 585px; overflow: hidden; background: linear-gradient(110deg, #f9fbff, #f5f9ff); }
+.k-lp-hero-image { position: absolute; inset: 0 0 0 37%; background: url('/images/landing-v9-hero.png') center center / cover no-repeat; }
+.k-lp-hero-image::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #f9fbff 0%, #f9fbfff2 13%, #f9fbff75 38%, transparent 70%); }
+.k-lp-hero-inner { position: relative; max-width: 1200px; min-height: 585px; margin: auto; padding: 66px 24px 30px; display: flex; align-items: center; }
+.k-lp-hero-content { max-width: 560px; }
+.k-lp-kicker, .k-lp-section-tag { display: inline-flex; align-items: center; gap: 9px; color: var(--lp-blue); font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+.k-lp-kicker { padding: 9px 15px; border: 1px solid #d9e8ff; border-radius: 99px; background: #eaf3ff; }
+.k-lp-kicker-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lp-blue); }
+.k-lp-hero h1 { margin: 26px 0 20px; font-size: clamp(39px, 4.25vw, 62px); line-height: 1.23; letter-spacing: -.05em; color: #101c36; font-weight: 800; }
+.k-lp-hero h1 span { color: var(--lp-blue); }
+.k-lp-hero p { max-width: 470px; margin-bottom: 24px; color: #4b5b71; font-size: 16px; line-height: 1.9; }
+.k-lp-hero-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.k-lp-hero-stats { display: flex; gap: 0; margin-top: 50px; }
+.k-lp-hero-stats div { min-width: 125px; padding: 0 22px; border-left: 1px solid #d5deeb; display: flex; flex-direction: column; gap: 3px; }
+.k-lp-hero-stats div:first-child { padding-left: 0; border-left: 0; }
+.k-lp-hero-stats strong { color: #172846; font-size: 26px; font-weight: 800; letter-spacing: -.05em; }
+.k-lp-hero-stats span { color: #758399; font-size: 12px; }
+.k-lp-section { max-width: 1200px; padding: 100px 24px; margin: auto; }
+.k-lp-section-head { margin-bottom: 42px; }
+.k-lp-section-head-center { text-align: center; }
+.k-lp-section-head h2 { margin: 13px 0 12px; color: #14213b; font-size: clamp(28px, 3vw, 38px); line-height: 1.3; letter-spacing: -.035em; font-weight: 800; }
+.k-lp-section-head p { margin: 0; color: var(--lp-muted); font-size: 15px; line-height: 1.8; }
+.k-lp-user-grid, .k-lp-pillar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+.k-lp-user-card { position: relative; min-height: 270px; padding: 30px; border: 1px solid var(--lp-border); border-radius: 18px; background: #fff; box-shadow: 0 12px 40px #2e4b7410; }
+.k-lp-card-number { position: absolute; right: 27px; top: 25px; color: #e5ebf5; font-size: 37px; font-weight: 800; }
+.k-lp-user-icon, .k-lp-pillar-icon { width: 50px; height: 50px; display: inline-grid; place-items: center; border-radius: 14px; background: #eaf2ff; color: var(--lp-blue); font-size: 25px; }
+.k-lp-user-card h3, .k-lp-pillar h3 { margin: 21px 0 9px; font-size: 19px; font-weight: 750; }
+.k-lp-user-card p, .k-lp-pillar p { color: var(--lp-muted); font-size: 14px; line-height: 1.75; }
+.k-lp-user-result { margin-top: 18px; padding-top: 16px; border-top: 1px solid #edf1f7; color: #34506d; font-size: 13px; line-height: 1.65; }
+.k-lp-feature-band { background: linear-gradient(135deg, #edf5ff 0%, #f7faff 57%, #eef5ff 100%); }
+.k-lp-feature-band .k-lp-section { padding-top: 96px; padding-bottom: 96px; }
+.k-lp-pillar { position: relative; min-height: 290px; padding: 32px 29px; overflow: hidden; border-top: 4px solid var(--lp-blue); border-radius: 16px; background: #fff; box-shadow: 0 16px 40px #28558c12; }
+.k-lp-pillar-no { position: absolute; right: 23px; top: 17px; color: #edf3fb; font-size: 64px; font-weight: 800; line-height: 1; }
+.k-lp-pillar-icon { position: relative; }
+.k-lp-pillar h3 { position: relative; }
+.k-lp-pillar-example { padding-top: 15px; color: var(--lp-blue); font-size: 13px; font-weight: 650; }
+.k-lp-how { padding-top: 105px; padding-bottom: 105px; }
+.k-lp-steps-grid { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+.k-lp-steps-grid::before { content: ''; position: absolute; left: 11%; right: 11%; top: 31px; border-top: 2px dashed #cfddf4; }
+.k-lp-step { position: relative; text-align: center; }
+.k-lp-step-no { width: 62px; height: 62px; display: grid; place-items: center; margin: 0 auto 23px; border: 6px solid #eaf2ff; border-radius: 50%; background: var(--lp-blue); color: #fff; box-shadow: 0 0 0 5px #fff; font-size: 17px; font-weight: 800; }
+.k-lp-step h3 { margin-bottom: 10px; font-size: 17px; font-weight: 750; }
+.k-lp-step p { max-width: 210px; margin: 0 auto; color: var(--lp-muted); font-size: 13px; line-height: 1.75; }
+.k-lp-how-note { margin: 32px 0 0; color: #62748c; font-size: 13px; text-align: center; }
+.k-lp-destinations { padding-top: 80px; padding-bottom: 100px; }
+.k-lp-dest-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.k-lp-dest-card { overflow: hidden; border: 1px solid var(--lp-border); border-radius: 14px; background: #fff; box-shadow: 0 8px 28px #2b47700d; }
+.k-lp-dest-image { position: relative; height: 185px; background: #eaf0f7; overflow: hidden; }
+.k-lp-dest-image .k-figure, .k-lp-dest-image .k-media, .k-lp-dest-image img, .k-lp-dest-placeholder { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
+.k-lp-dest-placeholder { display: grid; place-items: center; color: #64748b; font-size: 13px; }
+.k-lp-dest-type { position: absolute; left: 13px; top: 13px; padding: 5px 9px; border-radius: 5px; background: #fffffff0; color: #24537d; font-size: 11px; font-weight: 700; }
+.k-lp-dest-info { padding: 15px 16px 16px; }
+.k-lp-dest-info h3 { margin-bottom: 2px; font-size: 17px; }
+.k-lp-dest-info p { margin-bottom: 12px; color: var(--lp-muted); font-size: 13px; }
+.k-lp-dest-stats { display: flex; gap: 14px; color: #6b7c93; font-size: 11px; }
+.k-lp-dest-action { margin-top: 28px; text-align: center; }
+.k-lp-state { padding: 55px 20px; border-radius: 12px; background: #f7faff; color: #5d7088; text-align: center; }
+.k-lp-state-error { color: #a33939; }
+.k-lp-faq { padding-top: 86px; padding-bottom: 106px; }
+.k-lp-faq-list { max-width: 870px; margin: auto; display: grid; gap: 12px; }
+.k-lp-faq-item { display: flex; gap: 17px; align-items: flex-start; padding: 23px 25px; border: 1px solid var(--lp-border); border-radius: 12px; background: white; }
+.k-lp-faq-q { width: 28px; height: 28px; display: grid; place-items: center; flex: none; border-radius: 7px; background: #eaf2ff; color: var(--lp-blue); font-size: 14px; font-weight: 800; }
+.k-lp-faq-item h3 { margin: 2px 0 9px; font-size: 15px; font-weight: 750; }
+.k-lp-faq-item p { margin-bottom: 0; color: var(--lp-muted); font-size: 13px; line-height: 1.7; }
+.k-lp-bottom-cta { position: relative; padding: 75px 24px; overflow: hidden; background: linear-gradient(120deg, #1d4ed8, #123a98); color: white; text-align: center; }
+.k-lp-bottom-cta > div { position: relative; }
+.k-lp-bottom-glow { position: absolute; width: 460px; height: 460px; left: calc(50% - 230px); top: -180px; border-radius: 50%; background: #ffffff14; filter: blur(20px); }
+.k-lp-bottom-cta h2 { position: relative; margin-bottom: 12px; font-size: clamp(28px, 3vw, 38px); }
+.k-lp-bottom-cta p { position: relative; margin-bottom: 25px; color: #dbe8ff; font-size: 15px; }
+.k-lp-button-light { position: relative; background: white; color: #1d4ed8; box-shadow: 0 12px 22px #0d2c8652; }
+.k-lp-button-light:hover { background: #f1f6ff; color: #1d4ed8; }
+.k-lp-footer { padding: 44px 24px 20px; background: #0f1d33; color: #9dacc0; }
+.k-lp-footer-inner, .k-lp-footer-bottom { max-width: 1200px; margin: auto; }
+.k-lp-footer-inner { display: flex; justify-content: space-between; gap: 40px; }
+.k-lp-footer-brand { color: #fff; font-size: 17px; }
+.k-lp-footer-inner p { margin: 14px 0 30px; font-size: 13px; }
+.k-lp-footer nav { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 25px; }
+.k-lp-footer nav a { color: #c8d4e2; font-size: 13px; }
+.k-lp-footer-bottom { padding-top: 20px; border-top: 1px solid #ffffff20; font-size: 12px; }
+@media (max-width: 1050px) {
+  .k-lp-nav { gap: 18px; }
+  .k-lp-nav-links { gap: 16px; }
+  .k-lp-hero-image { left: 43%; }
+  .k-lp-hero-content { max-width: 510px; }
+  .k-lp-dest-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-
-.k-lp-nav-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--color-ink);
-  text-decoration: none;
-  flex-shrink: 0;
+@media (max-width: 760px) {
+  .k-lp-nav { height: 62px; padding: 0 18px; }
+  .k-lp-nav-links { display: none; }
+  .k-lp-nav-cta { margin-left: auto; min-height: 36px; padding: 0 11px; font-size: 12px; }
+  .k-lp-nav-brand { font-size: 16px; }
+  .k-lp-brand-en { font-size: 13px; }
+  #top, .k-lp-section, .k-lp-feature-band { scroll-margin-top: 74px; }
+  .k-lp-hero, .k-lp-hero-inner { min-height: 590px; }
+  .k-lp-hero-image { inset: 0; background-position: 64% bottom; opacity: .32; }
+  .k-lp-hero-image::after { background: linear-gradient(90deg, #f9fbffcf 0%, #f9fbff82 100%); }
+  .k-lp-hero-inner { padding: 56px 22px 38px; align-items: flex-start; }
+  .k-lp-hero-content { max-width: 590px; }
+  .k-lp-hero h1 { font-size: clamp(36px, 8vw, 51px); }
+  .k-lp-hero p { max-width: 490px; font-size: 15px; }
+  .k-lp-hero-stats { margin-top: 42px; }
+  .k-lp-hero-stats div { min-width: 102px; padding: 0 12px; }
+  .k-lp-hero-stats strong { font-size: 22px; }
+  .k-lp-section { padding: 75px 20px; }
+  .k-lp-user-grid, .k-lp-pillar-grid { grid-template-columns: 1fr; gap: 15px; }
+  .k-lp-user-card, .k-lp-pillar { min-height: auto; }
+  .k-lp-steps-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 35px; }
+  .k-lp-steps-grid::before { display: none; }
+  .k-lp-dest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-/* 中间锚点列表横向滚动——手机宽度（~400px）不折叠成汉堡菜单，直接滚，
-   满足验收项"手机宽度导航折叠或横向滚动，不溢出"。 */
-.k-lp-nav-links {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  gap: 1.5rem;
-  overflow-x: auto;
-  scrollbar-width: none;
+@media (max-width: 480px) {
+  .k-lp-hero-actions { align-items: flex-start; flex-direction: column; gap: 13px; }
+  .k-lp-hero-stats div { min-width: 0; flex: 1; padding: 0 7px; }
+  .k-lp-hero-stats strong { font-size: 20px; }
+  .k-lp-hero-stats span { font-size: 10px; }
+  .k-lp-section-head h2 { font-size: 27px; }
+  .k-lp-steps-grid { grid-template-columns: 1fr; }
+  .k-lp-dest-grid { grid-template-columns: 1fr; }
+  .k-lp-dest-image { height: 210px; }
+  .k-lp-footer-inner { flex-direction: column; gap: 10px; }
+  .k-lp-footer nav { gap: 15px; }
 }
-
-.k-lp-nav-links::-webkit-scrollbar {
-  display: none;
-}
-
-.k-lp-nav-links a {
-  flex-shrink: 0;
-  font-size: 0.9rem;
-  color: var(--color-ink-soft);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.k-lp-nav-links a:hover {
-  color: var(--color-accent);
-}
-
-.k-lp-nav-cta {
-  flex-shrink: 0;
-  height: 36px;
-  padding: 0 1.1rem;
-}
-
-/* 每个 section 的滚动定位都要扣掉导航高度，不然平滑滚动后标题被导航挡住。 */
-#top,
-.k-lp-section {
-  scroll-margin-top: calc(var(--k-lp-nav-h) + 12px);
-}
-
-.k-lp-hero {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 4rem 1.5rem 1rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  text-align: center;
-  align-items: center;
-}
-
-.k-lp-hero h1 {
-  font-size: 2.5rem;
-  line-height: 1.25;
-}
-
-.k-lp-hero p {
-  font-size: 1.02rem;
-  line-height: 1.85;
-  color: var(--color-ink-soft);
-  margin: 0;
-}
-
-.k-lp-hero-cta {
-  margin-top: 0.5rem;
-}
-
-.k-lp-section {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 3.5rem 1.5rem 0 1.5rem;
-}
-
-.k-lp-section-head {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.k-lp-section-head h2 {
-  font-size: 1.7rem;
-}
-
-.k-lp-how-substep-head {
-  margin-top: 2.5rem;
-  margin-bottom: 1.25rem;
-}
-
-.k-lp-how-substep-head h3 {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  margin: 0;
-}
-
-.k-lp-section-lead {
-  max-width: 760px;
-  font-size: 1rem;
-  line-height: 1.85;
-  color: var(--color-ink-soft);
-  margin: 0 0 2rem 0;
-}
-
-/* #solutions 三张 P0 用户卡 */
-.k-lp-user-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.25rem;
-}
-
-.k-lp-user-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.k-lp-user-row p {
-  margin: 0.25rem 0 0 0;
-  font-size: 0.9rem;
-  color: var(--color-ink-soft);
-  line-height: 1.6;
-}
-
-/* #features 三张护城河卡 */
-.k-lp-pillar-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.5rem;
-  border-top: 1px solid var(--color-ink);
-  padding-top: 1.5rem;
-}
-
-.k-lp-pillar p {
-  margin: 0.5rem 0 0 0;
-  font-size: 0.9rem;
-  color: var(--color-muted);
-  line-height: 1.7;
-}
-
-/* #how 六阶段流程条：横向滚动，手机上不挤压卡片 */
-.k-lp-flow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-}
-
-.k-lp-flow-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.k-lp-flow-arrow {
-  color: var(--color-muted);
-}
-
-.k-lp-steps-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1.25rem;
-  border-top: 1px solid var(--color-border);
-  padding-top: 1.5rem;
-}
-
-.k-lp-step-no {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.4rem;
-  color: var(--color-accent);
-}
-
-.k-lp-step p {
-  margin: 0.4rem 0 0 0;
-  font-size: 0.85rem;
-  color: var(--color-muted);
-  line-height: 1.6;
-}
-
-/* #destinations 真实数据卡 */
-.k-lp-dest-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.k-lp-dest-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  align-items: flex-start;
-}
-
-.k-lp-dest-stats {
-  display: flex;
-  gap: 1.25rem;
-  font-size: 0.85rem;
-  color: var(--color-ink-soft);
-}
-
-/* #faq */
-.k-lp-faq-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  max-width: 760px;
-}
-
-.k-lp-faq-item p {
-  margin: 0.4rem 0 0 0;
-  font-size: 0.92rem;
-  color: var(--color-ink-soft);
-  line-height: 1.75;
-}
-
-.k-lp-footer {
-  max-width: 1080px;
-  margin: 3.5rem auto 0 auto;
-  padding: 1.75rem 1.5rem 2.5rem 1.5rem;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  border-top: 1px solid var(--color-border);
-  font-size: 0.8rem;
-  color: var(--color-muted);
-}
-
-.k-lp-footer-login {
-  margin-left: auto;
-}
-
-@media (max-width: 720px) {
-  .k-lp-user-grid,
-  .k-lp-pillar-grid {
-    grid-template-columns: 1fr;
-  }
-  .k-lp-steps-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .k-lp-hero h1 {
-    font-size: 2rem;
-  }
-  .k-lp-nav {
-    gap: 1rem;
-    padding: 0 1rem;
-  }
-  .k-lp-footer-login {
-    margin-left: 0;
-  }
-}
-
-/* Public site uses an editorial image hero while retaining live catalog sections. */
-.k-lp-page { background: #fff; }
-.k-lp-nav { background: #ffffffef; backdrop-filter: blur(14px); }
-.k-lp-hero { max-width: none; min-height: 560px; margin: 0; padding: 0; position: relative; display: flex; align-items: center; text-align: left; overflow: hidden; }
-.k-lp-hero-image { position: absolute; inset: 0; background: url('/images/kelvoy-travel-hero.jpg') center/cover; }
-.k-lp-hero-image::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #101c32dc 0%, #101c32a0 42%, #101c3210 100%); }
-.k-lp-hero-content { position: relative; z-index: 1; width: min(1080px, 100%); margin: auto; padding: 4rem 2rem; color: #fff; }
-.k-lp-hero .k-eyebrow { color: #bcd1ff; }
-.k-lp-hero h1 { max-width: 760px; font-size: clamp(2.3rem, 5vw, 4.5rem); line-height: 1.18; margin: 0.7rem 0 1rem; letter-spacing: -0.04em; }
-.k-lp-hero p { max-width: 600px; color: #edf3ff; font-size: 1rem; line-height: 1.9; }
-.k-lp-hero .k-btn-primary { background: var(--color-accent); }
-.k-lp-section { padding-top: 4.5rem; }
-.k-lp-section-head h2 { font-size: clamp(1.5rem, 2.3vw, 2.1rem); }
-.k-lp-dest-card { padding: 0 0 1rem; overflow: hidden; }
-.k-lp-dest-card > :not(.k-lp-dest-image) { margin-left: 1rem; margin-right: 1rem; }
-.k-lp-dest-image { width: 100%; height: 150px; background: #e5edf7; }
-.k-lp-dest-image .k-figure, .k-lp-dest-image .k-media, .k-lp-dest-image .k-media-missing { width: 100%; height: 100%; border-radius: 0; object-fit: cover; }
-@media (max-width: 700px) { .k-lp-hero { min-height: 520px; } .k-lp-hero-content { padding: 3rem 1.2rem; } .k-lp-hero-image::after { background: linear-gradient(0deg, #101c32e8, #101c3260); } .k-lp-nav-cta { display: none; } }
+@media (prefers-reduced-motion: reduce) { .k-lp-button { transition: none; } }

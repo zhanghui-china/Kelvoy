@@ -5,6 +5,8 @@ import { GuideTip } from "../GuideTip";
 import HelpPage, { focusGuideHash } from "./HelpPage";
 import LandingHero from "./LandingHero";
 import LandingHow from "./LandingHow";
+import LandingDestinations from "./LandingDestinations";
+import LandingFooter from "./LandingFooter";
 import LoginPage from "./LoginPage";
 import CreditPanel from "./CreditPanel";
 import { ShareVideo } from "./SharePage";
@@ -14,13 +16,17 @@ import { GUIDE_SECTIONS } from "../guide";
 const render = (node: React.ReactNode) => renderToStaticMarkup(<StaticRouter location="/">{node}</StaticRouter>);
 
 test("public entry copy explains direct video and optional keyframe workflow", () => {
-  const html = render(<><LandingHero /><LandingHow /><LoginPage /></>);
-  expect(html).toContain("9:16");
-  expect(html).toContain("16:9");
-  expect(html).toContain("人物与场景直出视频");
-  expect(html).toContain("传统方式另需选关键帧");
+  const html = render(<><LandingHero destinationCount={2} /><LandingHow /><LandingFooter /><LoginPage /></>);
+  expect(html).toContain("可旅，让每一场旅行");
+  expect(html).toContain("已入库目的地");
+  expect(html).toContain("<strong>2</strong>");
+  expect(html).toContain('href="/login"');
+  expect(html).toContain("人物与场景参考直接生成视频");
+  expect(html).toContain("传统关键帧流程");
   expect(html).not.toContain("三选一");
-  expect(html).toContain("审核脚本和视频片段");
+  expect(html).not.toContain("30 分钟");
+  expect(html).not.toContain("免费体验");
+  expect(render(<LandingDestinations loading={false} error={null} destinations={[]} />)).toContain("目前有 0 个目的地");
 });
 
 test("resource hints lead to focused, stable help sections", () => {

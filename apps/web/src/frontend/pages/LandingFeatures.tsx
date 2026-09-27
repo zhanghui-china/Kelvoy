@@ -1,35 +1,29 @@
-// §1"护城河不在模型，在角色资产、目的地库和跨期一致性"——三张卡各对应
-// 一样，素材分别是 FR-03（角色）、FR-04（目的地库不允许无参考的想象地
-// 标）、§8"质量红线"（脚本和片段由人审核）。
 const PILLARS = [
-  {
-    title: "角色资产跨期一致",
-    desc: "脸型、发型、体态锁定，角色是带版本号的账号级资产；每期可换穿搭，三期下来观众记住的是人，不是滤镜。",
-  },
-  {
-    title: "真实目的地库",
-    desc: "每个地标 ≥ 3 张实景参考图，地标镜头必须以库里的实景图为条件生成，不允许无参考的「想象地标」。",
-  },
-  {
-    title: "逐镜人工审核",
-    desc: "先审脚本，再审视频片段；人物漂移、手部崩坏、幻觉文字、地标失真——命中任一条就重生成。传统方式另需审核关键帧。",
-  },
+  { no: "01", icon: "◉", title: "一个角色，持续出发", desc: "选用官方角色，或建立自己的角色。角色资料按版本保存，让不同作品沿用熟悉的人物形象。", example: "从第一条 vlog，到下一座城市" },
+  { no: "02", icon: "◇", title: "让真实风景入镜", desc: "目的地库提供地标实景参考图。人物与场景参考可以直接用于视频生成，也可选择传统关键帧流程。", example: "有来源的地标参考，更好核对画面" },
+  { no: "03", icon: "✓", title: "每一步都由你把关", desc: "先审脚本，再逐镜审核视频片段。发现人物、地标或动作问题，可以修改或重新生成。", example: "确定每镜的一秒，再进入合成" },
 ];
 
 export default function LandingFeatures() {
   return (
-    <section id="features" className="k-lp-section">
-      <div className="k-lp-section-head">
-        <div className="k-eyebrow">产品护城河</div>
-        <h2>三样东西让 AI 旅行内容可信</h2>
-      </div>
-      <div className="k-lp-pillar-grid">
-        {PILLARS.map((p) => (
-          <div className="k-lp-pillar" key={p.title}>
-            <div className="k-card-title">{p.title}</div>
-            <p>{p.desc}</p>
-          </div>
-        ))}
+    <section id="features" className="k-lp-feature-band">
+      <div className="k-lp-section">
+        <div className="k-lp-section-head k-lp-section-head-center">
+          <span className="k-lp-section-tag">为什么选择可旅</span>
+          <h2>你的角色，你的旅行叙事</h2>
+          <p>保留人物和地点的线索，把创作的选择权留给你。</p>
+        </div>
+        <div className="k-lp-pillar-grid">
+          {PILLARS.map((p) => (
+            <article className="k-lp-pillar" key={p.no}>
+              <span className="k-lp-pillar-no">{p.no}</span>
+              <span className="k-lp-pillar-icon" aria-hidden="true">{p.icon}</span>
+              <h3>{p.title}</h3>
+              <p>{p.desc}</p>
+              <div className="k-lp-pillar-example">{p.example}</div>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );
