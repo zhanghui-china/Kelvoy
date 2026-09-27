@@ -11,6 +11,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import httpx
+from PIL import Image
 
 from inference.schemas import InferenceResponse
 
@@ -29,6 +30,38 @@ class ComfyUIError(Exception):
     def __init__(self, status: int, message: str):
         self.status = status
         super().__init__(message)
+
+
+async def validate_media(path: Path, kind: str) -> None:
+    if kind == "image":
+        def verify_image() -> None:
+            with Image.open(path) as image:
+                if image.format != "PNG" or image.width <= 0 or image.height <= 0:
+                    raise ComfyUIError(502, "ComfyUI returned invalid image media")
+                image.verify()
+
+        try:
+            await asyncio.to_thread(verify_image)
+        except (OSError, ValueError) as exc:
+            raise ComfyUIError(502, "ComfyUI returned corrupt image media") from exc
+        return
+
+    process = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-nostdin", "-v", "error", "-xerror", "-i", str(path),
+        "-map", "0:v:0", "-f", "null", "-",
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        _, stderr = await process.communicate()
+    except asyncio.CancelledError:
+        if process.returncode is None:
+            process.kill()
+        await process.wait()
+        raise
+    if process.returncode != 0:
+        diagnostic = stderr.decode(errors="replace")[-500:]
+        logger.warning("ComfyUI video validation failed: %s", diagnostic)
+        raise ComfyUIError(502, "ComfyUI returned corrupt video media")
 
 
 async def cancel_prompt(client: httpx.AsyncClient, prompt_id: str) -> None:
@@ -228,6 +261,7 @@ async def _generate_once(
                                     output.write(chunk)
                             if size == 0:
                                 raise ComfyUIError(502, "ComfyUI returned an empty file")
+                        await validate_media(temporary, media_kind)
                         temporary.replace(target)
                     finally:
                         temporary.unlink(missing_ok=True)

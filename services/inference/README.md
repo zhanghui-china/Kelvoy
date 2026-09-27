@@ -30,4 +30,4 @@ DGX 的 `kelvoy-inference.service` 需要设置
 并从仓库根目录保留 `comfyui-bridge` 工作流。图像和视频生成超时设为 240 秒；
 调用方现有的 300 秒超时更长，给响应传输留出了时间。
 
-ComfyUI 媒体下载使用流式临时文件，单文件上限 512 MiB；超限会拒绝并尝试取消对应任务。这个本地上限不代替 DGX 的总磁盘水位与暂存回收。Worker 的无 ASS/drawtext 文字图层回退使用本项目 `uv sync` 创建的 `.venv/bin/python`，其中已锁定 Pillow；部署时还须提供中文字体。
+ComfyUI 媒体下载使用流式临时文件，单文件上限 512 MiB；超限会拒绝并尝试取消对应任务。发布前用 Pillow 校验完整 PNG、用 `ffmpeg` 解码视频流；损坏媒体会删除暂存文件并取消对应任务。推理服务和 Worker 所在主机均须将 `ffmpeg`、`ffprobe` 放在 PATH 上，CI 也安装同一运行依赖。这个本地上限不代替 DGX 的总磁盘水位与暂存回收。Worker 的无 ASS/drawtext 文字图层回退使用本项目 `uv sync` 创建的 `.venv/bin/python`，其中已锁定 Pillow；部署时还须提供中文字体。

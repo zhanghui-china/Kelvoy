@@ -1,11 +1,14 @@
 """ComfyUI adapter behavior without requiring a GPU."""
 
 import asyncio
+import io
 import json
+import subprocess
 from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image
 
 from inference.comfyui import (
     TEMPLATES,
@@ -15,10 +18,24 @@ from inference.comfyui import (
     build_video_workflow,
     generate,
     resolve_reference,
+    validate_media,
 )
 from inference.config import Settings
 
 BRIDGE = Path(__file__).resolve().parents[3] / "comfyui-bridge"
+
+
+def valid_media_bytes(tmp_path: Path, modality: str) -> bytes:
+    if modality == "image":
+        buffer = io.BytesIO()
+        Image.new("RGB", (4, 4), "red").save(buffer, format="PNG")
+        return buffer.getvalue()
+    path = tmp_path / "valid.mp4"
+    subprocess.run([
+        "ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi",
+        "-i", "color=c=black:s=16x16:r=2:d=1", "-c:v", "mpeg4", path.as_posix(),
+    ], check=True, capture_output=True)
+    return path.read_bytes()
 
 
 @pytest.mark.parametrize("template_kind", TEMPLATES)
@@ -157,6 +174,7 @@ def test_generate_uploads_submits_and_saves_selected_output(tmp_path, kind, node
         else ["first.png"]
     )
     modality = "image" if kind.startswith("image") else "video"
+    media_bytes = valid_media_bytes(tmp_path, modality)
     for name in inputs:
         (tmp_path / name).write_bytes(b"fixture")
     submitted = []
@@ -193,7 +211,7 @@ def test_generate_uploads_submits_and_saves_selected_output(tmp_path, kind, node
             )
         if request.url.path == "/view":
             assert request.url.params["filename"] == f"result{extension}"
-            return httpx.Response(200, content=b"media bytes")
+            return httpx.Response(200, content=media_bytes)
         raise AssertionError(request.url)
 
     async def run():
@@ -208,7 +226,7 @@ def test_generate_uploads_submits_and_saves_selected_output(tmp_path, kind, node
     assert result.seed == 31
     assert len(submitted) == len(inputs)
     assert result.paths[0].startswith(f"inference/{modality}/")
-    assert (tmp_path / result.paths[0]).read_bytes() == b"media bytes"
+    assert (tmp_path / result.paths[0]).read_bytes() == media_bytes
 
 
 def test_generate_cancels_failed_prompt_without_touching_other_jobs(tmp_path):
@@ -357,6 +375,71 @@ def test_generate_rejects_oversized_media_and_cleans_temporary_file(tmp_path, mo
     with pytest.raises(ComfyUIError, match="size limit"):
         asyncio.run(run())
     assert list((tmp_path / "inference" / "video").glob("*")) == []
+
+
+@pytest.mark.parametrize("kind,filename", [("image", "result.png"), ("video", "result.mp4")])
+def test_corrupt_media_is_rejected_before_publication(tmp_path, kind, filename):
+    (tmp_path / "first.png").write_bytes(b"fixture")
+    calls = []
+    output_node, output_key = ("482", "images") if kind == "image" else ("40", "gifs")
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "first.png"})
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "p1"})
+        if request.url.path == "/history/p1":
+            return httpx.Response(200, json={"p1": {"outputs": {
+                output_node: {output_key: [{"filename": filename}]}
+            }}})
+        if request.url.path == "/view":
+            return httpx.Response(200, content=b"corrupt media")
+        if request.url.path == "/api/jobs/p1/cancel":
+            return httpx.Response(200, json={"cancelled": True})
+        raise AssertionError(request.url)
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await generate(kind, "scene", ["first.png"], tmp_path, "http://comfy", client=client)
+
+    with pytest.raises(ComfyUIError) as error:
+        asyncio.run(run())
+    assert error.value.status == 502
+    assert calls[-1] == "/api/jobs/p1/cancel"
+    assert list((tmp_path / "inference" / kind).glob("*")) == []
+
+
+def test_cancelling_video_validation_terminates_its_child_process(tmp_path, monkeypatch):
+    from inference import comfyui
+
+    original_spawn = asyncio.create_subprocess_exec
+    launched = []
+
+    async def launch_slow_validation(*_args, **kwargs):
+        process = await original_spawn("/bin/sleep", "3", **kwargs)
+        launched.append(process)
+        return process
+
+    monkeypatch.setattr(comfyui.asyncio, "create_subprocess_exec", launch_slow_validation)
+
+    async def run():
+        task = asyncio.create_task(validate_media(tmp_path / "unused.mp4", "video"))
+        try:
+            while not launched:
+                await asyncio.sleep(0)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert launched[0].returncode is not None
+        finally:
+            if launched and launched[0].returncode is None:
+                launched[0].kill()
+                await launched[0].wait()
+
+    asyncio.run(run())
 
 
 def test_bad_comfy_response_still_attempts_cancel_and_returns_server_error(tmp_path):

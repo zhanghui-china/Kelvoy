@@ -42,7 +42,7 @@
 | P2 部分修复 | 每次 DB 打开扫描并补 persona 历史，1000 期启动成本随数据增长；`packages/store/src/db.ts`。| persona 与 destination 历史回填已用 `schema_migrations` 限制为一次，旧库重复打开回归通过；部署旧生产库时仍需备份和验收实际迁移耗时。 |
 | P3 部分修复 | 失败任务查询、队列扫描、跨期浏览器聚合有结构性放大；`packages/store/src/tasks.ts`、`apps/web/src/frontend/pages/UsagePage.tsx`。| 队列领取与失败摘要均已补索引，失败摘要改为单次 SQL 反连接；用量聚合已移到服务端并缩小响应，但服务端读取变慢，分页与真实并发仍待修。 |
 | F1 部分修复 | 审片台 3 秒轮询与写后立即刷新可并发返回，旧响应覆盖新状态；`apps/web/src/frontend/hooks/useApiResource.ts`。| 同一 hook 的请求已单飞合并，刷新排队时丢弃过时响应，切期/卸载后不接收旧结果；慢请求/手动刷新测试通过。后台页面暂停定时请求、回到前台立即检查；`done`/`failed` 稳定态停止自动轮询，手动刷新仍可用。可见性切换的浏览器端交互回归仍待补。 |
-| R1 部分修复 | 媒体使用整文件缓冲、多份拷贝且暂存未统一回收；`services/inference/src/inference/comfyui.py` 和 worker 生成适配。| ComfyUI 下载已改流式、512 MiB 上限和原子临时文件清理。Worker 归档后立即删除推理中间副本；启动时及每小时只回收 `inference/image`、`inference/video` 中超过一小时且符合服务端 UUID 命名的遗留文件，跳过符号链接目录与文件。超限、清理和符号链接回归通过；期目录中的未引用产物、损坏媒体检查仍待修。 |
+| R1 部分修复 | 媒体使用整文件缓冲、多份拷贝且暂存未统一回收；`services/inference/src/inference/comfyui.py` 和 worker 生成适配。| ComfyUI 下载已改流式、512 MiB 上限和原子临时文件清理；发布前用 Pillow 校验 PNG，用 ffmpeg 解码视频流，损坏媒体会取消对应 prompt。Worker 归档后立即删除推理中间副本；启动时及每小时只回收 `inference/image`、`inference/video` 中超过一小时且符合服务端 UUID 命名的遗留文件，跳过符号链接目录与文件。损坏、超限、清理和符号链接回归通过；期目录中的未引用产物、已归档文件事后损坏检测仍待修。 |
 | R4 部分修复 | ComfyUI 坏响应、落盘异常发生在提交后时原代码可能不发取消；取消 HTTP 失败也被忽略；`services/inference/src/inference/comfyui.py`。| 已对坏响应和 I/O 错误尝试按任务 ID 取消、检查 HTTP/确认位并记录失败；断连监测会取消生成协程并等待清理。整体硬期限覆盖上传至下载，卡在轮询请求时也会取消 prompt。坏响应、取消 500、合法非对象响应、模拟断连及期限回归通过；目标 DGX 取消语义仍待验。 |
 | R2 部分修复 | 合成文本降级依赖系统 `python3` + 未声明的 Pillow；`apps/worker/src/compose/ffmpeg.ts`、`scripts/render-text-overlays.py`。| 已锁定 Pillow 并让 Worker 使用项目受管理解释器，CI 检查依赖，macOS 无 ASS/drawtext 合成回归通过；DGX 字体和正式部署预检待验。 |
 | R3 部分修复 | 模板/脚本改动不触发推理 CI，Python lint 原有两项失败；`.github/workflows/inference-ci.yml`。| 已扩展触发路径并修 lint；需 CI 实际运行确认。 |
