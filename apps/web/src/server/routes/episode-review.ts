@@ -10,8 +10,8 @@ import {
 } from "@kelvoy/engine";
 import {
   getDestinationVersion,
-  patchShot,
   replaceEpisode,
+  submitReviewShotPatch,
   setShare,
   submitReviewAdvance,
   submitShotRegeneration,
@@ -105,67 +105,17 @@ function inferRegenStage(shotStatus: string): RegenStage {
 }
 
 review.patch("/:id/shots/:no", async (c) => {
-  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
-  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
-  if (loaded.episode.script_pending_task_id) return c.json({ ok: false, error: "action_pending" }, 400);
-
   const body = await c.req.json().catch(() => null);
   const result = validatePatchShotRequest(body);
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
-  const patch = { ...result.value.patch };
-  const shot = loaded.episode.shots.find((item) => item.no === Number(c.req.param("no")));
-  if (!shot) return c.json({ ok: false, error: "not_found" }, 404);
-  const scriptFields = ["beat", "caption", "size", "camera", "landmark", "kf_prompt", "motion_prompt"];
-  const keys = Object.keys(patch);
-  const scriptEdit = loaded.episode.status === "script_review" && keys.every((key) => scriptFields.includes(key));
-  const keyframeEdit = (loaded.episode.status === "kf_review" || loaded.episode.status === "keyframing") &&
-    keys.every((key) => (loaded.episode.status === "keyframing"
-      ? ["kf_selected", "status"] : ["kf_selected", "status", "kf_prompt", "motion_prompt"]).includes(key)) &&
-    (patch.status === undefined || patch.status === "kf_selected") &&
-    (patch.status === undefined || shot.status === "kf_ready") &&
-    (patch.kf_selected === undefined || (patch.kf_selected !== null && shot.candidates.includes(patch.kf_selected)));
-  const clipEdit = loaded.episode.status === "clip_review" &&
-    keys.every((key) => ["trim_start_s", "status"].includes(key)) &&
-    (patch.status === undefined || (patch.status === "approved" && shot.status === "clip_ready"));
-  if (keys.length === 0 || (!scriptEdit && !keyframeEdit && !clipEdit)) {
-    return c.json({ ok: false, error: "invalid_public_patch" }, 400);
+  const patchResult = submitReviewShotPatch({ episode_id: c.req.param("id"), owner_id: c.get("ownerId"),
+    shot_no: Number(c.req.param("no")), row_version: result.value.row_version,
+    patch: result.value.patch });
+  if (!patchResult.ok) {
+    if (patchResult.error === "version_conflict") return c.json(patchResult, 409);
+    return c.json(patchResult, patchResult.error === "not_found" ||
+      patchResult.error === "destination_not_found" ? 404 : 400);
   }
-  if (loaded.episode.cut_policy === "fixed_1s" && patch.trim_start_s !== undefined && patch.trim_start_s !== null) {
-    patch.trim_start_s = Math.round(patch.trim_start_s * 30) / 30;
-  }
-
-  // 审核 1/2 改的这三个字段是用户自由输入的文本，和建期时的 season/tone/
-  // banned 一样要过关键词拦截（PRD §8/§11，#29）——否则拦了建期这一处，
-  // 用户在审片台里改 prompt 就绕过去了。
-  const contentViolations = checkContent([
-    ...(patch.beat !== undefined ? [{ field: "beat", text: patch.beat }] : []),
-    ...(patch.caption !== undefined ? [{ field: "caption", text: patch.caption }] : []),
-    ...(patch.kf_prompt !== undefined ? [{ field: "kf_prompt", text: patch.kf_prompt }] : []),
-    ...(patch.motion_prompt !== undefined
-      ? [{ field: "motion_prompt", text: patch.motion_prompt }]
-      : []),
-  ]);
-  if (contentViolations.length > 0) {
-    return c.json({ ok: false, error: "content_blocked", violations: contentViolations }, 400);
-  }
-
-  // FR-02 的 landmark_reference 规则：改地标引用时立刻查，不要等到删镜/
-  // 重排时才由 checkScriptRules 把一个早就写坏的值报出来。
-  if (patch.landmark !== undefined && patch.landmark !== null) {
-    const destination = await getDestinationVersion(loaded.episode.destination_id, loaded.episode.destination_version);
-    if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
-    if (!destination.landmarks.some((l) => l.id === patch.landmark)) {
-      return c.json({ ok: false, error: "landmark_reference" }, 400);
-    }
-  }
-
-  const patchResult = await patchShot(
-    loaded.episode.episode_id,
-    Number(c.req.param("no")),
-    result.value.row_version,
-    patch,
-  );
-  if (!patchResult.ok) return patchErrorResponse(c, patchResult);
   return c.json({ ok: true, row_version: patchResult.row_version });
 });
 

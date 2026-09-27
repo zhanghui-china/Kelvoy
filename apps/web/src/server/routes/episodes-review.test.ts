@@ -1,9 +1,59 @@
-import { dequeueTask, insertEpisode, upsertDestination } from "@kelvoy/store";
+import { dequeueTask, insertEpisode, submitReviewShotPatch, upsertDestination } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode } from "@kelvoy/engine";
 import { setupEpisodeRouteTests, buildApp, compliantShots, destinationFixture, fixture, login, shotFixture } from "./episode-test-fixtures";
 
 setupEpisodeRouteTests();
+
+test("the store review command enforces owner, stage, pending action and content rules", async () => {
+  const episode = fixture("e_review_command", "u_owner");
+  episode.shots = [shotFixture(1)];
+  await insertEpisode(episode);
+  const input = { episode_id: episode.episode_id, owner_id: "u_owner", row_version: 1,
+    shot_no: 1, patch: { beat: "新镜头" } };
+  expect(submitReviewShotPatch({ ...input, owner_id: "u_other" })).toMatchObject({ ok: false, error: "not_found" });
+  expect(submitReviewShotPatch(input)).toMatchObject({ ok: false, error: "invalid_public_patch" });
+
+  const review = fixture("e_pending_command", "u_owner");
+  review.status = "script_review";
+  review.script_pending_task_id = "tk_pending";
+  review.shots = [shotFixture(1)];
+  await insertEpisode(review);
+  expect(submitReviewShotPatch({ ...input, episode_id: review.episode_id }))
+    .toMatchObject({ ok: false, error: "action_pending" });
+
+  const unblocked = fixture("e_blocked_command", "u_owner");
+  unblocked.status = "script_review";
+  unblocked.shots = [shotFixture(1)];
+  await insertEpisode(unblocked);
+  expect(submitReviewShotPatch({ ...input, episode_id: unblocked.episode_id,
+    patch: { kf_prompt: "裸体 站在山顶" } }))
+    .toMatchObject({ ok: false, error: "content_blocked" });
+});
+
+test("the store review command checks candidate membership and frozen destination landmarks", async () => {
+  await upsertDestination(destinationFixture("d_review_command"));
+  const script = fixture("e_script_command", "u_owner");
+  script.status = "script_review";
+  script.destination_id = "d_review_command";
+  script.shots = [shotFixture(1)];
+  await insertEpisode(script);
+  const base = { episode_id: script.episode_id, owner_id: "u_owner", row_version: 1, shot_no: 1 };
+  expect(submitReviewShotPatch({ ...base, patch: { landmark: "unknown" } }))
+    .toMatchObject({ ok: false, error: "landmark_reference" });
+  expect(submitReviewShotPatch({ ...base, patch: { beat: "正常镜头" } }))
+    .toMatchObject({ ok: true, row_version: 2 });
+  expect(submitReviewShotPatch({ ...base, patch: { beat: "过时镜头" } }))
+    .toMatchObject({ ok: false, error: "version_conflict", current_row_version: 2 });
+
+  const keyframes = fixture("e_keyframe_command", "u_owner");
+  keyframes.status = "kf_review";
+  keyframes.shots = [shotFixture(1, { status: "kf_ready", candidates: ["kf/01_a.png"] })];
+  await insertEpisode(keyframes);
+  expect(submitReviewShotPatch({ ...base, episode_id: keyframes.episode_id,
+    patch: { status: "kf_selected", kf_selected: "kf/other.png" } }))
+    .toMatchObject({ ok: false, error: "invalid_public_patch" });
+});
 
 test("script optimization queues once, blocks edits during processing, and preserves the current draft", async () => {
   const { cookie, ownerId } = await login("script-action");
