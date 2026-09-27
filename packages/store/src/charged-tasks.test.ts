@@ -128,7 +128,7 @@ test("shot completion keeps a selection made on another shot during generation",
 test("a failed success commit rolls back the episode result and credit settlement", async () => {
   const started = { ...episode(), status: "keyframing" as const, shots: [
     { no: 1, status: "generating_kf", candidates: [], kf_selected: null },
-  ] } as Episode;
+  ] } as unknown as Episode;
   await insertEpisode(started);
   grantCredits(ownerId, 1, "completion-grant");
   const queued = await enqueueTask({ episode_id: started.episode_id,

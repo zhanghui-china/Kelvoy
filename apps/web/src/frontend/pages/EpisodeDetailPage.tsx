@@ -25,7 +25,10 @@ import "../review/review.css";
  */
 export default function EpisodeDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { loading, data, error, refresh } = usePolledApiResource(() => getEpisode(id!), [id]);
+  const { loading, data, error, refresh } = usePolledApiResource(
+    () => getEpisode(id!), [id],
+    (result) => result.episode.status !== "done" && result.episode.status !== "failed",
+  );
 
   const mutation = useEpisodeMutation(data?.row_version ?? 0, refresh);
 
@@ -62,7 +65,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
           目的地：{destination ? `${destination.city} · ${destination.name}` : episode.destination_id}
         </span>
         <span className="k-card-meta">预计完整创作：{episode.estimated_credits} 积分</span>
-        <span className="k-card-meta">{episode.shots.length} 镜 · 每 3 秒自动刷新</span>
+        <span className="k-card-meta">{episode.shots.length} 镜 · 活跃时按需自动刷新</span>
       </div>
       {destinationHistoryApproximate && <p className="k-card-meta">
         此期使用旧数据创建：原始目的地版本已无法恢复，显示的是迁移时保存的近似资料。
