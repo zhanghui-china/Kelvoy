@@ -19,7 +19,6 @@ import {
   getPersonaVersion,
   hasActiveStageTasks,
   prepareTaskShot,
-  replaceEpisode,
   renewTaskLease,
   requeueTaskAfterCommitConflict,
 } from "@kelvoy/store";
@@ -29,8 +28,8 @@ import { createLocalGenerationProviders } from "../generation/local";
 /**
  * Task queue consumer (ADR-0004): polls the local `tasks` table (no Redis,
  * no HTTP — worker and web share a machine and both call @kelvoy/store
- * directly). Dispatches to @kelvoy/engine's runStage and writes the result
- * back with optimistic-lock protection via replaceEpisode.
+ * directly). Dispatches to @kelvoy/engine's runStage and commits the result
+ * with the task lease, episode version and credit settlement in one transaction.
  */
 
 const POLL_INTERVAL_MS = 1000;
@@ -242,18 +241,6 @@ async function handleScriptActionTask(task: Task, overrides: Partial<StageContex
       failTaskWithCredits(task, true);
       return;
     }
-    await clearFailedScriptAction(task);
     failTaskWithCredits(task, false);
-  }
-}
-
-async function clearFailedScriptAction(task: Task): Promise<void> {
-  const fresh = await getEpisode(task.episode_id);
-  if (fresh.ok && fresh.episode.script_pending_task_id === task.task_id) {
-    await replaceEpisode(task.episode_id, fresh.row_version, {
-      ...fresh.episode,
-      script_pending_task_id: null,
-      script_action_error: "脚本处理失败，原稿已保留，请重试。",
-    });
   }
 }

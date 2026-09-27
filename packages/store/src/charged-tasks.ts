@@ -264,7 +264,21 @@ export function failTaskWithCredits(task: Task, requeue: boolean, failureReason?
         lease_token = null, lease_until = null, updated_at = datetime('now') where task_id = ?`)
         .run(task.task_id);
     } else {
-      if (failureReason) {
+      if (task.operation === "script_regenerate" || task.operation === "script_optimize") {
+        const episodeRow = getDb().query<{ doc: string }, [string]>(
+          "select doc from episodes where episode_id = ?",
+        ).get(task.episode_id);
+        if (episodeRow) {
+          const episode = decodeEpisode(episodeRow.doc);
+          if (episode.script_pending_task_id === task.task_id) {
+            const updated = { ...episode, script_pending_task_id: null,
+              script_action_error: "脚本处理失败，原稿已保留，请重试。" };
+            getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
+              updated_at = datetime('now') where episode_id = ?`)
+              .run(JSON.stringify(updated), task.episode_id);
+          }
+        }
+      } else if (failureReason) {
         const episodeRow = getDb().query<{ doc: string }, [string]>(
           "select doc from episodes where episode_id = ?",
         ).get(task.episode_id);

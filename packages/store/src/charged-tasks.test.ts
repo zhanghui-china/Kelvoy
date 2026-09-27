@@ -9,6 +9,7 @@ import { getEpisode, insertEpisode, patchShot } from "./episodes";
 import { upsertDestination } from "./destinations";
 import { dequeueTask, enqueueTask } from "./tasks";
 import { createUser } from "./users";
+import { submitScriptAction } from "./script-actions";
 
 let ownerId = "";
 beforeEach(async () => {
@@ -188,6 +189,33 @@ test("terminal shot failure commits task, refund, shot state and reason together
   expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
     .get(task.task_id)?.status).toBe("failed");
   expect(getCreditBalance(ownerId).reserved).toBe(0);
+});
+
+test("terminal script action failure clears its marker and refunds in one transaction", async () => {
+  await insertEpisode({ ...episode(), status: "script_review" });
+  grantCredits(ownerId, 1, "script-action-grant");
+  const queued = submitScriptAction({ episode_id: "e_charge", owner_id: ownerId,
+    row_version: 1, operation: "script_optimize", instruction: "突出夜景" });
+  expect(queued.ok).toBe(true);
+  const task = await dequeueTask();
+  expect(task?.operation).toBe("script_optimize");
+  getDb().exec(`create trigger reject_failure before update on tasks
+    when new.status = 'failed' begin select raise(abort, 'injected failure'); end`);
+  expect(() => failTaskWithCredits(task!, false)).toThrow("injected failure");
+  const during = await getEpisode("e_charge");
+  expect(during.ok && during.episode.script_pending_task_id).toBe(task?.task_id);
+  expect(getCreditBalance(ownerId).reserved).toBe(1);
+  expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
+    .get(task!.task_id)?.status).toBe("processing");
+  getDb().exec("drop trigger reject_failure");
+  expect(failTaskWithCredits(task!, false)).toBe(true);
+  const saved = await getEpisode("e_charge");
+  expect(saved.ok && saved.episode.status).toBe("script_review");
+  expect(saved.ok && saved.episode.script_pending_task_id).toBeNull();
+  expect(saved.ok && saved.episode.script_action_error).toContain("原稿已保留");
+  expect(getCreditBalance(ownerId).reserved).toBe(0);
+  expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
+    .get(task!.task_id)?.status).toBe("failed");
 });
 
 test("write conflict requeues without consuming the model failure budget", async () => {

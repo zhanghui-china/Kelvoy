@@ -29,7 +29,7 @@
 | A2 已修复 | 建期可引用别人的私有模板；`apps/web/src/server/routes/episodes.ts` 查询后未核 owner。根因是存在性代替授权。| 同时允许官方或本人模板，跨账号回归测试。 |
 | B1 部分修复 | 默认 `video_source=references` 的双参考图工作流缺模型与 CLIP 连线，含隐式节点；`comfyui-bridge/2_2_DualRef2Video_MinimaxH3_api.json`。静态图无法自洽。| 已改显式图、保留原 `BlockSparseAttention` 采样链，并对四份生产图做链接/可达性测试；目标 DGX 节点契约、该加速节点稳定性和两种画幅仍待验证。 |
 | C1 部分修复 | 模型运行期间选择另一镜导致整期行版本变化，提交冲突耗尽重试、镜头停留生成中；`packages/store/src/charged-tasks.ts`、`apps/worker/src/queue/consumer.ts`。根因是整期替换与无关用户编辑争锁。| 已按目标镜合并；store 与 worker 并发回归证明另一镜选择保留，同镜改稿后的过时结果被拒绝，审核态可实际提交重试，写入冲突不消耗模型失败预算。旧 JSON 默认字段与事务读用同一解码器。执行令牌与租约回收仍待补。 |
-| C2 部分修复 | 任务失败/退款后另起写入更新镜头和原因，中间崩溃会分裂状态；`apps/worker/src/queue/consumer.ts`。| 终态失败已在 store 事务内完成任务、退款、镜头/期失败和原因；需要崩溃注入覆盖各提交边界、脚本动作和取消。 |
+| C2 部分修复 | 任务失败/退款后另起写入更新镜头和原因，中间崩溃会分裂状态；`apps/worker/src/queue/consumer.ts`。| 终态失败已在 store 事务内完成任务、退款、镜头/期失败和原因；脚本优化失败也在同一事务清除待处理标记、保留原稿并退款。通过 SQLite 触发器注入提交失败，验证三者一起回滚；其他提交边界、取消和进程崩溃仍待覆盖。 |
 | C3 已修复 | brief 可从 `script_review` 再运行并错误推进；`packages/engine/src/stages/index.ts`。根因是只检查状态机可推进，未检查阶段的起点。| 阶段入口表约束，反向阶段测试。 |
 | C7 已修复 | CLI 将任意阶段字符串强转为 `StageName`，或从错误阶段运行时，异常分支可能把仍可正常推进的期标成失败；`packages/cli/src/run-stage.ts`。| 在执行前检查阶段名称和入口状态；错误命令不写库回归。 |
 | C8 部分修复 | 完整期校验拒绝正常的自动配乐空键，却接受重复镜号、重复场景 ID 和悬空场景引用；`packages/engine/src/schema/validate.ts`。| 已统一空配乐语义（精确空串可用、空白路径不可用）并补跨字段身份/引用校验与 PRD；脚本审核入口仍需统一复用领域约束。 |
