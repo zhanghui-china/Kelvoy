@@ -1,3 +1,6 @@
+import { Link } from "react-router-dom";
+import { LibraryFilters } from "./LibraryFilters";
+import { filterTemplates, type LibraryType } from "./resource-library";
 import { type FormEvent, type ReactNode, useState } from "react";
 import type { DestinationType, Template } from "@kelvoy/engine";
 import { createTemplate, deleteTemplate, listTemplates } from "../api/client";
@@ -10,6 +13,7 @@ const SKELETON_OPTIONS = Object.entries(DESTINATION_TYPE_LABELS) as [Destination
 function TemplateCard({ template, action }: { template: Template; action?: ReactNode }) {
   return (
     <div className="k-card">
+      <div className="k-template-cover" data-skeleton={template.skeleton}><strong>{DESTINATION_TYPE_LABELS[template.skeleton]}</strong><span>叙事类型示意 · 非成片预览</span></div>
       <div className="k-card-title">
         {template.name} <span className="k-pill">{DESTINATION_TYPE_LABELS[template.skeleton]}</span>
       </div>
@@ -18,12 +22,14 @@ function TemplateCard({ template, action }: { template: Template; action?: React
         片头：{template.intro ?? "无"} / 片尾：{template.outro ?? "无"}
       </div>
       <div className="k-card-meta">标题样式：{template.title_style}</div>
-      {action && <div className="k-tpl-card-actions">{action}</div>}
+      <div className="k-library-use"><Link to={`/episodes/new?template=${encodeURIComponent(template.template_id)}`} className="k-btn k-btn-primary">使用模板</Link>{action}</div>
     </div>
   );
 }
 
 export default function TemplatesPage() {
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<LibraryType>("all");
   const [refreshKey, setRefreshKey] = useState(0);
   const { loading, data, error } = useApiResource(listTemplates, [refreshKey]);
 
@@ -82,7 +88,7 @@ export default function TemplatesPage() {
   if (loading) return <p className="k-empty">加载中…</p>;
   if (error) return <p className="k-error">加载失败：{error}</p>;
 
-  const templates = data?.templates ?? [];
+  const templates = filterTemplates(data?.templates ?? [], query, type);
   const official = templates.filter((t) => t.owner_id === null);
   const mine = templates.filter((t) => t.owner_id !== null);
 
@@ -92,10 +98,11 @@ export default function TemplatesPage() {
       <h1>模板</h1>
       <GuideTip section="templates">新建一期会按目的地类型预选匹配模板；官方模板可直接使用，自建模板用于固定自己的叙事与视觉风格。LUT 是画面调色方案。</GuideTip>
 
+      <LibraryFilters label="模板" query={query} type={type} onQuery={setQuery} onType={setType} count={templates.length} />
       <div>
         <h2>官方模板</h2>
         {official.length === 0 ? (
-          <p className="k-empty">暂无官方模板。</p>
+          <p className="k-empty">{query || type !== "all" ? "没有匹配的官方模板。" : "暂无官方模板。"}</p>
         ) : (
           <div className="k-card-list k-tpl-grid">
             {official.map((t) => (
@@ -109,7 +116,7 @@ export default function TemplatesPage() {
         <h2>我的模板</h2>
         {deleteError && <p className="k-error">删除失败：{deleteError}</p>}
         {mine.length === 0 ? (
-          <p className="k-empty">还没有私有模板。</p>
+          <p className="k-empty">{query || type !== "all" ? "没有匹配的私有模板。" : "还没有私有模板。"}</p>
         ) : (
           <div className="k-card-list k-tpl-grid">
             {mine.map((t) => (

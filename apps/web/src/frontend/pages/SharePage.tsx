@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { LoadingState } from "../ui";
 import { getShare, shareFinalVideoUrl, type SharedEpisode } from "../api/client";
 
 export function ShareVideo({ slug, episode }: { slug: string; episode: SharedEpisode }) {
@@ -31,22 +32,27 @@ export default function SharePage() {
 
   if (notFound) {
     return (
-      <div className="k-auth-shell">
-        <p className="k-empty">链接无效，或者分享已经关闭。</p>
-      </div>
+      <main className="k-share-page k-share-state">
+        <Link to="/" className="k-nav-brand">Kelvoy · 可旅</Link>
+        <h1>暂时无法查看作品</h1>
+        <p className="k-empty" role="status">链接无效，或者分享已经关闭。</p>
+      </main>
     );
   }
-  if (!episode || !slug) return null;
+  if (!episode || !slug) return <main className="k-share-page k-share-state">
+    <Link to="/" className="k-nav-brand">Kelvoy · 可旅</Link>
+    <LoadingState />
+  </main>;
 
   return (
-    <div className="k-share-page">
-      <div className="k-nav-brand">Kelvoy</div>
+    <main className="k-share-page">
+      <Link to="/" className="k-nav-brand">Kelvoy · 可旅</Link>
       <ShareVideo slug={slug} episode={episode} />
       <h1>{episode.render.title || episode.episode_id}</h1>
       <p className="k-card-meta">{episode.shots.length} 镜 · AI 生成 · 虚构角色 · 真实目的地</p>
       {episode.final && <p className="k-card-meta">{episode.final.duration_s.toFixed(1)} 秒 · {episode.final.width}×{episode.final.height}</p>}
       <p className="k-card-meta">持有此链接的人可观看并下载视频；作品拥有者可随时关闭分享。</p>
       <a className="k-btn k-btn-primary" href={shareFinalVideoUrl(slug)} download>下载视频</a>
-    </div>
+    </main>
   );
 }
