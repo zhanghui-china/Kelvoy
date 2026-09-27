@@ -240,6 +240,42 @@ def test_generate_cancels_failed_prompt_without_touching_other_jobs(tmp_path):
     assert calls[-1] == "/api/jobs/p1/cancel"
 
 
+def test_http_disconnect_cancels_only_the_submitted_comfyui_prompt(tmp_path):
+    from inference.disconnect import run_while_connected
+
+    (tmp_path / "first.png").write_bytes(b"fixture")
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "first.png"})
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "p1"})
+        if request.url.path == "/history/p1":
+            return httpx.Response(200, json={})
+        if request.url.path == "/api/jobs/p1/cancel":
+            return httpx.Response(200, json={"cancelled": True})
+        raise AssertionError(request.url)
+
+    class Caller:
+        async def is_disconnected(self):
+            return "/history/p1" in calls
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://comfy"
+        ) as client:
+            await run_while_connected(
+                Caller(), generate("video", "scene", ["first.png"], tmp_path,
+                                   "http://comfy", client=client)
+            )
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run())
+    assert calls[-1] == "/api/jobs/p1/cancel"
+
+
 def test_generate_rejects_oversized_media_and_cleans_temporary_file(tmp_path, monkeypatch):
     from inference import comfyui
 
