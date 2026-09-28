@@ -5,6 +5,7 @@ import { SCENE_TIME_LABELS, SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS } from "../labe
 import { GuideTip } from "../GuideTip";
 import ShotEditor from "./ShotEditor";
 import { MutationError } from "./ShotHeader";
+import { buildScriptCsv, scriptCsvFilename } from "./scriptExport";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
 // FR-02 的下限，和 engine 的 MIN_SHOTS 同一个数——这里只用来显示"当前 N
@@ -61,6 +62,18 @@ export default function ScriptReview({
   async function handleRemove(shotNo: number) {
     if (!window.confirm(`确认删除第 ${shotNo} 镜？删掉的镜会留在 removed_shots 里。`)) return;
     await mutation.run((rowVersion) => removeShot(episode.episode_id, shotNo, rowVersion));
+  }
+
+  function exportScript() {
+    const blob = new Blob([buildScriptCsv(episode, destination)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = scriptCsvFilename(episode);
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function shotActions(shot: Shot, index: number) {
@@ -123,6 +136,7 @@ export default function ScriptReview({
       <div className="k-desk-toolbar">
         <div className="k-card-title">审核 1 · 脚本</div>
         <span className="k-nav-spacer" />
+        <button type="button" className="k-btn k-btn-secondary k-btn-tiny" onClick={exportScript}>导出脚本 CSV</button>
         <div className="k-desk-viewswitch" role="group" aria-label="查看模式">
           <button
             type="button"
@@ -145,97 +159,102 @@ export default function ScriptReview({
       <p className="k-card-meta">
         当前 {shots.length} 镜，下限 {MIN_SHOTS} 镜。审核 1 只能改、删，不能新增镜（PRD §4）。
       </p>
-      <div className="k-card k-desk-script-assistant">
-        <div className="k-card-title">脚本助手</div>
-        <p className="k-card-meta">已生成 {shots.length} 镜；可重新生成整份脚本，或描述想调整的叙事重点。处理失败会保留当前脚本。</p>
-        <p className="k-card-meta">优化与重新生成可能消耗积分；这里不会显示每次操作的单独报价。</p>
-        <label className="k-field">
-          优化指令
-          <textarea value={instruction} maxLength={500} disabled={actionDisabled}
-            placeholder="例如：增加夜景镜头，让美食段落更有生活感"
-            onChange={(event) => setInstruction(event.target.value)} />
-        </label>
-        <div className="k-desk-actions">
-          <button type="button" className="k-btn k-btn-secondary" disabled={actionDisabled}
-            onClick={() => mutation.run((rowVersion) => regenerateScript(episode.episode_id, rowVersion))}>
-            重新生成
-          </button>
-          <button type="button" className="k-btn k-btn-secondary" disabled={actionDisabled || !instruction.trim()}
-            onClick={() => mutation.run((rowVersion) => optimizeScript(episode.episode_id, rowVersion, instruction.trim()))}>
-            按指令优化
-          </button>
-        </div>
-        {scriptBusy && <p role="status">脚本正在处理中，请稍候…</p>}
-        {episode.script_action_error && <p role="alert">{episode.script_action_error}</p>}
-      </div>
       <MutationError error={mutation.error} />
 
-      {view === "script" ? (
-        <div className="k-desk-tablewrap">
-          <table className="k-desk-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>场景</th>
-                <th>时段</th>
-                <th>景别</th>
-                <th>动作 beat</th>
-                <th>字幕</th>
-                <th>机位</th>
-                <th>地标</th>
-                <th>关键帧 prompt</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shots.map((shot, index) => {
-                const scene = sceneLabel(episode, shot);
-                return [
-                  <tr key={shot.no}>
-                    <td>{shot.no}</td>
-                    <td>{scene.name}</td>
-                    <td>{scene.time}</td>
-                    <td>{SHOT_SIZE_LABELS[shot.size]}</td>
-                    <td>{shot.beat}</td>
-                    <td>{shot.caption || "—"}</td>
-                    <td>{SHOT_CAMERA_LABELS[shot.camera]}</td>
-                    <td>{landmarkLabel(destination, shot)}</td>
-                    <td className="k-desk-prompt-cell">{shot.kf_prompt || "—"}</td>
-                    <td>{shotActions(shot, index)}</td>
-                  </tr>,
-                  editing === shot.no ? (
-                    <tr key={`${shot.no}-editor`}>
-                      <td colSpan={10}>{editor(shot)}</td>
-                    </tr>
-                  ) : null,
-                ];
-              })}
-            </tbody>
-          </table>
+      <div className="k-desk-script-layout">
+        <div className="k-desk-script-content">
+        {view === "script" ? (
+          <div className="k-desk-tablewrap">
+            <table className="k-desk-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>场景</th>
+                  <th>时段</th>
+                  <th>景别</th>
+                  <th>动作 beat</th>
+                  <th>字幕</th>
+                  <th>机位</th>
+                  <th>地标</th>
+                  <th>关键帧 prompt</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shots.map((shot, index) => {
+                  const scene = sceneLabel(episode, shot);
+                  return [
+                    <tr key={shot.no}>
+                      <td>{shot.no}</td>
+                      <td>{scene.name}</td>
+                      <td>{scene.time}</td>
+                      <td>{SHOT_SIZE_LABELS[shot.size]}</td>
+                      <td>{shot.beat}</td>
+                      <td>{shot.caption || "—"}</td>
+                      <td>{SHOT_CAMERA_LABELS[shot.camera]}</td>
+                      <td>{landmarkLabel(destination, shot)}</td>
+                      <td className="k-desk-prompt-cell">{shot.kf_prompt || "—"}</td>
+                      <td>{shotActions(shot, index)}</td>
+                    </tr>,
+                    editing === shot.no ? (
+                      <tr key={`${shot.no}-editor`}>
+                        <td colSpan={10}>{editor(shot)}</td>
+                      </tr>
+                    ) : null,
+                  ];
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="k-desk-board">
+            {shots.map((shot, index) => {
+              const scene = sceneLabel(episode, shot);
+              return (
+                <article key={shot.no} className="k-card k-desk-card">
+                  <div className="k-card-title">
+                    第 {shot.no} 镜 · {SHOT_SIZE_LABELS[shot.size]}
+                  </div>
+                  <div className="k-card-meta">
+                    {scene.name} · {scene.time} · {SHOT_CAMERA_LABELS[shot.camera]} · 地标{" "}
+                    {landmarkLabel(destination, shot)}
+                  </div>
+                  <p>{shot.beat}</p>
+                  <p className="k-card-meta">字幕：{shot.caption || "—"}</p>
+                  <div className="k-card-meta k-desk-prompt-cell">{shot.kf_prompt || "还没有 prompt"}</div>
+                  {shotActions(shot, index)}
+                  {editing === shot.no && editor(shot)}
+                </article>
+              );
+            })}
+          </div>
+        )}
+
         </div>
-      ) : (
-        <div className="k-desk-board">
-          {shots.map((shot, index) => {
-            const scene = sceneLabel(episode, shot);
-            return (
-              <article key={shot.no} className="k-card k-desk-card">
-                <div className="k-card-title">
-                  第 {shot.no} 镜 · {SHOT_SIZE_LABELS[shot.size]}
-                </div>
-                <div className="k-card-meta">
-                  {scene.name} · {scene.time} · {SHOT_CAMERA_LABELS[shot.camera]} · 地标{" "}
-                  {landmarkLabel(destination, shot)}
-                </div>
-                <p>{shot.beat}</p>
-                <p className="k-card-meta">字幕：{shot.caption || "—"}</p>
-                <div className="k-card-meta k-desk-prompt-cell">{shot.kf_prompt || "还没有 prompt"}</div>
-                {shotActions(shot, index)}
-                {editing === shot.no && editor(shot)}
-              </article>
-            );
-          })}
+        <div className="k-card k-desk-script-assistant">
+          <div className="k-card-title">脚本助手</div>
+          <p className="k-card-meta">已生成 {shots.length} 镜；可重新生成整份脚本，或描述想调整的叙事重点。处理失败会保留当前脚本。</p>
+          <p className="k-card-meta">优化与重新生成可能消耗积分；这里不会显示每次操作的单独报价。</p>
+          <label className="k-field">
+            优化指令
+            <textarea value={instruction} maxLength={500} disabled={actionDisabled}
+              placeholder="例如：增加夜景镜头，让美食段落更有生活感"
+              onChange={(event) => setInstruction(event.target.value)} />
+          </label>
+          <div className="k-desk-actions">
+            <button type="button" className="k-btn k-btn-secondary" disabled={actionDisabled}
+              onClick={() => mutation.run((rowVersion) => regenerateScript(episode.episode_id, rowVersion))}>
+              重新生成
+            </button>
+            <button type="button" className="k-btn k-btn-secondary" disabled={actionDisabled || !instruction.trim()}
+              onClick={() => mutation.run((rowVersion) => optimizeScript(episode.episode_id, rowVersion, instruction.trim()))}>
+              按指令优化
+            </button>
+          </div>
+          {scriptBusy && <p role="status">脚本正在处理中，请稍候…</p>}
+          {episode.script_action_error && <p role="alert">{episode.script_action_error}</p>}
         </div>
-      )}
+      </div>
 
       <div className="k-desk-actions">
         <button

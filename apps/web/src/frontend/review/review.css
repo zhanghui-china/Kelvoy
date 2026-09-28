@@ -339,3 +339,20 @@
 .k-compose-setup { display: grid; gap: 16px; max-width: 720px; }
 .k-compose-options { display: flex; flex-wrap: wrap; gap: 12px 24px; color: var(--color-ink-soft); }
 .k-compose-options label { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Script review keeps its wide table inside the left column. */
+.k-desk-script-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  gap: 1.25rem;
+  align-items: start;
+  min-width: 0;
+}
+.k-desk-script-content { min-width: 0; }
+.k-desk-script-content .k-desk-tablewrap { max-width: 100%; }
+.k-desk-script-assistant { min-width: 0; }
+.k-desk-script-assistant textarea { width: 100%; box-sizing: border-box; }
+@media (max-width: 900px) {
+  .k-desk-script-layout { grid-template-columns: minmax(0, 1fr); }
+}
+.k-desk-script-content .k-desk-board { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
