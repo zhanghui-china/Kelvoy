@@ -129,5 +129,18 @@ with sync_playwright() as playwright:
     assert [item["row_version"] for item in state["writes"]] == [1, 2]
     page.close()
 
+    page, state = open_view(browser, "clip_review")
+    first = page.locator('.k-desk-shot[data-shot-no="1"]')
+    for name in ("人物一致", "手部正常", "地标形态正确", "物理合理", "无可读文字"):
+        first.get_by_label(name).check()
+    slider = first.locator('input[type="range"]')
+    slider.focus()
+    slider.press("ArrowRight")
+    first.get_by_role("button", name="通过这一镜").evaluate("button => { button.click(); button.click(); }")
+    page.wait_for_function("document.querySelector('[data-shot-no=\"1\"] .k-pill')?.textContent === '已通过'", timeout=10000)
+    assert len(state["writes"]) == 2, state["writes"]
+    assert [item["patch"] for item in state["writes"]][1] == {"status": "approved"}
+    page.close()
+
     browser.close()
 print("PR10 browser interactions passed")

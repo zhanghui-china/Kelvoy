@@ -58,6 +58,8 @@ function ClipShot({
   const savedTrimRef = useRef(shot.trim_start_s ?? 0);
   const serverTrimRef = useRef(shot.trim_start_s ?? 0);
   const trimSaveRef = useRef<Promise<boolean> | null>(null);
+  const approvalRef = useRef(false);
+  const [approving, setApproving] = useState(false);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const serverTrim = shot.trim_start_s ?? 0;
@@ -108,12 +110,20 @@ function ClipShot({
   }
 
   async function approve() {
-    if (!(await saveTrim())) return;
-    setError(null);
-    const result = await mutation.run((rowVersion) =>
-      patchShot(episode.episode_id, shot.no, rowVersion, { status: "approved" }),
-    );
-    if (result && !result.ok) setError(describeWriteError(result));
+    if (approvalRef.current) return;
+    approvalRef.current = true;
+    setApproving(true);
+    try {
+      if (!(await saveTrim())) return;
+      setError(null);
+      const result = await mutation.run((rowVersion) =>
+        patchShot(episode.episode_id, shot.no, rowVersion, { status: "approved" }),
+      );
+      if (result && !result.ok) setError(describeWriteError(result));
+    } finally {
+      approvalRef.current = false;
+      setApproving(false);
+    }
   }
 
   async function runWrite(call: (rowVersion: number) => Promise<WriteResult>) {
@@ -197,7 +207,7 @@ function ClipShot({
         <button
           type="button"
           className="k-btn k-btn-primary k-btn-tiny"
-          disabled={(mutation.pending && !trimSaveRef.current) || !allChecked || shot.status !== "clip_ready"}
+          disabled={approving || (mutation.pending && !trimSaveRef.current) || !allChecked || shot.status !== "clip_ready"}
           onClick={approve}
         >
           通过这一镜
