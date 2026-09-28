@@ -5,6 +5,7 @@ import ShareActions from "./ShareActions";
 import { MutationError } from "./ShotHeader";
 import { tally } from "./tally";
 import type { EpisodeMutation } from "./useEpisodeMutation";
+import "./DoneView.css";
 
 /** Old episodes had a fixed key; new deliveries carry their versioned key. */
 function finalKey(episode: Episode): string {
@@ -21,6 +22,9 @@ export default function DoneView({
   const url = episodeFileUrl(episode.episode_id, finalKey(episode));
   const rows = tally(episode);
   const totalCost = rows.reduce((sum, row) => sum + row.costUsd, 0);
+  const final = episode.final;
+  const aspectRatio = final?.width && final.height ? `${final.width}/${final.height}` :
+    episode.brief.aspect === "16:9" ? "16/9" : "9/16";
 
   if (episode.status === "composing") {
     return (
@@ -33,18 +37,18 @@ export default function DoneView({
 
   return (
     <section className="k-desk-main">
-      <div className="k-card-title">成片</div>
+      <div className="k-card-title">成片 · {episode.render.title || episode.name}</div>
       <GuideTip section="deliver">先完整播放成片，再下载或开启分享链接。</GuideTip>
-      <video className="k-media k-desk-final" src={url} controls aria-label="成片" />
-      <p className="k-card-meta">文件还没生成时播放器会是空的，那说明合成还没跑完。</p>
-      {episode.final && <p className="k-card-meta">
-        {episode.final.duration_s.toFixed(1)} 秒 · {episode.final.width}×{episode.final.height} · {episode.final.fps} fps · {(episode.final.size_bytes / 1024 / 1024).toFixed(1)} MB · {new Date(episode.final.completed_at).toLocaleString()}
-      </p>}
-      <p>
-        <a href={url} download>
-          下载成片
-        </a>
-      </p>
+      <div className="k-delivery-preview">
+        <video className="k-media k-desk-final" style={{ aspectRatio }} src={url} controls aria-label="成片" />
+        <div className="k-delivery-detail">
+          <p className="k-card-meta">请先完整播放并检查画面、字幕与声音，再交付作品。</p>
+          {final ? <p className="k-card-meta">
+            {final.duration_s.toFixed(1)} 秒 · {final.width}×{final.height} · {final.fps} fps · {(final.size_bytes / 1024 / 1024).toFixed(1)} MB · {new Date(final.completed_at).toLocaleString()}
+          </p> : <p className="k-card-meta">旧版作品未记录成片规格，仍可播放和下载已有文件。</p>}
+          <a className="k-btn k-btn-primary" href={url} download>下载 MP4 成片</a>
+        </div>
+      </div>
       {episode.cut_policy !== "fixed_1s" && episode.mode === "per_shot" &&
         episode.shots.length > 0 && episode.shots.every((shot) => !!shot.clip) &&
         <div className="k-card">
