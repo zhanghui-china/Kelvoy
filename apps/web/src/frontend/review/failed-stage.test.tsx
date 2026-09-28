@@ -21,7 +21,7 @@ test.each([
   ["draft", 1], ["scripting", 2], ["script_review", 2],
   ["assets", 3], ["keyframing", 3], ["kf_review", 3],
   ["clipping", 4], ["clip_review", 4],
-  ["compose_ready", 5], ["composing", 5], ["done", 6],
+  ["compose_ready", 5], ["composing", 5],
 ] as [EpisodeStatus, number][])("live %s status marks step %i", (status, ordinal) => {
   const html = renderToStaticMarkup(<StageSteps status={status} />);
   expect(html).toContain(`aria-current="step">${["①", "②", "③", "④", "⑤", "⑥"][ordinal - 1]}`);
@@ -97,4 +97,11 @@ test("direct reference asset failure names preparation rather than a failed clip
   expect(html).toContain("准备素材失败");
   expect(html).not.toContain("视频片段<span class=\"k-desk-step-state\">失败阶段");
   expect(html).not.toContain("关键帧");
+});
+
+test.each(["keyframe", "references"] as const)("completed %s episode marks every stage complete", (videoSource) => {
+  const html = renderToStaticMarkup(<StageSteps status="done" videoSource={videoSource} />);
+  expect(html).not.toContain("当前阶段");
+  expect(html).not.toContain('aria-current="step"');
+  expect((html.match(/已完成/g) ?? []).length).toBe(videoSource === "references" ? 5 : 6);
 });
