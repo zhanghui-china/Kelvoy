@@ -92,10 +92,88 @@ test("reclaimed executions cannot overwrite each other's generated files", async
   const old = await provider.generate({ ...input, execution_id: "lease_old" });
   await writeFile(source, "new execution");
   const current = await provider.generate({ ...input, execution_id: "lease_new" });
-  expect(current.key).not.toBe(old.key);
+  expect(current.key).toBe(old.key);
   expect(await readFile(join(root, "e1", old.key), "utf8")).toBe("old execution");
-  expect(await readFile(join(root, "e1", current.key), "utf8")).toBe("new execution");
-  expect(await Bun.file(source).exists()).toBe(false);
+  expect(await Bun.file(source).exists()).toBe(true);
+});
+
+test("new lease reuses only matching intact candidates and regenerates changed references", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-reclaim-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "persona"));
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  const reference = join(root, "persona", "front.png");
+  const source = join(root, "inference", "image", "result.png");
+  await writeFile(reference, "version 1");
+  let calls = 0;
+  const provider = createLocalGenerationProviders(async () => {
+    calls++;
+    await writeFile(source, `image ${calls}`);
+    return { ok: true, response: { paths: ["inference/image/result.png"],
+      model: "Qwen", version: "1", seed: 42, seconds: 1 } };
+  }).keyframe;
+  const input = { episode_id: "e1", shot_no: 1, candidate_no: 0, prompt: "scene",
+    refs: ["persona/front.png"], seed: 42, generation_id: "generation-1" };
+  const first = await provider.generate({ ...input, execution_id: "old" });
+  expect((await provider.generate({ ...input, execution_id: "new" })).key).toBe(first.key);
+  expect(calls).toBe(1);
+  await writeFile(reference, "version 2");
+  const changed = await provider.generate({ ...input, execution_id: "new" });
+  expect(changed.key).not.toBe(first.key);
+  expect(calls).toBe(2);
+  await writeFile(join(root, "e1", changed.key), "tampered");
+  const recovered = await provider.generate({ ...input, execution_id: "new" });
+  expect(recovered.key).not.toBe(changed.key);
+  expect(await readFile(join(root, "e1", changed.key), "utf8")).toBe("tampered");
+  expect(calls).toBe(3);
+});
+
+test("new lease reuses matching direct video without another model call", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-video-reclaim-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "persona"));
+  await mkdir(join(root, "dest"));
+  await mkdir(join(root, "inference", "video"), { recursive: true });
+  await writeFile(join(root, "persona", "front.png"), "person");
+  await writeFile(join(root, "dest", "scene.jpg"), "scene");
+  const source = join(root, "inference", "video", "result.mp4");
+  let calls = 0;
+  const provider = createLocalGenerationProviders(async () => {
+    calls++;
+    await writeFile(source, "video");
+    return { ok: true, response: { paths: ["inference/video/result.mp4"],
+      model: "MiniMax", version: "1", seed: 7, seconds: 20 } };
+  }).video;
+  const input = { episode_id: "e1", shot_no: 1, refs: ["persona/front.png", "dest/scene.jpg"],
+    prompt: "walking", duration_s: 3, seed: 7, generation_id: "generation-1" };
+  const first = await provider.generate({ ...input, execution_id: "old" });
+  expect((await provider.generate({ ...input, execution_id: "new" })).key).toBe(first.key);
+  expect(calls).toBe(1);
+});
+
+test("an orphaned media file from a failed metadata publish does not block a same-lease retry", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-orphan-retry-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "e1", "kf"), { recursive: true });
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  const orphan = join(root, "e1", "kf", "01_generation-1_lease-1_0.png");
+  await writeFile(orphan, "orphan from interrupted publish");
+  const source = join(root, "inference", "image", "result.png");
+  let calls = 0;
+  const provider = createLocalGenerationProviders(async () => {
+    calls++;
+    await writeFile(source, "fresh generation");
+    return { ok: true, response: { paths: ["inference/image/result.png"],
+      model: "Qwen", version: "1", seed: 42, seconds: 1 } };
+  }).keyframe;
+  const input = { episode_id: "e1", shot_no: 1, candidate_no: 0, prompt: "scene",
+    refs: [], seed: 42, generation_id: "generation-1", execution_id: "lease-1" };
+  const result = await provider.generate(input);
+  expect(result.key).not.toBe("kf/01_generation-1_lease-1_0.png");
+  expect(await readFile(orphan, "utf8")).toBe("orphan from interrupted publish");
+  expect(await readFile(join(root, "e1", result.key), "utf8")).toBe("fresh generation");
+  expect((await provider.generate(input)).key).toBe(result.key);
+  expect(calls).toBe(1);
 });
 
 test("video adapter rejects a keyframe path escaping the episode directory", async () => {
