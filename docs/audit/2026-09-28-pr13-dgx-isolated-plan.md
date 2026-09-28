@@ -1,6 +1,6 @@
 # PR13 DGX 隔离验收方案（待授权执行）
 
-2026-09-28 只读 SSH 检查黑客松 Spark 节点 `spark-c327`：`kelvoy-web`、`kelvoy-worker`、`kelvoy-inference` 和 `comfyui` 用户服务均 active；现有 Kelvoy 仓库 HEAD 为 `7c62e37`，`infra/dgx/README.md` 有本地修改且 `infra/dgx/systemd/` 未跟踪。磁盘约 1.7 TB 可用，GPU 查询时利用率 0%。同次非交互 SSH shell 中 `bun`、`uv`、`ffmpeg`、`ffprobe` 均不在 `PATH`；不等于机器上完全未安装，执行前需定位现有用户级运行时或在隔离目录准备。拟用的回环端口 3301、8111 当时空闲。这些只是当时的快照，运行前必须重查。现有服务和真实库不能作为最新 main 的验收对象，也不能覆写它们。
+2026-09-28 只读 SSH 检查黑客松 Spark 节点 `spark-c327`：`kelvoy-web`、`kelvoy-worker`、`kelvoy-inference` 和 `comfyui` 用户服务均 active；现有 Kelvoy 仓库 HEAD 为 `7c62e37`，`infra/dgx/README.md` 有本地修改且 `infra/dgx/systemd/` 未跟踪。磁盘约 1.7 TB 可用，GPU 查询时利用率 0%。非交互 SSH shell 的默认 `PATH` 不含运行工具，但只读检查已定位用户级 Bun 1.4.2（`~/.bun/bin/bun`）、ffmpeg/ffprobe 7.0.2（`~/.local/bin/`）及 uv 0.12.17（`~/miniconda3/bin/uv`）。隔离进程需显式设置包含这些目录的 `PATH`，不用改系统级工具。拟用的回环端口 3301、8111 当时空闲。这些只是当时的快照，运行前必须重查。现有服务和真实库不能作为最新 main 的验收对象，也不能覆写它们。
 
 ## 拟执行的隔离方式
 
