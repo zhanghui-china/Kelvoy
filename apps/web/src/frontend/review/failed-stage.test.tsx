@@ -68,3 +68,20 @@ test("direct reference progress has no keyframe stage", () => {
   expect(html).not.toContain("关键帧");
   expect(html).toContain('aria-current="step">③ 视频片段');
 });
+
+test("steps identify completed, current review, and upcoming stages without links", () => {
+  const html = renderToStaticMarkup(<StageSteps status="script_review" />);
+  expect(html).toContain("已完成");
+  expect(html).toContain("当前阶段");
+  expect(html).toContain("待开始");
+  expect(html).toContain("请审核分镜脚本");
+  expect(html).not.toContain("<a ");
+  expect(html).not.toContain("<button");
+});
+
+test("direct failure identifies the video stage without showing keyframes", () => {
+  const html = renderToStaticMarkup(<StageSteps status="failed" videoSource="references" failedTask={{ stage: "video", shot_no: 2 }} />);
+  expect(html).toContain("③ 视频片段");
+  expect(html).toContain("失败阶段");
+  expect(html).not.toContain("关键帧");
+});

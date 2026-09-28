@@ -55,7 +55,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
   return (
     <div>
       <div className="k-eyebrow">审片台</div>
-      <h1>
+      <h1 className="k-desk-title">
         {episodeLabel(episode)}{" "}
         <span className="k-pill k-pill-accent">{EPISODE_STATUS_LABELS[episode.status]}</span>
       </h1>
