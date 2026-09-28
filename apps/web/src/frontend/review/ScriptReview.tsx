@@ -158,6 +158,8 @@ export default function ScriptReview({
       <div className="k-desk-script-layout">
         <div className="k-desk-script-content">
         {view === "script" ? (
+          <>
+          <p className="k-card-meta k-desk-scroll-hint">表格可横向滚动查看全部字段。</p>
           <div className="k-desk-tablewrap">
             <table className="k-desk-table">
               <thead>
@@ -200,6 +202,7 @@ export default function ScriptReview({
               </tbody>
             </table>
           </div>
+          </>
         ) : (
           <div className="k-desk-board">
             {shots.map((shot, index) => {
