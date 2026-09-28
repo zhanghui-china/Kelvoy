@@ -21,7 +21,7 @@ test.each([
   ["draft", 1], ["scripting", 2], ["script_review", 2],
   ["assets", 3], ["keyframing", 3], ["kf_review", 3],
   ["clipping", 4], ["clip_review", 4],
-  ["compose_ready", 5], ["composing", 5], ["done", 6],
+  ["compose_ready", 5], ["composing", 5],
 ] as [EpisodeStatus, number][])("live %s status marks step %i", (status, ordinal) => {
   const html = renderToStaticMarkup(<StageSteps status={status} />);
   expect(html).toContain(`aria-current="step">${["①", "②", "③", "④", "⑤", "⑥"][ordinal - 1]}`);
@@ -67,4 +67,41 @@ test("direct reference progress has no keyframe stage", () => {
   const html = renderToStaticMarkup(<StageSteps status="clipping" videoSource="references" />);
   expect(html).not.toContain("关键帧");
   expect(html).toContain('aria-current="step">③ 视频片段');
+});
+
+test("steps identify completed, current review, and upcoming stages without links", () => {
+  const html = renderToStaticMarkup(<StageSteps status="script_review" />);
+  expect(html).toContain("已完成");
+  expect(html).toContain("当前阶段");
+  expect(html).toContain("待开始");
+  expect(html).toContain("请审核分镜脚本");
+  expect(html).not.toContain("<a ");
+  expect(html).not.toContain("<button");
+});
+
+test("direct failure identifies the video stage without showing keyframes", () => {
+  const html = renderToStaticMarkup(<StageSteps status="failed" videoSource="references" failedTask={{ stage: "video", shot_no: 2 }} />);
+  expect(html).toContain("③ 视频片段");
+  expect(html).toContain("失败阶段");
+  expect(html).not.toContain("关键帧");
+});
+
+test("failure without task summary does not describe every stage as waiting", () => {
+  const html = renderToStaticMarkup(<StageSteps status="failed" failedTask={null} />);
+  expect(html).toContain("生成失败，阶段未知");
+  expect(html).not.toContain("待开始");
+});
+
+test("direct reference asset failure names preparation rather than a failed clip", () => {
+  const html = renderToStaticMarkup(<StageSteps status="failed" videoSource="references" failedTask={{ stage: "assets", shot_no: null }} />);
+  expect(html).toContain("准备素材失败");
+  expect(html).not.toContain("视频片段<span class=\"k-desk-step-state\">失败阶段");
+  expect(html).not.toContain("关键帧");
+});
+
+test.each(["keyframe", "references"] as const)("completed %s episode marks every stage complete", (videoSource) => {
+  const html = renderToStaticMarkup(<StageSteps status="done" videoSource={videoSource} />);
+  expect(html).not.toContain("当前阶段");
+  expect(html).not.toContain('aria-current="step"');
+  expect((html.match(/已完成/g) ?? []).length).toBe(videoSource === "references" ? 5 : 6);
 });
