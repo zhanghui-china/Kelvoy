@@ -42,19 +42,29 @@ function ClipShot({
   shot,
   mutation,
   isCurrent,
+  hidden,
   registerShot,
 }: {
   episode: Episode;
   shot: Shot;
   mutation: EpisodeMutation;
   isCurrent: boolean;
+  hidden: boolean;
   registerShot: (no: number, el: HTMLElement | null) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [clipSeconds, setClipSeconds] = useState<number | null>(null);
   const [trimStart, setTrimStart] = useState(shot.trim_start_s ?? 0);
+  const savedTrimRef = useRef(shot.trim_start_s ?? 0);
+  const serverTrimRef = useRef(shot.trim_start_s ?? 0);
+  const trimSaveRef = useRef<Promise<boolean> | null>(null);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const serverTrim = shot.trim_start_s ?? 0;
+  if (serverTrim !== serverTrimRef.current) {
+    serverTrimRef.current = serverTrim;
+    savedTrimRef.current = serverTrim;
+  }
 
   const total = clipSeconds ?? FALLBACK_CLIP_SECONDS;
   const fixedCut = episode.cut_policy === "fixed_1s";
@@ -76,17 +86,25 @@ function ClipShot({
     });
   }
 
-  async function saveTrim() {
-    if (trimStart === (shot.trim_start_s ?? 0)) return true;
+  function saveTrim(): Promise<boolean> {
+    if (trimSaveRef.current) return trimSaveRef.current;
+    if (trimStart === savedTrimRef.current) return Promise.resolve(true);
+    const value = trimStart;
     setError(null);
-    const result = await mutation.run((rowVersion) =>
-      patchShot(episode.episode_id, shot.no, rowVersion, { trim_start_s: trimStart }),
-    );
-    if (!result || !result.ok) {
-      if (result) setError(describeWriteError(result));
-      return false;
-    }
-    return true;
+    const saving = mutation.run((rowVersion) =>
+      patchShot(episode.episode_id, shot.no, rowVersion, { trim_start_s: value }),
+    ).then((result) => {
+      if (!result || !result.ok) {
+        if (result) setError(describeWriteError(result));
+        return false;
+      }
+      savedTrimRef.current = value;
+      return true;
+    }).finally(() => {
+      if (trimSaveRef.current === saving) trimSaveRef.current = null;
+    });
+    trimSaveRef.current = saving;
+    return saving;
   }
 
   async function approve() {
@@ -107,6 +125,8 @@ function ClipShot({
   return (
     <article
       className={`k-card k-desk-shot ${isCurrent ? "is-current" : ""}`}
+      data-shot-no={shot.no}
+      hidden={hidden}
       ref={(el) => registerShot(shot.no, el)}
     >
       <ShotHeader shot={shot} />
@@ -149,7 +169,6 @@ function ClipShot({
                 preview(snapped);
               }}
               onPointerUp={saveTrim}
-              onKeyUp={saveTrim}
               onBlur={saveTrim}
             />
             <span className="k-card-meta">
@@ -178,7 +197,7 @@ function ClipShot({
         <button
           type="button"
           className="k-btn k-btn-primary k-btn-tiny"
-          disabled={mutation.pending || !allChecked || shot.status !== "clip_ready"}
+          disabled={(mutation.pending && !trimSaveRef.current) || !allChecked || shot.status !== "clip_ready"}
           onClick={approve}
         >
           通过这一镜
@@ -221,17 +240,23 @@ export default function ClipReview({
   mutation: EpisodeMutation;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
   const { currentNo, focusShot, registerShot } = useShotNavigation(episode.shots.map((s) => s.no));
   const shotNos = episode.shots.map((shot) => shot.no);
   const activeNo = focusedShot(shotNos, currentNo);
   useEffect(() => {
     if (currentNo === null && activeNo !== null) focusShot(activeNo);
   }, [activeNo, currentNo, focusShot]);
+  useEffect(() => {
+    if (activeNo !== null) {
+      mainRef.current?.querySelector<HTMLElement>(`[data-shot-no="${activeNo}"]`)?.scrollIntoView({ block: "center" });
+    }
+  }, [activeNo]);
   const unapproved = episode.shots.filter((s) => s.status !== "approved").length;
 
   return (
     <div className="k-desk-layout">
-      <section className="k-desk-main">
+      <section className="k-desk-main" ref={mainRef}>
         <div className="k-desk-toolbar">
           <div className="k-card-title">审核 3 · 片段</div>
         </div>
@@ -251,13 +276,14 @@ export default function ClipReview({
             </button>
           </div>}
 
-        {episode.shots.filter((shot) => showAll || shot.no === activeNo).map((shot) => (
+        {episode.shots.map((shot) => (
           <ClipShot
             key={shot.no}
             episode={episode}
             shot={shot}
             mutation={mutation}
             isCurrent={activeNo === shot.no}
+            hidden={!showAll && activeNo !== shot.no}
             registerShot={registerShot}
           />
         ))}

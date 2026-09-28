@@ -82,7 +82,8 @@ test("keyframe and clip review initially focus one shot while retaining queue na
   for (const html of [keyframes, clips]) {
     expect(html).toContain('aria-label="镜头导航"');
     expect(html).toContain("查看全部镜头");
-    expect(html.match(/class="k-card k-desk-shot /g)).toHaveLength(1);
+    expect(html.match(/class="k-card k-desk-shot /g)).toHaveLength(2);
+    expect(html).toContain('data-shot-no="2" hidden=""');
     expect(html).toContain("第 1 镜");
     expect(html).toContain("第 2 镜"); // 待审队列仍能定位未展示的镜头
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
 import { GuideTip } from "../GuideTip";
@@ -24,6 +24,7 @@ function KeyframeShot({
   persona,
   mutation,
   isCurrent,
+  hidden,
   registerShot,
 }: {
   episode: Episode;
@@ -32,6 +33,7 @@ function KeyframeShot({
   persona: Persona | null;
   mutation: EpisodeMutation;
   isCurrent: boolean;
+  hidden: boolean;
   registerShot: (no: number, el: HTMLElement | null) => void;
 }) {
   const [promptOpen, setPromptOpen] = useState(false);
@@ -76,6 +78,8 @@ function KeyframeShot({
   return (
     <article
       className={`k-card k-desk-shot ${isCurrent ? "is-current" : ""}`}
+      data-shot-no={shot.no}
+      hidden={hidden}
       ref={(el) => registerShot(shot.no, el)}
     >
       <ShotHeader shot={shot} />
@@ -179,19 +183,25 @@ export default function KeyframeReview({
 }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
   const { currentNo, focusShot, registerShot } = useShotNavigation(episode.shots.map((s) => s.no));
   const shotNos = episode.shots.map((shot) => shot.no);
   const activeNo = focusedShot(shotNos, currentNo);
   useEffect(() => {
     if (currentNo === null && activeNo !== null) focusShot(activeNo);
   }, [activeNo, currentNo, focusShot]);
+  useEffect(() => {
+    if (activeNo !== null) {
+      mainRef.current?.querySelector<HTMLElement>(`[data-shot-no="${activeNo}"]`)?.scrollIntoView({ block: "center" });
+    }
+  }, [activeNo]);
 
   const unselected = episode.shots.filter((s) =>
     s.status !== "approved" && (s.status !== "kf_selected" || !s.kf_selected)).length;
 
   return (
     <div className="k-desk-layout">
-      <section className="k-desk-main">
+      <section className="k-desk-main" ref={mainRef}>
         <div className="k-desk-toolbar">
           <div className="k-card-title">审核 2 · 关键帧</div>
           <span className="k-nav-spacer" />
@@ -230,7 +240,7 @@ export default function KeyframeReview({
 
         <MutationError error={mutation.error} />
 
-        {episode.shots.filter((shot) => showAll || shot.no === activeNo).map((shot) => (
+        {episode.shots.map((shot) => (
           <KeyframeShot
             key={shot.no}
             episode={episode}
@@ -239,6 +249,7 @@ export default function KeyframeReview({
             persona={persona}
             mutation={mutation}
             isCurrent={activeNo === shot.no}
+            hidden={!showAll && activeNo !== shot.no}
             registerShot={registerShot}
           />
         ))}
