@@ -1,10 +1,10 @@
 # PR13 DGX 隔离验收方案（待授权执行）
 
-2026-09-28 只读 SSH 检查黑客松 Spark 节点 `spark-c327`：`kelvoy-web`、`kelvoy-worker`、`kelvoy-inference` 和 `comfyui` 用户服务均 active；现有 Kelvoy 仓库 HEAD 为 `7c62e37`，`infra/dgx/README.md` 有本地修改且 `infra/dgx/systemd/` 未跟踪。磁盘约 1.7 TB 可用，GPU 查询时利用率 0%。这些只是当时的快照，运行前必须重查。现有服务和真实库不能作为最新 main 的验收对象，也不能覆写它们。
+2026-09-28 只读 SSH 检查黑客松 Spark 节点 `spark-c327`：`kelvoy-web`、`kelvoy-worker`、`kelvoy-inference` 和 `comfyui` 用户服务均 active；现有 Kelvoy 仓库 HEAD 为 `7c62e37`，`infra/dgx/README.md` 有本地修改且 `infra/dgx/systemd/` 未跟踪。磁盘约 1.7 TB 可用，GPU 查询时利用率 0%。同次非交互 SSH shell 中 `bun`、`uv`、`ffmpeg`、`ffprobe` 均不在 `PATH`；不等于机器上完全未安装，执行前需定位现有用户级运行时或在隔离目录准备。拟用的回环端口 3301、8111 当时空闲。这些只是当时的快照，运行前必须重查。现有服务和真实库不能作为最新 main 的验收对象，也不能覆写它们。
 
 ## 拟执行的隔离方式
 
-1. 在节点另建独立 checkout，固定到届时已审查的 PR13 提交；保留现有 `/home/Developer/kelvoy`、其本地修改和用户 systemd 服务。先只读核实 Bun 版本；若节点没有 Bun，在隔离用户目录准备与项目锁文件兼容的运行时，不改系统级工具。独立进程只绑定 `127.0.0.1` 的未占用端口，通过 SSH 隧道访问，不占用现有 8888/9000 公网映射。
+1. 在节点另建独立 checkout，固定到届时已审查的 PR13 提交；保留现有 `/home/Developer/kelvoy`、其本地修改和用户 systemd 服务。先只读定位 Bun、uv、ffmpeg 和 ffprobe 的现有用户级路径与版本；若缺少，则在隔离用户目录准备所需运行时，不改系统级工具。独立进程只绑定 `127.0.0.1` 的未占用端口，通过 SSH 隧道访问，不占用现有 8888/9000 公网映射。
 2. 使用新建的测试 SQLite、`projects/` 目录、日志和临时目录；不读取或迁移现有运行库。隔离 web 与 worker 均设置同一个独立 `KELVOY_DB_PATH`，隔离 web、worker 和**新起的推理包装服务**均设置同一个独立 `KELVOY_PROJECTS_ROOT`；worker 的 `INFERENCE_BASE_URL` 指向新包装服务，不能复用正在运行的 `kelvoy-inference`，因为其产物根目录属于现有服务。为测试账号按已确认的额度发放积分，隔离账号、角色、目的地及分享链接。
 3. 复核模型、字体、音乐/LUT、StepFun 凭证和 ComfyUI 当前任务；同一时段只由本任务向共享 GPU 提交生成。选同一角色、两个不同目的地，一期 9:16、一期 16:9，记录版本、任务 ID、积分/API 消耗和失败恢复。
 4. 按实际流程审核脚本、传统关键帧（若所选期采用传统方式）、片段、合成、下载和分享。用 `ffprobe` 检查**合成后每镜 1 秒选段**的 30 帧与最终尺寸、时长、30 fps、片头偏移；原始模型片段的 24 fps、约 3 秒规格另行记录；检查分享开关及跨账号权限。生成结果和截图只放隔离目录，验收记录不包含密钥。
