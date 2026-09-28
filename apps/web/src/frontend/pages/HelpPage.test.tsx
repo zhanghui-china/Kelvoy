@@ -33,7 +33,13 @@ test("guide renders six anchored stages and links to live workspace routes", () 
   expect(html).toContain("不会自动发布");
   expect(html).toContain("重新显示新手引导");
   expect(html).toContain("新建一期会按目的地类型预选匹配的模板");
-  expect(html).toContain("暂不支持 CSV/PDF 导出");
+  expect(html).toContain("导出当前脚本 CSV");
+  expect(html).toContain("目前不提供分镜 PDF");
+  expect(html).toContain("按模型的实际 API 费用");
+  expect(html).toContain("通过时会先保存改动过的起点");
+  expect(html).toContain("切换到“官方角色”");
+  expect(html).toContain("按名称搜索或按类型筛选");
+  expect(html).toContain("按状态、地区、省份和季节筛选");
   expect(html).toContain("其他重生成可能消耗积分");
   expect(html).not.toContain("实际用量为准");
 });
@@ -105,4 +111,14 @@ test("modified or non-primary TOC clicks do not move the current page", () => {
     }
     expect(scrolled).toBe(0);
   } finally { globalThis.document = previousDocument; }
+});
+
+test("help directory searches real anchored sections without hiding the article", () => {
+  const html = renderToStaticMarkup(<StaticRouter location="/help"><HelpPage /></StaticRouter>);
+  expect(html).toContain('type="search"');
+  expect(html).toContain('aria-label="帮助目录"');
+  for (const id of ["personas", "destinations", "templates", "settings", "credits", "retries", "faq"]) {
+    expect(html).toContain(`href="/help#${id}"`);
+    expect(html).toContain(`id="${id}"`);
+  }
 });

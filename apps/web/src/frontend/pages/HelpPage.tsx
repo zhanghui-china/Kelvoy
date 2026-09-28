@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { updateMySettings } from "../api/client";
-import { GUIDE_RESOURCES, GUIDE_SECTIONS, guideHref } from "../guide";
+import { GUIDE_RESOURCES, GUIDE_SECTIONS } from "../guide";
+import { searchHelp, type HelpAnchor } from "./help-search";
 import "./HelpPage.css";
 
 const GUIDE_ANCHORS = new Set([...GUIDE_SECTIONS.map((section) => section.id), ...GUIDE_RESOURCES.map((resource) => resource.id), "retries", "faq"]);
@@ -20,12 +21,12 @@ export function focusGuideHash(hash: string, doc: { getElementById(id: string): 
 
 /** A repeated click on the current hash does not change location, so focus explicitly. */
 export function GuideJumpLink({ section, currentHash, children }: {
-  section: (typeof GUIDE_SECTIONS)[number]["id"];
+  section: HelpAnchor;
   currentHash: string;
   children: React.ReactNode;
 }) {
   const targetHash = `#${section}`;
-  return <Link to={guideHref(section)} onClick={(event) => {
+  return <Link to={`/help#${section}`} onClick={(event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (currentHash === targetHash) focusGuideHash(targetHash, document);
   }}>{children}</Link>;
@@ -69,6 +70,8 @@ function ReopenOnboarding() {
 
 export default function HelpPage() {
   const { hash } = useLocation();
+  const [query, setQuery] = useState("");
+  const results = searchHelp(query);
   useEffect(() => {
     if (hash) focusGuideHash(hash, document);
   }, [hash]);
@@ -78,6 +81,24 @@ export default function HelpPage() {
       <div className="k-eyebrow">使用指南</div>
       <h1>从第一期到可分享的旅行作品</h1>
       <p className="k-page-intro">一期开一个角色与真实目的地的旅行故事。推荐人物＋场景直出视频，审核脚本和片段即可；选择传统方式时另有关键帧审核。</p>
+
+      <section className="k-card k-help-search" aria-labelledby="help-search-heading">
+        <h2 id="help-search-heading">查找创作指南</h2>
+        <label className="k-field">搜索帮助内容
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="例如：角色、横屏、失败重试" />
+        </label>
+        <p className="k-card-meta" role="status">{query.trim() ? `找到 ${results.length} 条相关说明` : "完整目录"}</p>
+        {results.length === 0 ? <p className="k-empty">没有匹配的说明，请换个关键词。</p> :
+          <nav className="k-help-directory" aria-label="帮助目录">
+            {(["创作流程", "资源与账户", "问题处理"] as const).map((group) => {
+              const items = results.filter((item) => item.group === group);
+              return items.length > 0 && <div key={group}>
+                <h3>{group}</h3>
+                <ul>{items.map((item) => <li key={item.id}><GuideJumpLink section={item.id} currentHash={hash}>{item.title}</GuideJumpLink></li>)}</ul>
+              </div>;
+            })}
+          </nav>}
+      </section>
 
       <section className="k-help-quick" aria-labelledby="quick-start-heading">
         <div>
@@ -100,9 +121,9 @@ export default function HelpPage() {
       </nav>
 
       <section className="k-help-resources" aria-label="创作资源说明">
-        <article className="k-card" id="personas" tabIndex={-1}><h2>角色怎么选</h2><p><Link to="/personas">官方角色</Link>已经可用，直接选就能开始。想持续使用自己的原创角色，可在角色页新建并上传多个视角的参考图；它们有助于跨期保持形象一致。</p></article>
-        <article className="k-card" id="destinations" tabIndex={-1}><h2>目的地看什么</h2><p>在<Link to="/destinations">目的地库</Link>查看景区地标和实景参考，选与你想呈现的行程相符的地方。缺少足够参考图的地标会提示，生成前先核对地标与季节。</p></article>
-        <article className="k-card" id="templates" tabIndex={-1}><h2>模板如何搭配</h2><p>新建一期会按目的地类型预选匹配的模板；高级设置可手动换。去<Link to="/templates">模板库</Link>查看骨架、调色、片头片尾和标题样式，选与你的叙事相符的组合。</p></article>
+        <article className="k-card" id="personas" tabIndex={-1}><h2>角色怎么选</h2><p>在<Link to="/personas">角色库</Link>切换到“官方角色”，点击“使用角色”即可带入新建一期；也可以直接在新建页选官方角色。想持续使用自己的原创角色，可在角色页新建并上传多个视角的参考图；它们有助于跨期保持形象一致。</p></article>
+        <article className="k-card" id="destinations" tabIndex={-1}><h2>目的地看什么</h2><p>在<Link to="/destinations">目的地库</Link>按名称搜索或按类型筛选，查看景区地标和实景参考；点击“用这个目的地新建一期”可带入选择。缺少足够参考图的地标会提示，生成前先核对地标与季节。</p></article>
+        <article className="k-card" id="templates" tabIndex={-1}><h2>模板如何搭配</h2><p>新建一期会按目的地类型预选匹配的模板；高级设置可手动换。去<Link to="/templates">模板库</Link>搜索或按类型筛选，查看骨架、调色、片头片尾和标题样式；点击“使用模板”可带入新建一期。</p></article>
         <article className="k-card" id="settings" tabIndex={-1}><h2>出片默认值</h2><p>在<Link to="/settings">设置页</Link>保存默认语气。每镜 1–3 张候选图只用于传统关键帧方式；直出视频不生成候选图。提交前看实时预估积分。</p></article>
         <article className="k-card" id="credits" tabIndex={-1}><h2>积分与流水</h2><p>团队发放积分；可用余额可用于新任务，任务预留会先锁定积分，成功结算，失败退回。到<Link to="/usage">用量页</Link>看可用、预留余额及实际流水。</p></article>
       </section>
@@ -119,8 +140,8 @@ export default function HelpPage() {
       <section className="k-card k-help-extra" id="retries" tabIndex={-1}>
         <h2>失败、重试与积分</h2>
         <p>后台生成失败时，在对应作品页查看原因并点“重新执行失败任务”。已有的产物和已通过镜头会保留。对某一镜不满意，可在审核页重生成；不同操作可能增加实际用量，请在提交前看预估积分，并在 <Link to="/usage">用量页</Link>查看实际积分记录。</p>
-        <p>脚本可直接编辑、按指令优化或重新生成；暂不支持 CSV/PDF 导出。片段审核中的首次报告坏镜提供一次免费重生成，其他重生成可能消耗积分，实际用量可在用量页查看。</p>
-        <Link to="/works">去我的作品查看进度 →</Link>
+        <p>脚本可直接编辑、按指令优化或重新生成，也可导出当前脚本 CSV；目前不提供分镜 PDF。关键帧和片段审核可用上一镜、下一镜与待审队列逐镜切换；片段审核通过前会先保存改动过的起点。首次报告坏镜提供一次免费重生成，其他重生成可能消耗积分，实际用量可在用量页查看。</p>
+        <p>在<Link to="/works">我的作品</Link>可按作品名、角色或目的地搜索，并按状态、地区、省份和季节筛选；点“继续”或“查看”打开对应作品。</p>
       </section>
 
       <section className="k-card k-help-extra" id="faq" tabIndex={-1}>
