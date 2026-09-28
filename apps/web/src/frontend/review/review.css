@@ -359,7 +359,3 @@
 
 .k-desk-script-content .k-desk-tablewrap { overflow-x: auto; }
 .k-desk-script-content .k-desk-table { min-width: 960px; }
-.k-desk-scroll-hint { display: none; }
-@media (max-width: 900px) {
-  .k-desk-scroll-hint { display: block; }
-}

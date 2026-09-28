@@ -38,4 +38,5 @@ test("narrow script table retains readable width inside its own horizontal scrol
   expect(html).toContain('<div class="k-desk-tablewrap"><table class="k-desk-table">');
   expect(reviewCss).toMatch(/\.k-desk-script-content \.k-desk-table\s*\{[^}]*min-width:\s*9\d\dpx/);
   expect(reviewCss).toMatch(/\.k-desk-script-content \.k-desk-tablewrap\s*\{[^}]*overflow-x:\s*auto/);
+  expect(reviewCss).not.toMatch(/\.k-desk-scroll-hint\s*\{\s*display:\s*none/);
 });
