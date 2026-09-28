@@ -73,3 +73,17 @@ test("legacy clip and compose guidance does not promise fixed cuts or a duration
   expect(compose).toContain("沿用旧项目的节拍切点");
   expect(compose).not.toContain("预计时长按当前镜头数和首尾设置计算");
 });
+
+test("keyframe and clip review initially focus one shot while retaining queue navigation", () => {
+  const keyframeEpisode = { ...episode, shots: [shot, { ...shot, no: 2, beat: "第二镜" }] } as Episode;
+  const clipEpisode = { ...keyframeEpisode, shots: keyframeEpisode.shots.map((item) => ({ ...item, status: "generating_clip" })) } as Episode;
+  const keyframes = render(<KeyframeReview episode={keyframeEpisode} destination={null} persona={null} mutation={mutation} />);
+  const clips = render(<ClipReview episode={clipEpisode} mutation={mutation} />);
+  for (const html of [keyframes, clips]) {
+    expect(html).toContain('aria-label="镜头导航"');
+    expect(html).toContain("查看全部镜头");
+    expect(html.match(/class="k-card k-desk-shot /g)).toHaveLength(1);
+    expect(html).toContain("第 1 镜");
+    expect(html).toContain("第 2 镜"); // 待审队列仍能定位未展示的镜头
+  }
+});

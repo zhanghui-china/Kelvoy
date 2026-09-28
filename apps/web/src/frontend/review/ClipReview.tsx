@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Episode, Shot } from "@kelvoy/engine";
 import type { WriteResult } from "../api/client";
 import {
@@ -12,7 +12,9 @@ import {
 import { describeWriteError } from "./errors";
 import { GuideTip } from "../GuideTip";
 import ReviewQueue from "./ReviewQueue";
+import { ShotFocusNav } from "./ShotFocusNav";
 import { MutationError, ShotHeader } from "./ShotHeader";
+import { focusedShot } from "./shot-focus";
 import { canRegen, regenHint } from "./shot-rules";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 import { useShotNavigation } from "./useShotNavigation";
@@ -75,15 +77,20 @@ function ClipShot({
   }
 
   async function saveTrim() {
-    if (trimStart === (shot.trim_start_s ?? 0)) return;
+    if (trimStart === (shot.trim_start_s ?? 0)) return true;
     setError(null);
     const result = await mutation.run((rowVersion) =>
       patchShot(episode.episode_id, shot.no, rowVersion, { trim_start_s: trimStart }),
     );
-    if (result && !result.ok) setError(describeWriteError(result));
+    if (!result || !result.ok) {
+      if (result) setError(describeWriteError(result));
+      return false;
+    }
+    return true;
   }
 
   async function approve() {
+    if (!(await saveTrim())) return;
     setError(null);
     const result = await mutation.run((rowVersion) =>
       patchShot(episode.episode_id, shot.no, rowVersion, { status: "approved" }),
@@ -213,7 +220,13 @@ export default function ClipReview({
   episode: Episode;
   mutation: EpisodeMutation;
 }) {
+  const [showAll, setShowAll] = useState(false);
   const { currentNo, focusShot, registerShot } = useShotNavigation(episode.shots.map((s) => s.no));
+  const shotNos = episode.shots.map((shot) => shot.no);
+  const activeNo = focusedShot(shotNos, currentNo);
+  useEffect(() => {
+    if (currentNo === null && activeNo !== null) focusShot(activeNo);
+  }, [activeNo, currentNo, focusShot]);
   const unapproved = episode.shots.filter((s) => s.status !== "approved").length;
 
   return (
@@ -225,6 +238,8 @@ export default function ClipReview({
         <GuideTip section="clips">{episode.cut_policy === "fixed_1s"
           ? "每镜严格截取 1 秒，起点按 30 fps 帧格调整；看完动作并确认五项质量红线后再通过。坏镜可报告并免费重生成一次。"
           : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 1 秒剪辑时，先转换并重新确认。"}</GuideTip>
+        <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
+          onPick={focusShot} onToggle={() => setShowAll(!showAll)} />
         <MutationError error={mutation.error} />
         {episode.cut_policy !== "fixed_1s" && episode.shots.every((shot) => !!shot.clip) &&
           <div className="k-card">
@@ -236,13 +251,13 @@ export default function ClipReview({
             </button>
           </div>}
 
-        {episode.shots.map((shot) => (
+        {episode.shots.filter((shot) => showAll || shot.no === activeNo).map((shot) => (
           <ClipShot
             key={shot.no}
             episode={episode}
             shot={shot}
             mutation={mutation}
-            isCurrent={currentNo === shot.no}
+            isCurrent={activeNo === shot.no}
             registerShot={registerShot}
           />
         ))}
@@ -260,7 +275,7 @@ export default function ClipReview({
         </div>
       </section>
 
-      <ReviewQueue gate="clip" shots={episode.shots} currentNo={currentNo} onPick={focusShot} />
+      <ReviewQueue gate="clip" shots={episode.shots} currentNo={activeNo} onPick={focusShot} />
     </div>
   );
 }
