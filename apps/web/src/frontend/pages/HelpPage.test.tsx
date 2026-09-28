@@ -34,6 +34,9 @@ test("guide renders six anchored stages and links to live workspace routes", () 
   expect(html).toContain("重新显示新手引导");
   expect(html).toContain("新建一期会按目的地类型预选匹配的模板");
   expect(html).toContain("暂不支持 CSV/PDF 导出");
+  expect(html).toContain("切换到“官方角色”");
+  expect(html).toContain("按名称搜索或按类型筛选");
+  expect(html).toContain("按状态、地区、省份和季节筛选");
   expect(html).toContain("其他重生成可能消耗积分");
   expect(html).not.toContain("实际用量为准");
 });

@@ -13,4 +13,6 @@ test("help search covers resource and FAQ topics and keeps stable anchors", () =
   expect(searchHelp("").some((item) => item.id === "create")).toBe(true);
   expect(searchHelp("CSV").map((item) => item.id)).toContain("retries");
   expect(searchHelp("PDF").map((item) => item.id)).toContain("retries");
+  expect(searchHelp("类型筛选").map((item) => item.id)).toContain("destinations");
+  expect(searchHelp("省份").map((item) => item.id)).toContain("retries");
 });
