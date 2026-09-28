@@ -1,6 +1,6 @@
 /** PR13: exercise backup, legacy migration, restart, and rollback on disposable SQLite files. */
 import { Database } from "bun:sqlite";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -11,17 +11,30 @@ const source = join(dir, "legacy.db");
 const backup = join(dir, "backup.db");
 const candidate = join(dir, "candidate.db");
 const restored = join(dir, "restored.db");
-const tables = ["episodes", "personas", "destinations", "tasks", "users"] as const;
+const projections = {
+  episodes: "episode_id, owner_id, row_version, doc, updated_at",
+  personas: "persona_id, owner_id, version, doc, updated_at",
+  destinations: "destination_id, version, doc, updated_at",
+  tasks: "task_id, episode_id, stage, shot_no, attempt, status, created_at, updated_at",
+  users: "user_id, username, password_hash, created_at",
+} as const;
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function snapshot(db: Database): Record<string, number> {
-  return Object.fromEntries(tables.map((table) => {
-    const row = db.query<{ count: number }, []>(`select count(*) as count from ${table}`).get();
-    return [table, row?.count ?? 0];
-  }));
+function snapshot(db: Database): Record<string, Record<string, unknown>[]> {
+  return Object.fromEntries(Object.entries(projections).map(([table, columns]) => [
+    table, db.query(`select ${columns} from ${table} order by 1`).all(),
+  ]));
+}
+
+function counts(rows: ReturnType<typeof snapshot>): Record<string, number> {
+  return Object.fromEntries(Object.entries(rows).map(([table, values]) => [table, values.length]));
+}
+
+function sameRows(actual: ReturnType<typeof snapshot>, expected: ReturnType<typeof snapshot>, phase: string): void {
+  assert(JSON.stringify(actual) === JSON.stringify(expected), `${phase} changed original core row content`);
 }
 
 function integrity(db: Database): void {
@@ -46,6 +59,7 @@ try {
   // Deliberately old tables: missing task lease/operation fields, user settings,
   // nullable persona owner, and the version-history tables.
   const legacy = new Database(source, { create: true });
+  legacy.exec("pragma journal_mode = WAL; pragma wal_autocheckpoint = 0;");
   legacy.exec(`
     create table episodes (episode_id text primary key, owner_id text not null,
       row_version integer not null default 1, doc text not null, updated_at text not null);
@@ -76,16 +90,21 @@ try {
   legacy.query("insert into users values (?, ?, ?, datetime('now'))").run("owner-a", "legacy", "hash");
   integrity(legacy);
   const before = snapshot(legacy);
-  legacy.close();
-
+  assert(statSync(`${source}-wal`).size > 0, "fixture has no committed WAL data");
+  // The writer stays open and committed rows remain in its WAL during backup.
   copyWithBackup(source, backup);
+  const saved = new Database(backup, { readonly: true });
+  integrity(saved);
+  sameRows(snapshot(saved), before, "WAL backup");
+  saved.close();
+  legacy.close();
   copyWithBackup(backup, candidate);
   const sourceHash = digest(source);
   const backupHash = digest(backup);
 
   let migrated = open(candidate);
   integrity(migrated);
-  assert(JSON.stringify(snapshot(migrated)) === JSON.stringify(before), "migration changed core row counts");
+  sameRows(snapshot(migrated), before, "migration");
   const episode = await getEpisode("legacy-episode");
   assert(episode.ok && episode.episode.candidate_count === 2 &&
     episode.episode.brief.aspect === "9:16" && episode.episode.cut_policy === "beat_aligned",
@@ -104,14 +123,14 @@ try {
   integrity(migrated);
   assert(migrated.query<{ count: number }, []>("select count(*) as count from schema_migrations").get()?.count === 1,
     "migration reran on restart");
-  assert(JSON.stringify(snapshot(migrated)) === JSON.stringify(before), "restart changed core row counts");
+  sameRows(snapshot(migrated), before, "restart");
   close();
 
   // Rollback is rehearsed only before accepting writes on the migrated DB.
   copyWithBackup(backup, restored);
   const rollback = new Database(restored, { readonly: true });
   integrity(rollback);
-  assert(JSON.stringify(snapshot(rollback)) === JSON.stringify(before), "rollback changed core row counts");
+  sameRows(snapshot(rollback), before, "rollback");
   assert(rollback.query<{ count: number }, []>(
     "select count(*) as count from sqlite_master where type = 'table' and name = 'schema_migrations'",
   ).get()?.count === 0, "rollback retained migrated schema");
@@ -120,7 +139,8 @@ try {
     "source or backup was modified during rehearsal");
 
   console.log(JSON.stringify({ result: "pass", fixture: "disposable legacy SQLite",
-    core_rows_before_after: before, sqlite_integrity: "ok", legacy_defaults: "pass",
+    core_rows_before_after: counts(before), core_row_content: "unchanged",
+    online_wal_backup: "pass", sqlite_integrity: "ok", legacy_defaults: "pass",
     approximate_catalog_versions: { persona: approximation, destination: destinationApproximation },
     restart_idempotence: "pass", rollback_before_new_writes: "pass",
     source_and_backup_unchanged: true }, null, 2));
