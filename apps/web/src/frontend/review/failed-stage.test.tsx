@@ -85,3 +85,16 @@ test("direct failure identifies the video stage without showing keyframes", () =
   expect(html).toContain("失败阶段");
   expect(html).not.toContain("关键帧");
 });
+
+test("failure without task summary does not describe every stage as waiting", () => {
+  const html = renderToStaticMarkup(<StageSteps status="failed" failedTask={null} />);
+  expect(html).toContain("生成失败，阶段未知");
+  expect(html).not.toContain("待开始");
+});
+
+test("direct reference asset failure names preparation rather than a failed clip", () => {
+  const html = renderToStaticMarkup(<StageSteps status="failed" videoSource="references" failedTask={{ stage: "assets", shot_no: null }} />);
+  expect(html).toContain("准备素材失败");
+  expect(html).not.toContain("视频片段<span class=\"k-desk-step-state\">失败阶段");
+  expect(html).not.toContain("关键帧");
+});

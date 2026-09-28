@@ -48,12 +48,14 @@ export default function StageSteps({ status, failedTask, videoSource }: {
       ? FAILURE_STAGE_INDEX[failedTask.stage] - 1 : FAILURE_STAGE_INDEX[failedTask.stage] : -1)
     : stages.findIndex((stage) => stage.states.includes(status));
   const failure = status === "failed";
+  const unknownFailure = failure && !failedTask;
+  const directAssetsFailure = failure && direct && failedTask?.stage === "assets";
   return <div className="k-desk-progress"><ol className="k-desk-steps" aria-label="创作进度">
     {stages.map((stage, index) => <li key={stage.label}
       className={`k-desk-step ${index === current ? failure ? "is-failed" : "is-current" : ""} ${index < current ? "is-done" : ""}`}
       aria-current={index === current ? "step" : undefined}>
-      {stage.label}
-      <span className="k-desk-step-state">{index === current ? failure ? "失败阶段" : "当前阶段" : index < current ? "已完成" : "待开始"}</span>
+      {directAssetsFailure && index === current ? "③ 素材准备与视频片段" : stage.label}
+      <span className="k-desk-step-state">{unknownFailure ? "阶段未知" : index === current ? directAssetsFailure ? "准备素材失败" : failure ? "失败阶段" : "当前阶段" : index < current ? "已完成" : "待开始"}</span>
     </li>)}
-  </ol>{REVIEW_HINTS[status] && <p className="k-desk-review-hint">{REVIEW_HINTS[status]}</p>}</div>;
+  </ol>{unknownFailure && <p className="k-desk-review-hint">生成失败，阶段未知</p>}{REVIEW_HINTS[status] && <p className="k-desk-review-hint">{REVIEW_HINTS[status]}</p>}</div>;
 }
