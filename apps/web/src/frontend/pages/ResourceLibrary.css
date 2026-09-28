@@ -1,0 +1,13 @@
+.k-library-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 1.4rem 0; }
+.k-library-toolbar .k-field { margin: 0; min-width: 180px; }
+.k-library-toolbar .k-field:first-child { flex: 1; }
+.k-library-toolbar p { margin: 0; padding-bottom: .6rem; }
+.k-library-source { display: flex; gap: .5rem; margin: 1rem 0; }
+.k-library-use { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+.k-template-cover { display: grid; align-content: center; min-height: 140px; padding: 1.4rem; margin: -1px -1px 1rem; border-radius: 14px; background: linear-gradient(135deg, #dbeafe, #eef2ff 60%, #e0f2fe); color: #1e3a8a; overflow: hidden; }
+.k-template-cover strong { font-size: 1.5rem; letter-spacing: .1em; }
+.k-template-cover span { margin-top: .5rem; font-size: .75rem; color: #475569; }
+.k-template-cover[data-skeleton="mountain_summit"], .k-template-cover[data-skeleton="scenic_area"] { background: linear-gradient(145deg, #dcfce7, #dbeafe); }
+.k-template-cover[data-skeleton="city_night"] { background: linear-gradient(145deg, #e0e7ff, #fae8ff); }
+.k-template-cover[data-skeleton="water_town"], .k-template-cover[data-skeleton="island"] { background: linear-gradient(145deg, #cffafe, #eff6ff); }
+@media (max-width: 600px) { .k-library-toolbar { align-items: stretch; } .k-library-toolbar .k-field { width: 100%; } }

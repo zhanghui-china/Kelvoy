@@ -11,6 +11,9 @@
   text-align: center;
 }
 
+.k-share-page h1 { max-width: 100%; overflow-wrap: anywhere; }
+.k-share-state { min-height: 60vh; justify-content: center; }
+
 .k-share-video {
   height: auto;
   max-width: 360px;
@@ -127,6 +130,16 @@
 .k-works-episode-info { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; min-width: 0; }
 .k-works-episode-info > span:first-child { overflow-wrap: anywhere; }
 .k-works-episode .k-series-action { flex: none; padding: 0.4rem 0; }
+.k-works-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem; margin: 1.3rem 0; }
+.k-works-filters label { display: grid; gap: 0.3rem; color: var(--color-muted); font-size: 0.8rem; }
+.k-works-filters input, .k-works-filters select { min-height: 2.6rem; min-width: 9rem; max-width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.45rem; background: var(--color-surface); color: var(--color-text); font: inherit; }
+.k-works-filters input { min-width: min(18rem, 80vw); }
+.k-works-filters > .k-card-meta { margin-left: auto; padding-bottom: 0.65rem; }
+.k-works-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr)); gap: 0.75rem; }
+.k-works-grid .k-works-episode { display: flex; align-items: stretch; flex-direction: column; border: 1px solid var(--color-border); border-radius: 0.6rem; padding: 1rem; min-width: 0; }
+.k-works-grid .k-works-episode-info { display: flex; flex-direction: column; align-items: start; gap: 0.45rem; }
+.k-works-grid .k-works-episode-info strong { overflow-wrap: anywhere; }
+.k-works-grid .k-series-action { align-self: end; margin-top: auto; }
 
 @media (max-width: 780px) {
   .k-home-week-grid {

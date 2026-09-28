@@ -1,3 +1,4 @@
+import { availableSelection } from "./resource-library";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -58,6 +59,10 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   // 首页"灵感目的地"卡片点进来时带 ?destination=<id>（#42）。
   const [searchParams] = useSearchParams();
   const destinationParam = searchParams.get("destination");
+  const personaParam = searchParams.get("persona");
+  const templateParam = searchParams.get("template");
+  const handledPersonaParam = useRef<string | null>(null);
+  const handledTemplateParam = useRef<string | null>(null);
   const restoredDraft = useRef(readDraft(ownerId));
   const initialDraft = useRef(draftForDestinationParam(restoredDraft.current, destinationParam));
   const handledDestinationParam = useRef(destinationParam);
@@ -78,7 +83,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   const [personaId, setPersonaId] = useState(() => initialDraft.current?.personaId ?? "");
   const [personaTab, setPersonaTab] = useState<"mine" | "official">("mine");
   const [destinationId, setDestinationId] = useState(destinationParam ?? initialDraft.current?.destinationId ?? "");
-  const [templateId, setTemplateId] = useState(initialDraft.current?.templateId ?? "");
+  const [templateId, setTemplateId] = useState(templateParam ?? initialDraft.current?.templateId ?? "");
   const [seasonMode, setSeasonMode] = useState<"preset" | "custom">(initialDraft.current?.seasonMode ?? "preset");
   const [season, setSeason] = useState(initialDraft.current?.season ?? "");
   const [tone, setTone] = useState(initialDraft.current?.tone ?? "");
@@ -112,6 +117,24 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   useEffect(() => {
     if (personas.length > 0 && personaId === "") setPersonaId(personas[0].persona_id);
   }, [personas, personaId]);
+
+  // A library link overrides only its selected resource, once the authorized catalog arrives.
+  useEffect(() => {
+    if (!personaParam || personaParam === handledPersonaParam.current || personasRes.loading) return;
+    handledPersonaParam.current = personaParam;
+    const selected = availableSelection(personaParam, personas.map(p => p.persona_id));
+    if (selected) {
+      setPersonaId(selected);
+      setPersonaTab(personas.find(p => p.persona_id === selected)?.owner_id === null ? "official" : "mine");
+    }
+  }, [personaParam, personas, personasRes.loading]);
+  useEffect(() => {
+    if (!templateParam || templateParam === handledTemplateParam.current || templatesRes.loading) return;
+    handledTemplateParam.current = templateParam;
+    const selected = availableSelection(templateParam, templates.map(t => t.template_id));
+    if (selected) setTemplateId(selected);
+    else if (!templates.some(t => t.template_id === templateId)) setTemplateId("");
+  }, [templateParam, templates, templatesRes.loading, templateId]);
 
   // 目的地的默认项优先用 ?destination=<id> 预选；id 不在库里（或者库变了）
   // 就回落到第一个，不报错——这个入口只是省一次下拉选择。
@@ -148,7 +171,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   // 换成第一个匹配的模板；用户手动选了别的骨架的模板会保留到下次目的地变化。
   useEffect(() => {
     if (!selectedDestination) return;
-    if (selectedTemplate && (selectedTemplate.skeleton === selectedDestination.type || initialDraft.current?.templateId)) return;
+    if (selectedTemplate && (selectedTemplate.skeleton === selectedDestination.type || selectedTemplate.template_id === templateParam || initialDraft.current?.templateId)) return;
     const match = templates.find((t) => t.skeleton === selectedDestination.type);
     if (match) setTemplateId(match.template_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

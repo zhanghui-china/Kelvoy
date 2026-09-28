@@ -1,3 +1,5 @@
+import { filterPersonas, type PersonaSource } from "./resource-library";
+import "./ResourceLibrary.css";
 import { useState } from "react";
 import { Card, EmptyState, ErrorState, LoadingState, PageHeading, Status } from "../ui";
 import { Link } from "react-router-dom";
@@ -52,20 +54,24 @@ export function PersonaCard({ persona: p }: { persona: Persona }) {
         <span className="k-card-meta">账号风格</span>
         <span className="k-card-meta">{p.style.lut} · {p.style.title_style}</span>
       </div>
+      <div className="k-library-use">
+      <Link to={`/episodes/new?persona=${encodeURIComponent(p.persona_id)}`} className="k-btn k-btn-primary">使用角色</Link>
       {canEditPersona(p) && (
         <Link to={`/personas/${p.persona_id}/edit`} className="k-btn k-btn-secondary">编辑</Link>
       )}
+      </div>
     </Card>
   );
 }
 
 export default function PersonasPage() {
+  const [source, setSource] = useState<PersonaSource>("mine");
   const [attempt, setAttempt] = useState(0);
   const { loading, data, error } = useApiResource(listPersonas, [attempt]);
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={`加载失败：${error}`} onRetry={() => setAttempt((value) => value + 1)} />;
-  const personas = data?.personas ?? [];
+  const personas = filterPersonas(data?.personas ?? [], source);
 
   return (
     <div>
@@ -75,9 +81,12 @@ export default function PersonasPage() {
         </Link>
       </PageHeading>
       <GuideTip section="personas">官方角色可直接用于新建一期。自己的角色建议用 3–7 张多视角参考图，锁定特征帮助跨期保持一致；编辑后版本号会更新。</GuideTip>
+      <div className="k-library-source" role="group" aria-label="角色来源">
+        {(["mine", "official"] as const).map(value => <button key={value} type="button" aria-pressed={source === value} className={`k-btn ${source === value ? "k-btn-primary" : "k-btn-secondary"}`} onClick={() => setSource(value)}>{value === "mine" ? "我的角色" : "官方角色"}</button>)}
+      </div>
       {personas.length === 0 ? (
         <EmptyState>
-          还没有角色，点上面"新建角色"开始第一个。
+          {source === "mine" ? "还没有自己的角色，可以新建或切换到官方角色。" : "暂无官方角色。"}
         </EmptyState>
       ) : (
         <div className="k-persona-grid">

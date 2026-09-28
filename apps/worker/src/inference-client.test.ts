@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { callInference } from "./inference-client";
 
 let server: ReturnType<typeof Bun.serve> | undefined;
@@ -81,4 +81,39 @@ test("maps a connection failure (nothing listening) to network", async () => {
   const result = await callInference("/image/", { prompt: "test" });
   expect(result.ok).toBe(false);
   expect(!result.ok && result.error.type).toBe("network");
+});
+
+
+for (const response of [null, [], {},
+  { paths: [1], model: "m", version: "v", seed: 1, seconds: 1 },
+  { paths: ["inference/image/a.png"], model: 1, version: "v", seed: 1, seconds: 1 },
+  { paths: ["inference/image/a.png"], model: "m", version: " ", seed: 1, seconds: 1 },
+  { paths: ["inference/image/a.png"], model: "m", version: "v", seed: 1.5, seconds: 1 },
+  { paths: ["inference/image/a.png"], model: "m", version: "v", seed: 1, seconds: -1 },
+]) {
+  test(`rejects invalid successful wire response: ${JSON.stringify(response)}`, async () => {
+    handler = () => Response.json(response);
+    expect(await callInference("/image/", { prompt: "test" })).toEqual({
+      ok: false, error: { type: "invalid_response" },
+    });
+  });
+}
+
+test("malformed JSON is a protocol failure rather than a connection failure", async () => {
+  handler = () => new Response("not json", { status: 200 });
+  expect(await callInference("/image/", { prompt: "test" })).toEqual({
+    ok: false, error: { type: "invalid_response" },
+  });
+});
+
+
+test("default HTTP deadline leaves 20 seconds after direct generation and cancellation", async () => {
+  handler = () => Response.json({ paths: ["inference/video/a.mp4"], model: "m", version: "v", seed: 1, seconds: 1 });
+  const timer = spyOn(globalThis, "setTimeout");
+  try {
+    expect((await callInference("/video/", { prompt: "test" })).ok).toBe(true);
+    expect(timer).toHaveBeenCalledWith(expect.any(Function), 300_000);
+  } finally {
+    timer.mockRestore();
+  }
 });

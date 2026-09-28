@@ -10,6 +10,7 @@ export type InferenceError =
   | { type: "timeout" }
   | { type: "cancelled" }
   | { type: "network"; message: string }
+  | { type: "invalid_response" }
   | { type: "not_implemented" } // LLM and upscale routes still return 501
   | { type: "invalid_request"; details: unknown } // pydantic 422
   | { type: "http_error"; status: number; body: string };
@@ -17,6 +18,15 @@ export type InferenceError =
 export type CallInferenceResult =
   | { ok: true; response: InferenceResponse }
   | { ok: false; error: InferenceError };
+
+function isInferenceResponse(value: unknown): value is InferenceResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const response = value as Record<string, unknown>;
+  const text = (item: unknown): item is string => typeof item === "string" && item.trim().length > 0;
+  return Array.isArray(response.paths) && response.paths.length > 0 && response.paths.every(text)
+    && text(response.model) && text(response.version) && Number.isSafeInteger(response.seed)
+    && typeof response.seconds === "number" && Number.isFinite(response.seconds) && response.seconds >= 0;
+}
 
 function inferenceBaseUrl(): string {
   return process.env.INFERENCE_BASE_URL ?? "http://127.0.0.1:8100";
@@ -60,12 +70,14 @@ export async function callInference(
       return { ok: false, error: { type: "http_error", status: res.status, body: text } };
     }
 
-    const response = (await res.json()) as InferenceResponse;
+    const response: unknown = await res.json();
+    if (!isInferenceResponse(response)) return { ok: false, error: { type: "invalid_response" } };
     return { ok: true, response };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       return { ok: false, error: { type: options.signal?.aborted ? "cancelled" : "timeout" } };
     }
+    if (err instanceof SyntaxError) return { ok: false, error: { type: "invalid_response" } };
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, error: { type: "network", message } };
   } finally {
