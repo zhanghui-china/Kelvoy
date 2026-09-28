@@ -33,7 +33,10 @@ test("guide renders six anchored stages and links to live workspace routes", () 
   expect(html).toContain("不会自动发布");
   expect(html).toContain("重新显示新手引导");
   expect(html).toContain("新建一期会按目的地类型预选匹配的模板");
-  expect(html).toContain("暂不支持 CSV/PDF 导出");
+  expect(html).toContain("导出当前脚本 CSV");
+  expect(html).toContain("目前不提供分镜 PDF");
+  expect(html).toContain("按模型的实际 API 费用");
+  expect(html).toContain("通过时会先保存改动过的起点");
   expect(html).toContain("切换到“官方角色”");
   expect(html).toContain("按名称搜索或按类型筛选");
   expect(html).toContain("按状态、地区、省份和季节筛选");
