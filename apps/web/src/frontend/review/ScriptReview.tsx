@@ -5,7 +5,7 @@ import { SCENE_TIME_LABELS, SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS } from "../labe
 import { GuideTip } from "../GuideTip";
 import ShotEditor from "./ShotEditor";
 import { MutationError } from "./ShotHeader";
-import { buildScriptCsv, scriptCsvFilename } from "./scriptExport";
+import { downloadScriptCsv } from "./scriptExport";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
 // FR-02 的下限，和 engine 的 MIN_SHOTS 同一个数——这里只用来显示"当前 N
@@ -65,15 +65,7 @@ export default function ScriptReview({
   }
 
   function exportScript() {
-    const blob = new Blob([buildScriptCsv(episode, destination)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = scriptCsvFilename(episode);
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadScriptCsv(episode, destination);
   }
 
   function shotActions(shot: Shot, index: number) {
@@ -141,6 +133,7 @@ export default function ScriptReview({
           <button
             type="button"
             className={`k-btn k-btn-secondary k-btn-tiny ${view === "script" ? "is-active" : ""}`}
+            aria-pressed={view === "script"}
             onClick={() => setView("script")}
           >
             脚本视图
@@ -148,6 +141,7 @@ export default function ScriptReview({
           <button
             type="button"
             className={`k-btn k-btn-secondary k-btn-tiny ${view === "storyboard" ? "is-active" : ""}`}
+            aria-pressed={view === "storyboard"}
             onClick={() => setView("storyboard")}
           >
             故事板视图

@@ -11,6 +11,8 @@ test("script review exposes two columns, CSV export, and existing review actions
   const html = renderToStaticMarkup(<StaticRouter location="/episodes/e1"><ScriptReview episode={episode} destination={null} mutation={mutation} /></StaticRouter>);
   expect(html).toContain('class="k-desk-script-layout"');
   expect(html).toContain("导出脚本 CSV");
+  expect(html).toMatch(/aria-pressed="true"[^>]*>脚本视图<\/button>/);
+  expect(html).toMatch(/aria-pressed="false"[^>]*>故事板视图<\/button>/);
   expect(html).toContain("脚本助手");
   expect(html).toContain("继续 → 用人物与场景生成视频");
   expect(html).toContain("下限 24 镜");

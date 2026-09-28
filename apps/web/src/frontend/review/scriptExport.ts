@@ -24,3 +24,46 @@ export function scriptCsvFilename(episode: Episode): string {
   const safeName = episode.name.replace(/[\\/:*?"<>|\x00-\x1F\x7F]/gu, "_").replace(/^[.\s_]+|[.\s_]+$/gu, "").slice(0, 80);
   return `${safeName || "脚本"}-脚本.csv`;
 }
+
+interface ScriptDownloadLink {
+  href: string;
+  download: string;
+  click(): void;
+  remove(): void;
+}
+
+interface ScriptDownloadEnvironment {
+  createObjectURL(blob: Blob): string;
+  revokeObjectURL(url: string): void;
+  createLink(): ScriptDownloadLink;
+  append(link: ScriptDownloadLink): void;
+  schedule(callback: () => void, delay: number): void;
+}
+
+const browserDownloadEnvironment: ScriptDownloadEnvironment = {
+  createObjectURL: (blob) => URL.createObjectURL(blob),
+  revokeObjectURL: (url) => URL.revokeObjectURL(url),
+  createLink: () => document.createElement("a"),
+  append: (link) => document.body.append(link as HTMLAnchorElement),
+  schedule: (callback, delay) => { setTimeout(callback, delay); },
+};
+
+export function downloadScriptCsv(
+  episode: Episode,
+  destination: Destination | null,
+  environment: ScriptDownloadEnvironment = browserDownloadEnvironment,
+): void {
+  const blob = new Blob([buildScriptCsv(episode, destination)], { type: "text/csv;charset=utf-8" });
+  const url = environment.createObjectURL(blob);
+  const link = environment.createLink();
+  link.href = url;
+  link.download = scriptCsvFilename(episode);
+  environment.append(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    // Downloads can begin asynchronously after the click handler returns.
+    environment.schedule(() => environment.revokeObjectURL(url), 30_000);
+  }
+}
