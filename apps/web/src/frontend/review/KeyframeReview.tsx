@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import { describeWriteError } from "./errors";
 import ReviewQueue from "./ReviewQueue";
+import { ShotFocusNav } from "./ShotFocusNav";
 import { AssetImage, MutationError, ShotHeader } from "./ShotHeader";
+import { focusedShot } from "./shot-focus";
 import { canRegen, regenHint } from "./shot-rules";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 import { useShotNavigation } from "./useShotNavigation";
@@ -22,6 +24,7 @@ function KeyframeShot({
   persona,
   mutation,
   isCurrent,
+  hidden,
   registerShot,
 }: {
   episode: Episode;
@@ -30,6 +33,7 @@ function KeyframeShot({
   persona: Persona | null;
   mutation: EpisodeMutation;
   isCurrent: boolean;
+  hidden: boolean;
   registerShot: (no: number, el: HTMLElement | null) => void;
 }) {
   const [promptOpen, setPromptOpen] = useState(false);
@@ -74,6 +78,8 @@ function KeyframeShot({
   return (
     <article
       className={`k-card k-desk-shot ${isCurrent ? "is-current" : ""}`}
+      data-shot-no={shot.no}
+      hidden={hidden}
       ref={(el) => registerShot(shot.no, el)}
     >
       <ShotHeader shot={shot} />
@@ -176,14 +182,26 @@ export default function KeyframeReview({
   mutation: EpisodeMutation;
 }) {
   const [gridOpen, setGridOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
   const { currentNo, focusShot, registerShot } = useShotNavigation(episode.shots.map((s) => s.no));
+  const shotNos = episode.shots.map((shot) => shot.no);
+  const activeNo = focusedShot(shotNos, currentNo);
+  useEffect(() => {
+    if (currentNo === null && activeNo !== null) focusShot(activeNo);
+  }, [activeNo, currentNo, focusShot]);
+  useEffect(() => {
+    if (activeNo !== null) {
+      mainRef.current?.querySelector<HTMLElement>(`[data-shot-no="${activeNo}"]`)?.scrollIntoView({ block: "center" });
+    }
+  }, [activeNo]);
 
   const unselected = episode.shots.filter((s) =>
     s.status !== "approved" && (s.status !== "kf_selected" || !s.kf_selected)).length;
 
   return (
     <div className="k-desk-layout">
-      <section className="k-desk-main">
+      <section className="k-desk-main" ref={mainRef}>
         <div className="k-desk-toolbar">
           <div className="k-card-title">审核 2 · 关键帧</div>
           <span className="k-nav-spacer" />
@@ -200,6 +218,9 @@ export default function KeyframeReview({
         </div>
 
         <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；全部生成完毕后可改 prompt 并重生成。</GuideTip>
+
+        <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
+          onPick={focusShot} onToggle={() => setShowAll(!showAll)} />
 
         {gridOpen && (
           <div className="k-card">
@@ -227,7 +248,8 @@ export default function KeyframeReview({
             destination={destination}
             persona={persona}
             mutation={mutation}
-            isCurrent={currentNo === shot.no}
+            isCurrent={activeNo === shot.no}
+            hidden={!showAll && activeNo !== shot.no}
             registerShot={registerShot}
           />
         ))}
@@ -245,7 +267,7 @@ export default function KeyframeReview({
         </div>
       </section>
 
-      <ReviewQueue gate="kf" shots={episode.shots} currentNo={currentNo} onPick={focusShot} />
+      <ReviewQueue gate="kf" shots={episode.shots} currentNo={activeNo} onPick={focusShot} />
     </div>
   );
 }

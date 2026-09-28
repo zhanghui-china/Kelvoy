@@ -14,6 +14,10 @@
   margin: 0.5rem 0 1.25rem 0;
 }
 
+.k-desk-title { overflow-wrap: anywhere; }
+.k-desk-title .k-pill { vertical-align: middle; letter-spacing: normal; }
+.k-desk-head > * { min-width: 0; overflow-wrap: anywhere; }
+
 .k-desk-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 240px;
@@ -34,6 +38,15 @@
   gap: 0.75rem;
   flex-wrap: wrap;
 }
+
+.k-desk-focus-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.k-desk-focus-nav .k-card-meta { margin-right: auto; }
 
 .k-desk-viewswitch {
   display: flex;
@@ -104,6 +117,8 @@
   gap: 0.75rem;
   scroll-margin-top: 1rem;
 }
+
+.k-desk-shot[hidden] { display: none; }
 
 .k-desk-shot.is-current {
   border-color: var(--color-accent);
@@ -258,22 +273,27 @@
 /* 阶段步骤条 */
 
 .k-desk-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 0.5rem;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .k-desk-step {
-  padding: 0.35rem 0.75rem;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: 10px;
   font-size: 0.8rem;
   color: var(--color-muted);
   background: var(--color-card);
+  overflow-wrap: anywhere;
 }
+
+.k-desk-step-state { display: block; margin-top: 0.2rem; font-size: 0.72rem; }
+.k-desk-review-hint { margin: 0.6rem 0 0; color: var(--color-ink-soft); font-size: 0.875rem; }
 
 .k-desk-step.is-done {
   color: var(--color-ink-soft);
@@ -286,7 +306,11 @@
   border-color: var(--color-accent);
 }
 
+.k-desk-step.is-failed { color: #9f2b2b; border-color: #c84949; background: #fff0f0; }
+
 @media (max-width: 720px) {
+  .k-desk-focus-nav .k-card-meta { flex-basis: 100%; }
+  .k-desk-focus-nav .k-btn { flex: 1 1 auto; }
   .k-desk-layout,
   .k-desk-shot-body {
     grid-template-columns: minmax(0, 1fr);
@@ -328,3 +352,23 @@
 .k-compose-setup { display: grid; gap: 16px; max-width: 720px; }
 .k-compose-options { display: flex; flex-wrap: wrap; gap: 12px 24px; color: var(--color-ink-soft); }
 .k-compose-options label { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Script review keeps its wide table inside the left column. */
+.k-desk-script-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  gap: 1.25rem;
+  align-items: start;
+  min-width: 0;
+}
+.k-desk-script-content { min-width: 0; }
+.k-desk-script-content .k-desk-tablewrap { max-width: 100%; }
+.k-desk-script-assistant { min-width: 0; }
+.k-desk-script-assistant textarea { width: 100%; box-sizing: border-box; }
+@media (max-width: 900px) {
+  .k-desk-script-layout { grid-template-columns: minmax(0, 1fr); }
+}
+.k-desk-script-content .k-desk-board { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+
+.k-desk-script-content .k-desk-tablewrap { overflow-x: auto; }
+.k-desk-script-content .k-desk-table { min-width: 960px; }

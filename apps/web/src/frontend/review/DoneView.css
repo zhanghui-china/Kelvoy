@@ -1,0 +1,32 @@
+.k-delivery-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.k-delivery-preview .k-desk-final {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  background: #000;
+}
+
+.k-delivery-detail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+@media (max-width: 780px) {
+  .k-delivery-preview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .k-delivery-preview .k-desk-final {
+    max-width: min(100%, 320px);
+  }
+}

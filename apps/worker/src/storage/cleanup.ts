@@ -9,7 +9,7 @@ const MEDIA_NAME = /^[0-9a-f]{32}\.(?:png|mp4)(?:\.tmp-[0-9a-f]{32})?$/;
 const EPISODE_ID = /^[a-zA-Z0-9_-]+$/;
 const PUBLISH_TEMP = /\.tmp-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const GENERATED_MEDIA: Record<"kf" | "clip", RegExp> = {
-  kf: /^\d{2,}_[A-Za-z0-9_-]+_\d+\.png$/,
+  kf: /^\d{2,}_[A-Za-z0-9_-]+_\d+(?:_retry_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})?\.png$/,
   clip: /^\d{2,}_[A-Za-z0-9_-]+\.mp4$/,
 };
 

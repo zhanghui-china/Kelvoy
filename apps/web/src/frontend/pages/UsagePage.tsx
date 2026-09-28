@@ -25,18 +25,6 @@ export default function UsagePage() {
   const periods = usage?.periods ?? [];
   const providerRows = usage?.providers ?? [];
 
-  if (periods.length === 0) {
-    return (
-      <div>
-        <div className="k-eyebrow">账号级成本聚合</div>
-        <h1>用量</h1>
-        <GuideTip section="credits">这里记录账户可用与预留积分，以及实际流水；额度由团队发放。</GuideTip>
-        <CreditPanel />
-        <p className="k-empty">还没有出片记录。</p>
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="k-eyebrow">账号级成本聚合</div>
@@ -62,6 +50,7 @@ export default function UsagePage() {
 
       <div className="k-card">
         <div className="k-card-title">按期</div>
+        {periods.length === 0 ? <p className="k-empty">还没有创作记录。</p> :
         <div className="k-desk-tablewrap">
           <table className="k-desk-table">
             <thead>
@@ -95,7 +84,7 @@ export default function UsagePage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>}
       </div>
 
       <div className="k-card">

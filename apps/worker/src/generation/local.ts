@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { link, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { link, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { localImageRequest, localVideoRequest, type StageContext } from "@kelvoy/engine";
 import { callInference } from "../inference-client";
 import { artifactPath, saveArtifact } from "../storage/artifacts";
@@ -8,6 +8,7 @@ import { artifactPath, saveArtifact } from "../storage/artifacts";
 type InferenceCall = typeof callInference;
 type CachedAsset = { key: string; model: string; version: string;
   seed: number; seconds: number; ref_hashes: string[] };
+type CacheMetadata = CachedAsset & { request_hash: string; content_hash: string };
 
 function requestHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -16,12 +17,35 @@ function requestHash(value: unknown): string {
 async function readCached(episodeId: string, key: string, hash: string): Promise<CachedAsset | null> {
   try {
     const meta = JSON.parse(await readFile(`${artifactPath(episodeId, key)}.meta.json`, "utf8")) as
-      CachedAsset & { request_hash: string };
-    const file = await stat(artifactPath(episodeId, key));
-    return meta.request_hash === hash && meta.key === key && file.size > 0 ? meta : null;
+      CacheMetadata;
+    const path = artifactPath(episodeId, key);
+    const file = await stat(path);
+    // Older metadata lacks a content digest and cannot be verified for
+    // cross-lease reuse. Regenerate it under the new execution key.
+    if (meta.request_hash !== hash || meta.key !== key || file.size === 0 || !meta.content_hash) return null;
+    const contentHash = createHash("sha256").update(await readFile(path)).digest("hex");
+    return contentHash === meta.content_hash ? meta : null;
   } catch {
     return null;
   }
+}
+
+async function findCached(episodeId: string, key: string, prefix: string,
+  hash: string): Promise<CachedAsset | null> {
+  const current = await readCached(episodeId, key, hash);
+  if (current) return current;
+  const directory = key.split("/", 1)[0]!;
+  try {
+    for (const name of await readdir(dirname(artifactPath(episodeId, key)))) {
+      if (!name.startsWith(prefix) || !name.endsWith(`${key.endsWith(".png") ? ".png" : ".mp4"}.meta.json`)) continue;
+      const candidateKey = `${directory}/${name.slice(0, -".meta.json".length)}`;
+      const cached = await readCached(episodeId, candidateKey, hash);
+      if (cached) return cached;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return null;
 }
 
 async function saveCached(episodeId: string, key: string, source: string,
@@ -30,11 +54,31 @@ async function saveCached(episodeId: string, key: string, source: string,
   const path = `${artifactPath(episodeId, key)}.meta.json`;
   const temporary = `${path}.tmp-${crypto.randomUUID()}`;
   try {
-    await writeFile(temporary, JSON.stringify({ ...asset, request_hash: hash }));
+    const content_hash = createHash("sha256").update(await readFile(artifactPath(episodeId, key))).digest("hex");
+    await writeFile(temporary, JSON.stringify({ ...asset, request_hash: hash, content_hash }));
     await link(temporary, path);
   } finally {
     await rm(temporary, { force: true });
   }
+}
+
+async function publishCached(episodeId: string, source: string, hash: string,
+  asset: CachedAsset): Promise<CachedAsset> {
+  const extension = asset.key.endsWith(".png") ? ".png" : ".mp4";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = attempt === 0 ? asset.key
+      : `${asset.key.slice(0, -extension.length)}_retry_${crypto.randomUUID()}${extension}`;
+    const candidate = { ...asset, key };
+    try {
+      await saveCached(episodeId, key, source, hash, candidate);
+      return candidate;
+    } catch (error) {
+      // A prior process may have published media but died before metadata, or
+      // another writer may have won the metadata link. Never replace either.
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  throw new Error("could not reserve a unique generation artifact key");
 }
 
 async function discardInferenceSource(source: string): Promise<void> {
@@ -112,17 +156,19 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const hashes = await Promise.all(input.refs.map(hashKey));
       const key = `kf/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}_${input.candidate_no}.png`;
       const { signal: _signal, ...requestInput } = input;
-      const fingerprint = requestHash({ input: requestInput, hashes });
-      const cached = await readCached(input.episode_id, key, fingerprint);
-      if (cached) return cached;
+      const { execution_id: _executionId, ...reusableInput } = requestInput;
+      const fingerprint = requestHash({ input: reusableInput, hashes });
+      const cached = await findCached(input.episode_id, key,
+        `${String(input.shot_no).padStart(2, "0")}_${input.generation_id}_`, fingerprint);
+      if (cached) { input.signal?.throwIfAborted(); return cached; }
       const response = await requestOne(call, "/image/", localImageRequest(input), input.signal);
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
         input.signal?.throwIfAborted();
-        await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+        const published = await publishCached(input.episode_id, response.source, fingerprint, asset);
         input.signal?.throwIfAborted();
-        return asset;
+        return published;
       } finally {
         await discardInferenceSource(response.source);
       }
@@ -139,9 +185,11 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const hashes = await Promise.all(refs.map(hashKey));
       const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}.mp4`;
       const { signal: _signal, ...requestInput } = input;
-      const fingerprint = requestHash({ input: requestInput, hashes });
-      const cached = await readCached(input.episode_id, key, fingerprint);
-      if (cached) return cached;
+      const { execution_id: _executionId, ...reusableInput } = requestInput;
+      const fingerprint = requestHash({ input: reusableInput, hashes });
+      const cached = await findCached(input.episode_id, key,
+        `${String(input.shot_no).padStart(2, "0")}_${input.generation_id}_`, fingerprint);
+      if (cached) { input.signal?.throwIfAborted(); return cached; }
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, refs,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
@@ -150,9 +198,9 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
         input.signal?.throwIfAborted();
-        await saveCached(input.episode_id, key, response.source, fingerprint, asset);
+        const published = await publishCached(input.episode_id, response.source, fingerprint, asset);
         input.signal?.throwIfAborted();
-        return asset;
+        return published;
       } finally {
         await discardInferenceSource(response.source);
       }
