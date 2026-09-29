@@ -398,14 +398,14 @@ flowchart TD
 
 **（1）流匹配轨迹拉直（Flow Trajectory Straightening）**
 
-在 Flow Matching 体系中，模型学习的是从高斯噪声分布 $p_0(x)$ 到真实数据流分布 $p_1(x)$ 的速度向量场 $v_\theta(x_t, t)$：
+在 Flow Matching 体系中，模型学习的是从高斯噪声分布 p₀(x) 到真实数据流分布 p₁(x) 的速度向量场 v_θ(xₜ, t)：
 
 $$\frac{d x_{t}}{d t} = v_{\theta}(x_{t}, t)$$
 
 未蒸馏的原生模型速度场具有高曲率，采用一阶欧拉求解器步长过大时会严重偏离真实数据流形。Turbo 蒸馏模型采用**渐进一致性蒸馏（Progressive Consistency Distillation）**或**整流流蒸馏（Rectified Flow Distillation / DMD2）**：
 
 1. **学生网络低秩微调**：冻结 INT8 主干，仅在 DiT 的注意力和 FFN 核心线性层注入低秩适配器 $\Delta W = A \cdot B$（秩 $r \ll d$）；
-2. **多步到单步跳跃对齐**：强制使学生模型在 $t_{n}$ 到 $t_{n+k}$ 的单步大跨度预测，匹配教师模型执行多步 Runge-Kutta 积分后的目标终点：
+2. **多步到单步跳跃对齐**：强制使学生模型在 tₙ 到 tₙ₊ₖ 的单步大跨度预测，匹配教师模型执行多步 Runge-Kutta 积分后的目标终点：
 
 $$\mathcal{L}_{\text{distill}} = \mathbb{E}\left[ \left\| \hat{x}_{0}^{\text{student}}(x_{t_n}) - \hat{x}_{0}^{\text{teacher-multi-step}}(x_{t_n}) \right\|^2 \right]$$
 
@@ -440,15 +440,15 @@ $$\text{Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d}}\right) 
 
 Sol-Attn 采用硬件级动态跳块机制：
 
-1. **分块质心提取（Block Centroid Pooling）**：以 $B_s = 64$ 为分块尺寸，预先在 GPU 上聚合计算 Key 质心 $k_c$ 与 Value 质心 $v_c$：
+1. **分块质心提取（Block Centroid Pooling）**：以 `B_s = 64` 为分块尺寸，预先在 GPU 上聚合计算 Key 质心 `k_c` 与 Value 质心 `v_c`：
 
    $$k_{c}^{(j)} = \frac{1}{B_{s}} \sum_{i \in \text{block } j} K_{i}$$
 
-2. **动态统计阈值截断（Adaptive Thresholding）**：对于 Query Block 质心 $q_c$，将粗粒度注意力 Logits 视为高斯分布建模，动态计算其均值 $\mu$ 与标准差 $\sigma$：
+2. **动态统计阈值截断（Adaptive Thresholding）**：对于 Query Block 质心 `q_c`，将粗粒度注意力 Logits 视为高斯分布建模，动态计算其均值 $\mu$ 与标准差 $\sigma$：
 
    $$T_{\text{threshold}} = \mu + \tau \cdot \sigma$$
 
-   若某个 Key Block 的估计响应上限低于 $T_{\text{threshold}}$，该 Block 对最终输出的贡献被判定为不显著，**算子在 Triton 内核层完全跳过该 Block 的加载与 MMA 计算**。
+   若某个 Key Block 的估计响应上限低于 `T_threshold`，该 Block 对最终输出的贡献被判定为不显著，**算子在 Triton 内核层完全跳过该 Block 的加载与 MMA 计算**。
 
 **（2）节点配置参数映射与工程机制**
 
@@ -564,7 +564,7 @@ MiniMax H3 VAE 的解码器包含：
 
 **（2）INT8 ConvRot 在 ViT3D 中的落地**
 
-针对 ViT3D 解码器中占据主要计算耗时的线性层（$X_{\text{embedder}}$、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 $P_{\text{proj-out}}$），全部转换为 **INT8 ConvRot** 格式：
+针对 ViT3D 解码器中占据主要计算耗时的线性层（`X_embedder`、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 `P_proj_out`），全部转换为 **INT8 ConvRot** 格式：
 
 1. **显存占用直降 50%**：解除显存峰值溢出风险；
 2. **解码延迟削减 60%+**：矩阵运算直接由 Tensor Core IMMA 高速执行，消除“去噪 10 秒，解码 8 秒”的倒挂瓶颈。
@@ -839,7 +839,7 @@ max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17
 
 [2026.9.22] 项目选题为”制作景区Vlog“，并邀请 **小腾子** 加入团队。项目成员 **馄饨** 跟x.com 的朋友交流，获取产品灵感，并制作PRD。**小腾子**对项目起名为 **可旅（Kelvoy）**并获得大家认可。
 
-[2026.8.31] 团队成立，起名**“金银铜铁队”**，寓意队员来自“无锡”，完成比赛报名手续，并申请了云端Spark设备。
+[2026.8.31] 团队成立，起名**金银铜铁队**，寓意队员均来自“无锡”，完成比赛报名手续，并申请了云端Spark设备。
 
 
 

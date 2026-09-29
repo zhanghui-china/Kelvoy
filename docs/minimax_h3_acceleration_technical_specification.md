@@ -49,17 +49,23 @@ flowchart TD
 工作流引入的 `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` 从**步数**与**引导前向次数**两个维度实现数量级加速。
 
 ### 2.1 流匹配轨迹拉直（Flow Trajectory Straightening）
-在 Flow Matching 体系中，模型学习的是从高斯噪声分布 $p_0(x)$ 到真实数据流分布 $p_1(x)$ 的速度向量场 $v_\theta(x_t, t)$：
-$$\frac{d x_t}{d t} = v_\theta(x_t, t)$$
+在 Flow Matching 体系中，模型学习的是从高斯噪声分布 p₀(x) 到真实数据流分布 p₁(x) 的速度向量场 v_θ(xₜ, t)：
+
+$$\frac{d x_{t}}{d t} = v_{\theta}(x_{t}, t)$$
+
 未蒸馏的原生模型速度场具有高曲率，采用一阶欧拉求解器步长过大时会严重偏离真实数据流形。Turbo 蒸馏模型采用**渐进一致性蒸馏（Progressive Consistency Distillation）**或**整流流蒸馏（Rectified Flow Distillation / DMD2）**：
 1. **学生网络低秩微调**：冻结 INT8 主干，仅在 DiT 的注意力和 FFN 核心线性层注入低秩适配器 $\Delta W = A \cdot B$（秩 $r \ll d$）；
-2. **多步到单步跳跃对齐**：强制使学生模型在 $t_{n}$ 到 $t_{n+k}$ 的单步大跨度预测，匹配教师模型执行多步 Runge-Kutta 积分后的目标终点：
-   $$\mathcal{L}_{\text{distill}} = \mathbb{E}\left[ \left\| \hat{x}_{0}^{\text{student}}(x_{t_n}) - \hat{x}_{0}^{\text{teacher\_multistep}}(x_{t_n}) \right\|^2 \right]$$
+2. **多步到单步跳跃对齐**：强制使学生模型在 tₙ 到 tₙ₊ₖ 的单步大跨度预测，匹配教师模型执行多步 Runge-Kutta 积分后的目标终点：
+
+   $$\mathcal{L}_{\text{distill}} = \mathbb{E}\left[ \left\| \hat{x}_{0}^{\text{student}}(x_{t_n}) - \hat{x}_{0}^{\text{teacher-multi-step}}(x_{t_n}) \right\|^2 \right]$$
+
 3. **8 步极速收敛**：原本需要 50 步细致积分的弯曲轨迹被“拉直”为 8 段直线段跃迁，步数直接压缩 **84%**。
 
 ### 2.2 CFG 引导内化蒸馏（Guidance Distillation）
 常规扩散生成必须借助 CFG 维持提示词遵循度：
-$$\tilde{v}_\theta(x_t, c, \emptyset) = v_\theta(x_t, \emptyset) + s \cdot \left(v_\theta(x_t, c) - v_\theta(x_t, \emptyset)\right)$$
+
+$$\tilde{v}_{\theta}(x_{t}, c, \emptyset) = v_{\theta}(x_{t}, \emptyset) + s \cdot \left(v_{\theta}(x_{t}, c) - v_{\theta}(x_{t}, \emptyset)\right)$$
+
 这要求模型每一步都分别计算有条件（Conditional）与无条件（Unconditional）两次前向，实际计算量为 $50 \times 2 = 100$ 次模型推断。
 
 Turbo LoRA 在蒸馏阶段利用高 CFG 教师模型作为目标，将大引导系数 $s$ 的语义强度直接蒸馏固化进学生模型的条件分支中：
@@ -67,6 +73,7 @@ Turbo LoRA 在蒸馏阶段利用高 CFG 教师模型作为目标，将大引导�
 - **负向输入直接置零**：通过 `ConditioningZeroOut` 将无条件分支旁路阻断，避免额外的文本编码器开销。
 
 $$\text{总前向次数压缩比} = \frac{50 \text{ 步} \times 2 \text{ (CFG)}}{8 \text{ 步} \times 1 \text{ (CFG=1.0)}} = \frac{100}{8} = \mathbf{12.5 \times}$$
+
 **仅 Turbo LoRA 单项技术，便带来了整个去噪阶段高达 12.5 倍的算力开销缩减。**
 
 ---
@@ -75,15 +82,21 @@ $$\text{总前向次数压缩比} = \frac{50 \text{ 步} \times 2 \text{ (CFG)}}
 
 ### 3.1 数学与算法原理
 自注意力机制计算公式为：
+
 $$\text{Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d}}\right) V$$
+
 在视频生成任务中，序列长度 $S = T \times \frac{H}{16} \times \frac{W}{16}$ 往往达到数万甚至数十万 Token。然而，绝大部分空间与时域距离较远的 Token 对当前 Query 的注意力贡献在经过 Softmax 后接近于 0。
 
 Sol-Attn 采用硬件级动态跳块机制：
-1. **分块质心提取（Block Centroid Pooling）**：以 $B_s = 64$ 为分块尺寸，预先在 GPU 上聚合计算 Key 质心 $k_c$ 与 Value 质心 $v_c$：
-   $$k_c^{(j)} = \frac{1}{B_s} \sum_{i \in \text{block } j} K_i$$
-2. **动态统计阈值截断（Adaptive Thresholding）**：对于 Query Block 质心 $q_c$，将粗粒度注意力 Logits 视为高斯分布建模，动态计算其均值 $\mu$ 与标准差 $\sigma$：
+1. **分块质心提取（Block Centroid Pooling）**：以 `B_s = 64` 为分块尺寸，预先在 GPU 上聚合计算 Key 质心 `k_c` 与 Value 质心 `v_c`：
+
+   $$k_{c}^{(j)} = \frac{1}{B_{s}} \sum_{i \in \text{block } j} K_{i}$$
+
+2. **动态统计阈值截断（Adaptive Thresholding）**：对于 Query Block 质心 `q_c`，将粗粒度注意力 Logits 视为高斯分布建模，动态计算其均值 $\mu$ 与标准差 $\sigma$：
+
    $$T_{\text{threshold}} = \mu + \tau \cdot \sigma$$
-   若某个 Key Block 的估计响应上限低于 $T_{\text{threshold}}$，该 Block 对最终输出的贡献被判定为不显著，**算子在 Triton 内核层完全跳过该 Block 的加载与 MMA 计算**。
+
+   若某个 Key Block 的估计响应上限低于 `T_threshold`，该 Block 对最终输出的贡献被判定为不显著，**算子在 Triton 内核层完全跳过该 Block 的加载与 MMA 计算**。
 
 ### 3.2 节点配置参数映射与工程机制
 
@@ -109,12 +122,16 @@ Sol-Attn 采用硬件级动态跳块机制：
 
 ### 4.1 平滑 Key 中心化校准（Smooth-K）
 注意力计算中，Key 矩阵在不同通道上存在严重的非对称静态偏置，导致直接对称 INT8 量化时大量量化阶被无效浪费。利用 Softmax 的平移不变性：
+
 $$\text{Softmax}\left(\frac{Q K^T}{\sqrt{d}}\right) = \text{Softmax}\left(\frac{Q (K - \bar{k})^T}{\sqrt{d}}\right)$$
+
 在 GPU 端采样代表性 Key 向量 $\bar{k}$ 并从 $K$ 中实时扣除，消除通道直流偏置，将动态范围极度压缩并居中，显著降低 INT8 量化噪声。
 
 ### 4.2 Fused Block-Hadamard 变换
 针对 Q 与 K 矩阵中不可预测的离群孤立峰值（Outliers），引入正交哈达玛矩阵 $H$（$H^T H = I$）：
+
 $$(Q H)(K H)^T = Q (H H^T) K^T = Q K^T$$
+
 通过正交旋转将集中在极少数维度的峰值能量均匀弥散至所有维度，使得数值服从平缓的高斯分布，从而实现无溢出、无截断的高保真 INT8 点积。
 
 ### 4.3 算子级深度融合
@@ -131,17 +148,24 @@ MiniMax H3 主干网络的大规模线性层（Linear/MatMul）采用 **INT8 Con
 
 ### 5.2 正规哈达玛旋转（Regular Hadamard Rotation）
 ConvRot 借鉴 **QuaRot** 与 **SpinQuant** 理论，使用分块构造的阶数为 4 的幂次的正规哈达玛矩阵（Regular Hadamard Matrix）：
-$$H_4 = \frac{1}{2} \begin{bmatrix} 1 & 1 & 1 & -1 \\ 1 & 1 & -1 & 1 \\ 1 & -1 & 1 & 1 \\ -1 & 1 & 1 & 1 \end{bmatrix}, \quad H_{4k} = H_{4} \otimes H_{k}$$
+
+$$H_{4} = \frac{1}{2} \begin{bmatrix} 1 & 1 & 1 & -1 \\ 1 & 1 & -1 & 1 \\ 1 & -1 & 1 & 1 \\ -1 & 1 & 1 & 1 \end{bmatrix}, \quad H_{4k} = H_{4} \otimes H_{k}$$
 
 1. **离线权重预旋转（Offline Weight Rotation）**：
    在模型打包转换阶段，对权重矩阵按组（Group Size = 256）执行正交投影并预量化为 INT8 存储：
+
    $$W_{\text{rot}} = W \cdot H_{\text{block}}^T$$
+
    此过程在推理期**无任何计算与时间开销**。
 2. **在线激活值融合旋转（Online Activation Rotation）**：
    在激活值 $X$ 进入 GEMM 前，通过 Triton / C++ 高性能融合内核执行在线旋转：
+
    $$X_{\text{rot}} = X \cdot H_{\text{block}}$$
+
 3. **严格数学等价性**：
+
    $$Y = X_{\text{rot}} W_{\text{rot}}^T = (X H) (W H^T)^T = X (H H^T) W^T = X W^T$$
+
    因为正交矩阵满足 $H H^T = I$，理论输出与浮点矩阵乘法完全等价。原本聚集在个别特征通道的极端离群点被均匀分散到整个组内，消除量化误差。
 4. **硬件级加速**：
    旋转后的激活值与权重均处于 INT8 域，直接下沉至 NVIDIA Tensor Core 执行 `cuBLASLt IMMA`（`torch._int_mm`），相比 FP16 模式：
@@ -183,7 +207,7 @@ MiniMax H3 VAE 的解码器包含：
 在高分辨率长视频解码时，24 通道的潜变量需要展开为海量时空 Token 进行全自注意力与 MLP 投影计算。在 FP16 精度下，仅 VAE 解码环节就常占总体耗时的 30%~40%，并伴随显存瞬间飙升。
 
 ### 7.2 INT8 ConvRot 在 ViT3D 中的落地
-针对 ViT3D 解码器中占据主要计算耗时的线性层（$X_{\text{embedder}}$、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 $P_{\text{proj\_out}}$），全部转换为 **INT8 ConvRot** 格式：
+针对 ViT3D 解码器中占据主要计算耗时的线性层（`X_embedder`、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 `P_proj_out`），全部转换为 **INT8 ConvRot** 格式：
 1. **显存占用直降 50%**：解除显存峰值溢出风险；
 2. **解码延迟削减 60%+**：矩阵运算直接由 Tensor Core IMMA 高速执行，消除“去噪 10 秒，解码 8 秒”的倒挂瓶颈。
 
@@ -290,8 +314,10 @@ graph LR
 
 ### 9.3 时空帧长严格对齐公式（MathExpression 计算）
 
-MiniMax H3 的时空 VAE 编码器具有时间轴 $vae\_ratio\_t = 4$、空间轴 $vae\_ratio = 16$ 的固定压缩率，其时间序列必须严格满足：
+MiniMax H3 的时空 VAE 编码器具有时间轴 `vae_ratio_t = 4`、空间轴 `vae_ratio = 16` 的固定压缩率，其时间序列必须严格满足：
+
 $$\text{Frame Count} \equiv 5 \pmod{17} \quad (\text{即 } 17k + 5)$$
+
 若输入的视频帧数不满足此栅格要求，VAE 采样与时空位置编码（3D RoPE）将产生尺寸失配抛出异常。
 
 工作流中使用 `PrimitiveInt`（输入秒数，例如 15 秒）配合 `MathExpression` 节点，通过如下数学表达式实现动态合法帧长闭式计算：

@@ -162,14 +162,32 @@ make test         # bun test + pytest (SQLite tests use :memory:, no services ne
 make lint         # ruff (Python side)
 ```
 
-## 📆 Team
+## 📆 Team & Project Timeline
 
 | Member                                      | Role                                              |
 | ------------------------------------------- | ------------------------------------------------- |
-| [张小白](https://github.com/zhanghui-china) | Lead, product planning, PRD, deployment, demo     |
-| 小腾子                                      | Prototype design, testing, demo video recording   |
+| [张小白](https://github.com/zhanghui-china) | Lead, product planning, environment setup, demo prep, demo video recording |
+| 小腾子                                      | Prototype design, testing                          |
 | [般度五子](https://github.com/Bandukids)    | ComfyUI deployment & development, image/video pipeline |
-| [馄饨](https://github.com/nativeas)         | Web frontend & backend, review desk, credit system |
+| [馄饨](https://github.com/nativeas)         | PRD writing, web frontend & backend, review desk & credit system |
+
+[2026.9.29] **馄饨 (Huntun)** kept optimizing the code and shipped the third release. **张小白 (Zhang Xiaobai)** drafted the demo deck, **小腾子 (Xiaotengzi)** refined the deck and produced the demo video. **张小白** finalized the project documentation and submitted the entry.
+
+[2026.9.28] **馄饨** found GPT extremely slow and opened a new Claude account (fingers crossed it won't be banned again).
+
+[2026.9.27] **小腾子** delivered a new round of prototypes.
+
+[2026.9.26] **馄饨** switched the vibe-coding tool to ChatGPT6 and kept developing and testing, spent a day building with sol medium, and deployed the second release. Team members tested it, discovered the product needed credits, and 100,000 credits were allocated to every member.
+
+[2026.9.25] **馄饨**'s Claude Max account was banned and development nearly stalled — the project's first major blocker. **般度五子 (Bandukids)** wrote the image and video generation development handbooks and emphasized that prompts supported by QwenImage2.1 work better.
+
+[2026.9.24] **馄饨** deployed the first release on the cloud Spark. **般度五子** configured the latest Qwen Image 2.1, MiniMax-H3, and StepFun ACEStep on ComfyUI, enabling image and video generation with 1–3/9 reference images, and optimized generation in every dimension. For the LLM, the team chose the StepFun Coding Plan Pro package provided by the organizer.
+
+[2026.9.23] **馄饨** generated the first prototype with claude fable 5.1. **小腾子** drew three more prototype variants on top of it. **张小白** created the code repository, obtained a set of scenic photos from a friend for the team's reference, and set short-term goals.
+
+[2026.9.22] The project topic was set to "scenic-area vlogs", and **小腾子** joined the team. **馄饨** exchanged ideas with friends on x.com for product inspiration and wrote the PRD. **小腾子** named the project **可旅 (Kelvoy)**, which everyone approved.
+
+[2026.8.31] The team was founded under the name **"金银铜铁队" (Gold-Silver-Copper-Iron)** — a nod to all members being from Wuxi (无锡) — completed the hackathon registration, and applied for the cloud Spark device.
 
 ## 💖 Acknowledgments
 
