@@ -404,7 +404,9 @@ $$\frac{d x_t}{d t} = v_\theta(x_t, t)$$
 
 1. **学生网络低秩微调**：冻结 INT8 主干，仅在 DiT 的注意力和 FFN 核心线性层注入低秩适配器 $\Delta W = A \cdot B$（秩 $r \ll d$）；
 2. **多步到单步跳跃对齐**：强制使学生模型在 $t_{n}$ 到 $t_{n+k}$ 的单步大跨度预测，匹配教师模型执行多步 Runge-Kutta 积分后的目标终点：
-   $$\mathcal{L}_{\text{distill}} = \mathbb{E}\left[ \left\| \hat{x}_{0}^{\text{student}}(x_{t_n}) - \hat{x}_{0}^{\text{teacher\_multistep}}(x_{t_n}) \right\|^2 \right]$$
+
+$$\mathcal{L}_{\text{distill}} = \mathbb{E}\left[ \left\| \hat{x}_{0}^{\text{student}}(x_{t_n}) - \hat{x}_{0}^{\text{teacher\textunderscore multistep}}(x_{t_n}) \right\|^2 \right]$$
+
 3. **8 步极速收敛**：原本需要 50 步细致积分的弯曲轨迹被“拉直”为 8 段直线段跃迁，步数直接压缩 **84%**。
 
 **（2）CFG 引导内化蒸馏（Guidance Distillation）**
@@ -419,6 +421,7 @@ Turbo LoRA 在蒸馏阶段利用高 CFG 教师模型作为目标，将大引导�
 - **负向输入直接置零**：通过 `ConditioningZeroOut` 将无条件分支旁路阻断，避免额外的文本编码器开销。
 
 $$\text{总前向次数压缩比} = \frac{50 \text{ 步} \times 2 \text{ (CFG)}}{8 \text{ 步} \times 1 \text{ (CFG=1.0)}} = \frac{100}{8} = \mathbf{12.5 \times}$$
+
 **仅 Turbo LoRA 单项技术，便带来了整个去噪阶段高达 12.5 倍的算力开销缩减。**
 
 #### 4.4.3 Sol-Attention 原理与配置深度剖析
@@ -540,7 +543,7 @@ MiniMax H3 VAE 的解码器包含：
 
 **（2）INT8 ConvRot 在 ViT3D 中的落地**
 
-针对 ViT3D 解码器中占据主要计算耗时的线性层（$X_{\text{embedder}}$、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 $P_{\text{proj\_out}}$），全部转换为 **INT8 ConvRot** 格式：
+针对 ViT3D 解码器中占据主要计算耗时的线性层（$X_{\text{embedder}}$、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 $P_{\text{proj\textunderscore out}}$），全部转换为 **INT8 ConvRot** 格式：
 
 1. **显存占用直降 50%**：解除显存峰值溢出风险；
 2. **解码延迟削减 60%+**：矩阵运算直接由 Tensor Core IMMA 高速执行，消除“去噪 10 秒，解码 8 秒”的倒挂瓶颈。
@@ -657,8 +660,10 @@ graph LR
 
 **（3）时空帧长严格对齐公式（MathExpression 计算）**
 
-MiniMax H3 的时空 VAE 编码器具有时间轴 $vae\_ratio\_t = 4$、空间轴 $vae\_ratio = 16$ 的固定压缩率，其时间序列必须严格满足：
+MiniMax H3 的时空 VAE 编码器具有时间轴 `vae_ratio_t = 4`、空间轴 `vae_ratio = 16` 的固定压缩率，其时间序列必须严格满足：
+
 $$\text{Frame Count} \equiv 5 \pmod{17} \quad (\text{即 } 17k + 5)$$
+
 若输入的视频帧数不满足此栅格要求，VAE 采样与时空位置编码（3D RoPE）将产生尺寸失配抛出异常。
 
 工作流中使用 `PrimitiveInt`（输入秒数，例如 15 秒）配合 `MathExpression` 节点，通过如下数学表达式实现动态合法帧长闭式计算：
