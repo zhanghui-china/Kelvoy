@@ -405,7 +405,7 @@ $$\frac{d x_t}{d t} = v_\theta(x_t, t)$$
 1. **学生网络低秩微调**：冻结 INT8 主干，仅在 DiT 的注意力和 FFN 核心线性层注入低秩适配器 $\Delta W = A \cdot B$（秩 $r \ll d$）；
 2. **多步到单步跳跃对齐**：强制使学生模型在 $t_{n}$ 到 $t_{n+k}$ 的单步大跨度预测，匹配教师模型执行多步 Runge-Kutta 积分后的目标终点：
 
-$$\mathcal{L}_{\text{distill}} = \mathbb{E}\left[ \left\| \hat{x}_{0}^{\text{student}}(x_{t_n}) - \hat{x}_{0}^{\text{teacher\textunderscore multistep}}(x_{t_n}) \right\|^2 \right]$$
+$$\mathcal{L}_{\text{distill}} = \mathbb{E}\left[ \left\| \hat{x}_{0}^{\text{student}}(x_{t_n}) - \hat{x}_{0}^{\text{teacher-multi-step}}(x_{t_n}) \right\|^2 \right]$$
 
 3. **8 步极速收敛**：原本需要 50 步细致积分的弯曲轨迹被“拉直”为 8 段直线段跃迁，步数直接压缩 **84%**。
 
@@ -543,7 +543,7 @@ MiniMax H3 VAE 的解码器包含：
 
 **（2）INT8 ConvRot 在 ViT3D 中的落地**
 
-针对 ViT3D 解码器中占据主要计算耗时的线性层（$X_{\text{embedder}}$、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 $P_{\text{proj\textunderscore out}}$），全部转换为 **INT8 ConvRot** 格式：
+针对 ViT3D 解码器中占据主要计算耗时的线性层（$X_{\text{embedder}}$、Attention QKV 投影、Output 线性投影、两层 FFN 线性变换以及 $P_{\text{proj-out}}$），全部转换为 **INT8 ConvRot** 格式：
 
 1. **显存占用直降 50%**：解除显存峰值溢出风险；
 2. **解码延迟削减 60%+**：矩阵运算直接由 Tensor Core IMMA 高速执行，消除“去噪 10 秒，解码 8 秒”的倒挂瓶颈。
