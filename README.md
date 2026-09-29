@@ -133,6 +133,8 @@ make test         # bun test + pytest（SQLite 测试用 :memory:，无需起服
 make lint         # ruff（Python 侧）
 ```
 
+
+
 ## 📆项目团队
 
 | 成员                                        | 职责                                         |
@@ -144,9 +146,21 @@ make lint         # ruff（Python 侧）
 
 ## 💖特别鸣谢
 
-感谢 NVIDIA 主办第三届 DGX Spark 黑客松并提供 Spark 云节点算力。
+感谢 NVIDIA 主办第三届 DGX Spark 黑客松。
 
-感谢 StepFun（阶跃星辰）提供脚本生成 API 支持，感谢 Qwen-Image、MiniMax H3、ComfyUI、FFmpeg 等开源模型与项目生态。
+![1372c345249308e6df60e9bc13346ab8](nvidia-logo.png)
+
+感谢赞奇提供 Spark 云节点算力。
+
+![78a608fc18d7f23073836da07417fe68](zanqi-logo.png)
+
+感谢 StepFun（阶跃星辰）提供Coding Plan算力支持。
+
+![stepfun-logo](stepfun-logo.png)
+
+感谢 Qwen-Image、MiniMax H3、ComfyUI、FFmpeg 等开源模型与项目生态。
+
+
 
 ## 开源协议
 
