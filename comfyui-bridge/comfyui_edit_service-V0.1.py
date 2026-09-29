@@ -10,7 +10,7 @@ ComfyUI Qwen-Image 2.1 Edit HTTP Service
     3. 三图编辑     (/api/triple_blend, /api/tri_blend)
     4. 四图编辑     (/api/quad_blend)
     5. 九图编辑     (/api/nona_blend)
-    6. 动态多图编辑 (/api/multi_edit) - 依据传入图片数量(1-9)自动路由
+    6. 动态多图编辑 (/api/multi_edit) - 依据传入图片数量(1/2/3/4/9)自动路由
     7. 健康检查     (/health)
     8. 接口说明     (/)
 
@@ -63,22 +63,6 @@ WORKFLOW_FILES = {
     "quad": {
         "api": os.path.join(BASE_DIR, "1_4_QuadRef2IMG_QwenImage2_1_api.json"),
         "ui": os.path.join(BASE_DIR, "1_4_QuadRef2IMG_QwenImage2_1.json"),
-    },
-    "penta": {
-        "api": os.path.join(BASE_DIR, "1_5_PentaRef2IMG_QwenImage2_1_api.json"),
-        "ui": os.path.join(BASE_DIR, "1_5_PentaRef2IMG_QwenImage2_1.json"),
-    },
-    "hexa": {
-        "api": os.path.join(BASE_DIR, "1_6_HexaRef2IMG_QwenImage2_1_api.json"),
-        "ui": os.path.join(BASE_DIR, "1_6_HexaRef2IMG_QwenImage2_1.json"),
-    },
-    "hepta": {
-        "api": os.path.join(BASE_DIR, "1_7_HeptaRef2IMG_QwenImage2_1_api.json"),
-        "ui": os.path.join(BASE_DIR, "1_7_HeptaRef2IMG_QwenImage2_1.json"),
-    },
-    "octa": {
-        "api": os.path.join(BASE_DIR, "1_8_OctaRef2IMG_QwenImage2_1_api.json"),
-        "ui": os.path.join(BASE_DIR, "1_8_OctaRef2IMG_QwenImage2_1.json"),
     },
     "nona": {
         "api": os.path.join(BASE_DIR, "1_9_NonaRef2IMG_QwenImage2_1_api.json"),
@@ -296,10 +280,6 @@ def run_qwen_image_workflow(workflow_type, image_filenames, prompt_text, aspect_
         "dual": "493",
         "tri": "494",
         "quad": "491",
-        "penta": "501",
-        "hexa": "501",
-        "hepta": "501",
-        "octa": "501",
         "nona": "501"
     }
     res_nid = res_node_map.get(workflow_type)
@@ -327,12 +307,6 @@ def run_qwen_image_workflow(workflow_type, image_filenames, prompt_text, aspect_
         workflow["493"]["inputs"]["image"] = image_filenames[1]
         workflow["494"]["inputs"]["image"] = image_filenames[2]
         workflow["495"]["inputs"]["image"] = image_filenames[3]
-
-    elif workflow_type in ("penta", "hexa", "hepta", "octa"):
-        multi_ref_nodes = ["489", "491", "497", "493", "494", "498", "495", "496"]
-        for idx, nid in enumerate(multi_ref_nodes):
-            if idx < len(image_filenames) and nid in workflow:
-                workflow[nid]["inputs"]["image"] = image_filenames[idx]
 
     elif workflow_type == "nona":
         nona_nodes = ["489", "491", "493", "494", "495", "496", "497", "498", "499"]
@@ -497,63 +471,6 @@ def api_quad_blend():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def _api_fixed_multi_blend(image_count: int):
-    prefixes = {5: "penta", 6: "hexa", 7: "hepta", 8: "octa"}
-    try:
-        prompt_text = request.form.get('prompt', '').strip()
-        if not prompt_text:
-            return jsonify({"success": False, "error": "Missing 'prompt' text"}), 400
-
-        aspect_ratio = request.form.get('aspect_ratio', '16:9 (Widescreen)').strip()
-        negative_prompt = request.form.get('negative_prompt', '').strip()
-        seed = int(request.form['seed']) if 'seed' in request.form and request.form['seed'].isdigit() else None
-        steps = int(request.form['steps']) if 'steps' in request.form and request.form['steps'].isdigit() else 25
-        cfg = float(request.form['cfg']) if 'cfg' in request.form else 1.0
-        megapixels = float(request.form.get('megapixels', 1.0))
-
-        images = []
-        for i in range(1, image_count + 1):
-            key = f'image{i}'
-            filename = upload_to_comfyui(request.files[key]) if key in request.files else request.form.get(key, '').strip()
-            if not filename:
-                return jsonify({"success": False, "error": f"'{key}' is required"}), 400
-            images.append(filename)
-
-        img_data, output_filename = run_qwen_image_workflow(
-            prefixes[image_count], images, prompt_text,
-            aspect_ratio, seed, steps, cfg, negative_prompt, megapixels
-        )
-        buffer = BytesIO(img_data)
-        buffer.seek(0)
-        return send_file(buffer, mimetype='image/png', as_attachment=False, download_name=output_filename)
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/penta_blend', methods=['POST'])
-@app.route('/api/five_blend', methods=['POST'])
-def api_penta_blend():
-    return _api_fixed_multi_blend(5)
-
-
-@app.route('/api/hexa_blend', methods=['POST'])
-@app.route('/api/six_blend', methods=['POST'])
-def api_hexa_blend():
-    return _api_fixed_multi_blend(6)
-
-
-@app.route('/api/hepta_blend', methods=['POST'])
-@app.route('/api/seven_blend', methods=['POST'])
-def api_hepta_blend():
-    return _api_fixed_multi_blend(7)
-
-
-@app.route('/api/octa_blend', methods=['POST'])
-@app.route('/api/eight_blend', methods=['POST'])
-def api_octa_blend():
-    return _api_fixed_multi_blend(8)
-
-
 @app.route('/api/nona_blend', methods=['POST'])
 def api_nona_blend():
     """九图编辑/融合接口"""
@@ -625,22 +542,20 @@ def api_multi_edit():
         if count == 0:
             return jsonify({"success": False, "error": "No images provided"}), 400
 
-        workflow_by_count = {
-            1: "single",
-            2: "dual",
-            3: "tri",
-            4: "quad",
-            5: "penta",
-            6: "hexa",
-            7: "hepta",
-            8: "octa",
-            9: "nona",
-        }
-        wf_type = workflow_by_count.get(count)
-        if wf_type is None:
+        if count == 1:
+            wf_type = "single"
+        elif count == 2:
+            wf_type = "dual"
+        elif count == 3:
+            wf_type = "tri"
+        elif count == 4:
+            wf_type = "quad"
+        elif count == 9:
+            wf_type = "nona"
+        else:
             return jsonify({
                 "success": False,
-                "error": f"Unsupported image count: {count}. Qwen-Image 2.1 supports 1-9 images."
+                "error": f"Unsupported image count: {count}. Qwen-Image 2.1 支持 1, 2, 3, 4 或 9 张图片。"
             }), 400
 
         img_data, output_filename = run_qwen_image_workflow(
@@ -683,12 +598,8 @@ def index():
             "/api/blend": "双图编辑/融合 (image1 + image2 + prompt)",
             "/api/triple_blend": "三图编辑/融合 (image1 + image2 + image3 + prompt)",
             "/api/quad_blend": "四图编辑/融合 (image1 ~ image4 + prompt)",
-            "/api/penta_blend": "五图编辑/融合 (image1 ~ image5 + prompt)",
-            "/api/hexa_blend": "六图编辑/融合 (image1 ~ image6 + prompt)",
-            "/api/hepta_blend": "七图编辑/融合 (image1 ~ image7 + prompt)",
-            "/api/octa_blend": "八图编辑/融合 (image1 ~ image8 + prompt)",
             "/api/nona_blend": "九图编辑/融合 (image1 ~ image9 + prompt)",
-            "/api/multi_edit": "通用多图编辑 (自动识别 1-9 张图片)",
+            "/api/multi_edit": "通用多图编辑 (自动识别 1/2/3/4/9 张图片)",
             "/health": "服务与 ComfyUI 状态检查"
         }
     })

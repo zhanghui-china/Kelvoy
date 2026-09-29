@@ -15,22 +15,14 @@
    - **双图编辑**：上传两张图片 + 融合提示词 (`/api/blend` 或 `/api/image/dual_blend`)。
    - **三图编辑**：上传三张图片 + 融合提示词 (`/api/triple_blend` 或 `/api/image/tri_blend`)。
    - **四图编辑**：上传四张图片 + 融合提示词 (`/api/quad_blend`)。
-   - **五图编辑**：上传五张图片 + 融合提示词 (`/api/penta_blend`)。
-   - **六图编辑**：上传六张图片 + 融合提示词 (`/api/hexa_blend`)。
-   - **七图编辑**：上传七张图片 + 融合提示词 (`/api/hepta_blend`)。
-   - **八图编辑**：上传八张图片 + 融合提示词 (`/api/octa_blend`)。
    - **九图编辑**：上传九张图片 + 融合提示词 (`/api/nona_blend`)。
-   - **通用动态多图编辑**：自动根据传入图片数 (1-9) 自动路由调用对应工作流 (`/api/image/multi_edit`)。
+   - **通用动态多图编辑**：自动根据传入图片数 (1/2/3/4/9) 自动路由调用对应工作流 (`/api/image/multi_edit`)。
 4. **Minimax-H3 图生视频 (Image to Video)**：单张图片 + 动态提示词生成带声画的高质量 720p 视频 (`/api/video/image2video`)。
-5. **Minimax-H3 1-9 多图参考生视频 (Multi-Ref Video Generation)**：
+5. **Minimax-H3 1/2/3/4/9 多图参考生视频 (Multi-Ref Video Generation)**：
    - **单图参考**：单张参考图 + 故事动作描述 (`/api/video/single_ref`)。
    - **双图参考**：两张角色/场景参考图 + 交互描述 (`/api/video/dual_ref`)。
    - **三图参考**：三张参考图 + 剧情描述 (`/api/video/tri_ref`)。
    - **四图参考**：四张参考图 + 场景描述 (`/api/video/quad_ref`)。
-   - **五图参考**：五张参考图 + 场景描述 (`/api/video/penta_ref`)。
-   - **六图参考**：六张参考图 + 场景描述 (`/api/video/hexa_ref`)。
-   - **七图参考**：七张参考图 + 场景描述 (`/api/video/hepta_ref`)。
-   - **八图参考**：八张参考图 + 场景描述 (`/api/video/octa_ref`)。
    - **九图参考**：九张参考图多视角/多元素融合生视频 (`/api/video/nona_ref`)。
    - **智能多图参考**：自动根据上传图片数匹配对应参考生视频工作流 (`/api/video/multi_ref`)。
 6. **Minimax-H3 视频编辑 (图+视频生视频 / Video Editing & Character Transfer)**：
@@ -72,14 +64,6 @@
 ├── 2_3_TriRef2Video_MinimaxH3_api.json        # [工作流] Minimax-H3 三图参考生视频 (API Prompt 格式)
 ├── 2_4_QuadRef2Video_MinimaxH3.json           # [工作流] Minimax-H3 四图参考生视频 (UI 格式)
 ├── 2_4_QuadRef2Video_MinimaxH3_api.json       # [工作流] Minimax-H3 四图参考生视频 (API Prompt 格式)
-├── 2_5_PentaRef2Video_MinimaxH3.json          # [工作流] Minimax-H3 五图参考生视频 (UI 格式)
-├── 2_5_PentaRef2Video_MinimaxH3_api.json      # [工作流] Minimax-H3 五图参考生视频 (API 格式)
-├── 2_6_HexaRef2Video_MinimaxH3.json           # [工作流] Minimax-H3 六图参考生视频 (UI 格式)
-├── 2_6_HexaRef2Video_MinimaxH3_api.json      # [工作流] Minimax-H3 六图参考生视频 (API 格式)
-├── 2_7_HeptaRef2Video_MinimaxH3.json          # [工作流] Minimax-H3 七图参考生视频 (UI 格式)
-├── 2_7_HeptaRef2Video_MinimaxH3_api.json      # [工作流] Minimax-H3 七图参考生视频 (API 格式)
-├── 2_8_OctaRef2Video_MinimaxH3.json           # [工作流] Minimax-H3 八图参考生视频 (UI 格式)
-├── 2_8_OctaRef2Video_MinimaxH3_api.json      # [工作流] Minimax-H3 八图参考生视频 (API 格式)
 ├── 2_9_NonaRef2Video_MinimaxH3.json           # [工作流] Minimax-H3 九图参考生视频 (UI 格式)
 ├── 2_9_NonaRef2Video_MinimaxH3_api.json       # [工作流] Minimax-H3 九图参考生视频 (API Prompt 格式)
 ├── 2_10_ImageVideo2Video_MinimaxH3.json        # [工作流] Minimax-H3 视频编辑 (图+视频生视频, UI 格式)
@@ -194,38 +178,7 @@
   - `megapixels` (Float, 可选): 百万像素值，默认 `1.0`（推荐 `1.0` / `1.5` / `2.0`）
 - **返回响应**: 二进制图片流 (`image/png`)
 
-#### 6. 五图融合/编辑 (`POST /api/penta_blend`)
-- **Content-Type**: `multipart/form-data`
-- **请求参数**:
-  - `image1` ~ `image5` (File 或 文件名, 必填): 五张参考图
-  - `prompt` (Text, 必填): 融合提示词
-  - `negative_prompt` (Text, 可选): 反向提示词
-  - `aspect_ratio` (Text, 可选): 画面比例，默认 `"16:9 (Widescreen)"`
-  - `megapixels` (Float, 可选): 百万像素值，默认 `1.0`
-  - `seed`, `steps`, `cfg` (可选): 采样控制
-- **别名**: `POST /api/image/penta_blend`, `POST /api/five_blend`
-- **返回响应**: 二进制图片流 (`image/png`)
-
-#### 7. 六图融合/编辑 (`POST /api/hexa_blend`)
-- **Content-Type**: `multipart/form-data`
-- **请求参数**: `image1` ~ `image6`, `prompt`, 以及与五图接口相同的可选参数。
-- **别名**: `POST /api/image/hexa_blend`, `POST /api/six_blend`
-- **返回响应**: 二进制图片流 (`image/png`)
-
-#### 8. 七图融合/编辑 (`POST /api/hepta_blend`)
-- **Content-Type**: `multipart/form-data`
-- **请求参数**: `image1` ~ `image7`, `prompt`, 以及与五图接口相同的可选参数。
-- **别名**: `POST /api/image/hepta_blend`, `POST /api/seven_blend`
-- **返回响应**: 二进制图片流 (`image/png`)
-
-#### 9. 八图融合/编辑 (`POST /api/octa_blend`)
-- **Content-Type**: `multipart/form-data`
-- **请求参数**: `image1` ~ `image8`, `prompt`, 以及与五图接口相同的可选参数。
-- **别名**: `POST /api/image/octa_blend`, `POST /api/eight_blend`
-- **返回响应**: 二进制图片流 (`image/png`)
-
-#### 10. 九图融合/编辑 (`POST /api/nona_blend`)
-
+#### 6. 九图融合/编辑 (`POST /api/nona_blend`)
 - **Content-Type**: `multipart/form-data`
 - **请求参数**:
   - `image1` ~ `image9` (File 或 文件名, 必填): 九张参考图
@@ -234,9 +187,9 @@
   - `megapixels` (Float, 可选): 百万像素值，默认 `1.0`（推荐 `1.0` / `1.5` / `2.0`）
 - **返回响应**: 二进制图片流 (`image/png`)
 
-#### 11. 通用动态多图编辑 (`POST /api/image/multi_edit`)
+#### 7. 通用动态多图编辑 (`POST /api/image/multi_edit`)
 - **Content-Type**: `multipart/form-data`
-- **说明**: 自动检测上传的图片数量，支持 1-9 张参考图；每张分别路由到对应数量的 Qwen-Image 2.1 工作流。
+- **说明**: 自动检测上传的图片数量，若为 1 张自动调用单图编辑，2 张调用双图，3 张调用三图，4 张调用四图，9 张调用九图。
 - **请求参数**:
   - `images` (List of Files, 必填): 图片文件列表 (支持表单内多次附加同名 `images` 字段，或 `image1`, `image2`...)
   - `prompt` (Text, 必填): 图像修改或融合提示词
@@ -258,13 +211,13 @@
 - ❌ **强烈不建议 (Discouraged)**: **`> 768`**。生成耗时成倍增加，极易导致显存溢出 (OOM) 崩溃或任务超时，收益极低。
 
 #### 2. 生成时长准则 (Duration)
-- ⏱️ **默认时长**: **`15 秒`** (`duration=15.0`)。适用于 `image2video`、`ref2video` (1-9 图参考) 以及 `ImageAudio2Video` (数字人)。
+- ⏱️ **默认时长**: **`15 秒`** (`duration=15.0`)。适用于 `image2video`、`ref2video` (单/双/三/四/九图参考) 以及 `ImageAudio2Video` (数字人)。
 - 📊 **建议范围**: **`3.0 秒 ~ 15.0 秒`**（强烈建议不低于 3 秒，不高于 15 秒）。
 - 🧮 **自动帧数对齐**: 底层工作流通过公式 `max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17` 自动换算为 24fps 下符合 17 帧 chunk 的精确帧数（如 15 秒对应约 362 帧，5 秒对应约 124 帧），调用方直接传递秒数即可，无需手工计算复杂帧数对齐。
 - 🚫 **视频编辑除外**: `video_edit`（图+视频生视频）无需设置时长，输出时长直接继承源视频。
 
 #### 3. 分辨率选择器百万像素准则 (ResolutionSelector - ref2video & ImageAudio2Video)
-在多图参考生视频（1-9 图参考）及数字人（图+音频生视频）工作流中，分辨率由 `ResolutionSelector` 节点（Node `#82` 与 `#112`）控制：
+在多图参考生视频（1/2/3/4/9 图参考）及数字人（图+音频生视频）工作流中，分辨率由 `ResolutionSelector` 节点（Node `#82` 与 `#112`）控制：
 - 🎯 **首选推荐 (Preferred Default)**: **`0.9`** 百万像素 (0.9 MP)。综合细节质感最佳，五官与肢体表现最稳。
 - ⚡ **快速模式 (Fast Mode)**: **`0.4`** 百万像素 (0.4 MP)。需要更短生成时间或快速验证动作时选择。
 - ⚠️ **严格限制范围**: **建议仅在 `[0.4, 0.9]` 区间内选择，强烈不建议超过此范围**（`< 0.4` 严重模糊涂抹，`> 0.9` 极易引发显存膨胀与画面畸变）。
@@ -297,7 +250,7 @@
   - `seed` (Int, 可选): 随机采样种子
 - **返回响应**: 二进制 MP4 视频流 (`video/mp4`)
 
-#### 10. 2-9 多图参考生视频 (`POST /api/video/dual_ref`, `/tri_ref`, `/quad_ref`, `/penta_ref`, `/hexa_ref`, `/hepta_ref`, `/octa_ref`, `/nona_ref`)
+#### 10. 2/3/4/9 多图参考生视频 (`POST /api/video/dual_ref`, `/tri_ref`, `/quad_ref`, `/nona_ref`)
 - **Content-Type**: `multipart/form-data`
 - **请求参数**:
   - `image1`, `image2` ... `imageN` (File 或 文件名, 必填): 多个角色或不同视角的参考图片
@@ -310,7 +263,7 @@
 
 #### 11. 智能多图参考生视频 (`POST /api/video/multi_ref`)
 - **Content-Type**: `multipart/form-data`
-- **说明**: 自动统计上传的参考图数量（1-9 张），无缝路由至对应的 Minimax-H3 多图参考工作流。
+- **说明**: 自动统计上传的参考图数量（1/2/3/4/9 张），无缝路由至对应的 Minimax-H3 多图参考工作流。
 - **请求参数**:
   - `images` (List of Files, 必填): 参考图列表
   - `prompt` (Text, 必填): 视频剧情提示词
@@ -388,9 +341,6 @@
 | **Qwen 2.1 四图融合** | `1_4_QuadRef2IMG_QwenImage2_1.json` | `#489`, `#493`, `#494`, `#495` | `LoadImage` | `inputs.image` | 图 1 ~ 图 4 |
 | | | `#469` | `TextEncodeQwenImage21` | `inputs.prompt` | 融合提示词 |
 | | | `#491` | `ResolutionSelector` | `inputs.aspect_ratio`, `inputs.megapixels` | 画面比例 与 百万像素 (默认 1.0) |
-| **Qwen 2.1 五~八图融合** | `1_5_PentaRef2IMG...` ~ `1_8_OctaRef2IMG...` | `#489`, `#491`, `#497`, `#493`, `#494`, `#498`, `#495`, `#496` | `LoadImage` | `inputs.image` | 按顺序注入图 1 ~ 图 N (N=5~8) |
-| | | `#469` | `TextEncodeQwenImage21` | `inputs.prompt`, `inputs.images.image_N` | 融合提示词与 N 个参考图 slot |
-| | | `#501` | `ResolutionSelector` | `inputs.aspect_ratio`, `inputs.megapixels` | 画面比例与百万像素 |
 | **Qwen 2.1 九图融合** | `1_9_NonaRef2IMG_QwenImage2_1.json` | `#489`, `#491`, `#493`~`#499` | `LoadImage` | `inputs.image` | 图 1 ~ 图 9 (共9张图) |
 | | | `#469` | `TextEncodeQwenImage21` | `inputs.prompt` | 融合提示词 |
 | | | `#501` | `ResolutionSelector` | `inputs.aspect_ratio`, `inputs.megapixels` | 画面比例 (默认 16:9) 与 百万像素 (默认 1.0) |
@@ -406,7 +356,7 @@
 | | | `#77` | `MiniMaxH3ReferenceToVideo` | `inputs.prompt`, `inputs.length` | 提示词与总帧数 |
 | | | `#82` | `ResolutionSelector` | `inputs.aspect_ratio`, `inputs.megapixels` | 画面比例 (默认 16:9) 与 百万像素 (默认 0.9, 快速 0.4, 范围 [0.4, 0.9]) |
 | | | `#49` | `KSampler` | `inputs.seed`, `inputs.steps` | 采样器 (默认 8 步) |
-| **Minimax 2-9 参考** | `2_2` ~ `2_9` | `#77` | `MiniMaxH3ReferenceToVideo` | `ref_images.ref_image_0~8` | 按顺序注入 2~9 张参考图 |
+| **Minimax 2/3/4/9 参考** | `2_2`, `2_3`, `2_4`, `2_9` | `#7`, `#92`, `#93`, `#94`... | `LoadImage` | `inputs.image` | 多张参考图对应节点 |
 | | | `#76` | `PrimitiveInt` | `inputs.value` | 生成时长秒数 (默认 15s，建议 3~15s) |
 | | | `#77` | `MiniMaxH3ReferenceToVideo` | `inputs.prompt`, `inputs.length` | 提示词与总帧数 |
 | | | `#82` | `ResolutionSelector` | `inputs.aspect_ratio`, `inputs.megapixels` | 画面比例 与 百万像素 (默认 0.9, 快速 0.4, 范围 [0.4, 0.9]) |
@@ -483,120 +433,8 @@ curl -X POST http://127.0.0.1:6000/api/music \
    - 仓库内既包含 ComfyUI 画布的 UI 格式 JSON (`.json`)，也包含经过全自动转换的 Prompt API 格式 JSON (`_api.json`)。
    - `comfyui_api_service.py` 与 `comfyui_edit_service.py` 内部均搭载了 `convert_ui_to_api_workflow()` 自动解析器，若遇到未预先转换的 UI JSON，会自动通过节点与 link 拓扑结构转化为合法 Prompt 字典，保障 100% 健壮性。
 2. **多图参考数量约束**：
-   - Qwen-Image 2.1 图像编辑当前按 `1` ~ `9` 张参考图完整规划，5~8 图工作流由 1/4/9 图结构派生并已通过节点校验。
-   - Minimax-H3 多图参考生视频当前按 `1` ~ `9` 张参考图完整规划；5~8 图工作流由 1/4/9 图结构派生，并已通过真实生成回归。
+   - Qwen-Image 2.1 图像编辑在官方工作流中按 `1` (单图), `2` (双图), `3` (三图), `4` (四图), `9` (九图) 规划。
+   - Minimax-H3 多图参考生视频同样按 `1`, `2`, `3`, `4`, `9` 张提供模型权重与节点连接。
    - 使用 `/api/image/multi_edit` 或 `/api/video/multi_ref` 端点时，桥接器会自动计算传入图片数量并精准路由。
 3. **媒体流与本地双重保存**：
    - 任务完成后，服务不仅会以二进制数据流的形式直接流式返回给请求方 (`send_file`)，还会同步在本地的 `output_image/`, `output_video/`, `output_audio/` 目录持久化一份带时间戳或模型前缀的文件副本，便于随时复查和日志回溯。
-
----
-
-## 7. Qwen-Image 2.1 1–9 参考图回归测试记录 (2026-09-29)
-
-### 测试环境
-
-```text
-服务: http://192.168.199.107:6000
-ComfyUI: http://127.0.0.1:8188
-模型: qwen_image_2.1_int8_convrot.safetensors
-TE: qwen3vl_8b_int8_convrot.safetensors
-VAE: qwen_image_2.1_vae_bf16.safetensors
-```
-
-### 固定测试参数
-
-```text
-aspect_ratio: 1:1 (Square)
-megapixels: 1.0
-steps: 10
-cfg: 1.0
-seed: 20260929
-```
-
-> 该组测试使用 10 steps 验证接口与工作流链路；生产默认仍为 25 steps。
-
-### 结果
-
-| 用例 | 端点 | 参考图数 | HTTP | 耗时 | 输出 |
-|---|---|---:|---:|---:|---|
-| 文生图 | `/api/text2img` | 0 | 200 | 31.991s | 1024×1024 PNG |
-| 单图编辑 | `/api/edit` | 1 | 200 | 16.681s | 1024×1024 PNG |
-| 双图融合 | `/api/blend` | 2 | 200 | 24.588s | 1024×1024 PNG |
-| 三图融合 | `/api/triple_blend` | 3 | 200 | 81.311s | 1024×1024 PNG |
-| 四图融合 | `/api/quad_blend` | 4 | 200 | 92.746s | 1024×1024 PNG |
-| 五图融合 | `/api/penta_blend` | 5 | 200 | 83.862s | 1024×1024 PNG |
-| 六图融合 | `/api/hexa_blend` | 6 | 200 | 81.500s | 1024×1024 PNG |
-| 七图融合 | `/api/hepta_blend` | 7 | 200 | 79.613s | 1024×1024 PNG |
-| 八图融合 | `/api/octa_blend` | 8 | 200 | 117.463s | 1024×1024 PNG |
-| 九图融合 | `/api/nona_blend` | 9 | 200 | 101.520s | 1024×1024 PNG |
-| 动态多图 | `/api/image/multi_edit` | 7 | 200 | 71.387s | 1024×1024 PNG |
-
-结论：
-
-```text
-11/11 用例成功。
-1–9 张固定参考图端点全部可用。
-/api/image/multi_edit 已验证可自动路由 5–8 图工作流。
-```
-
----
-
-## 8. MiniMax-H3 1–9 参考视频回归测试记录 (2026-09-29)
-
-### 测试环境
-
-```text
-服务: http://192.168.199.107:6000
-ComfyUI: http://127.0.0.1:8188
-GPU: NVIDIA GB10 / 128GB unified memory
-模型: minimax_h3_ref2va_pruned_int8_convrot
-Text Encoder: qwen3vl_32b_minimax_h3_int8_convrot
-```
-
-### 固定测试参数
-
-```text
-duration: 2s
-megapixels: 0.2
-steps: 4
-seed: 20260929
-```
-
-### 回归结果
-
-| 用例 | 端点 | 参考输入 | HTTP | 耗时 | 输出 |
-|---|---|---|---:|---:|---|
-| 单图参考 | `/api/video/single_ref` | 1图 | 200 | 18.877s | 608×352 MP4 + audio |
-| 双图参考 | `/api/video/dual_ref` | 2图 | 200 | 21.882s | 608×352 MP4 + audio |
-| 三图参考 | `/api/video/tri_ref` | 3图 | 200 | 25.268s | 608×352 MP4 + audio |
-| 四图参考 | `/api/video/quad_ref` | 4图 | 200 | 29.239s | 608×352 MP4 + audio |
-| 五图参考 | `/api/video/penta_ref` | 5图 | 200 | 38.483s | 608×352 MP4 + audio |
-| 六图参考 | `/api/video/hexa_ref` | 6图 | 200 | 43.674s | 608×352 MP4 + audio |
-| 七图参考 | `/api/video/hepta_ref` | 7图 | 200 | 46.921s | 608×352 MP4 + audio |
-| 八图参考 | `/api/video/octa_ref` | 8图 | 200 | 51.927s | 608×352 MP4 + audio |
-| 九图参考 | `/api/video/nona_ref` | 9图 | 200 | 56.731s | 608×352 MP4 + audio |
-| 图生视频 | `/api/video/image2video` | 1图 | 200 | 65.169s | 480×480 MP4 + audio |
-| 图+视频编辑 | `/api/video/edit` | 1图 + 1视频 | 200 | 126.965s | 832×480 MP4 + audio |
-| 图+音频数字人 | `/api/video/digital_human` | 1图 + 1音频 | 200 | 51.000s | 608×352 MP4 + audio |
-| 动态多参考 | `/api/video/multi_ref` | 7图 | 200 | 46.826s | 608×352 MP4 + audio |
-
-结论：
-
-```text
-13/13 用例成功。
-1-9 张参考图端点全部可用。
-图生视频、图+视频编辑、图+音频数字人均已通过真实 MP4 输出回归。
-/api/video/multi_ref 已验证可自动路由 7 参考图新增工作流。
-```
-
-### 本轮关键修复
-
-1. 将 H3 API JSON 中的前端 `SetNode/GetNode` 解析为显式原生链接。
-2. 将 `Anything Everywhere` 广播的 CLIP/MODEL 连接改为显式 API 链接。
-3. 新增 5-8 参考图 API/UI 工作流。
-4. `multi_ref` 动态路由从 `1/2/3/4/9` 扩展为 `1-9`。
-5. 图+音频 T8 工作流修正为：
-   - `task_type = I2VA`
-   - `add_source_as_reference = false`
-   - `KSampler.latent_image = T8.av_latent`
-   - 分辨率 multiple 对齐为 32

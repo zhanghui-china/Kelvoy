@@ -5,9 +5,9 @@ ComfyUI Unified Multi-Modal API Service
 统一的 ComfyUI HTTP 中间件桥接服务，支持：
 1. Qwen-Image 2.1 文生图 (/api/text2img)
 2. Qwen-Image 2.1 单图编辑 (/api/edit, /api/image/edit)
-3. Qwen-Image 2.1 1-9 图融合/编辑 (/api/blend, /api/triple_blend, /api/quad_blend, /api/nona_blend, /api/image/multi_edit)
+3. Qwen-Image 2.1 2/3/4/9 图融合/编辑 (/api/blend, /api/triple_blend, /api/quad_blend, /api/nona_blend, /api/image/multi_edit)
 4. Minimax-H3 图生视频 (/api/video/image2video, /api/image2video)
-5. Minimax-H3 1-9 多图参考生视频 (/api/video/single_ref, /api/video/dual_ref, /api/video/tri_ref, /api/video/quad_ref, /api/video/penta_ref, /api/video/hexa_ref, /api/video/hepta_ref, /api/video/octa_ref, /api/video/nona_ref, /api/video/multi_ref)
+5. Minimax-H3 1/2/3/4/9 多图参考生视频 (/api/video/single_ref, /api/video/dual_ref, /api/video/tri_ref, /api/video/quad_ref, /api/video/nona_ref, /api/video/multi_ref)
 6. Minimax-H3 视频编辑/图+视频生视频 (/api/video/edit, /api/video/video_edit, /api/video/image_video2video)
 7. Minimax-H3 数字人/图+音频生视频 (/api/video/digital_human, /api/video/image_audio2video)
 8. ACE STEP 1.5XL 音乐生成 (/api/music, /api/music/acestep)
@@ -75,26 +75,6 @@ WORKFLOW_CONFIG = {
         "ui_template": os.path.join(BASE_DIR, "1_4_QuadRef2IMG_QwenImage2_1.json"),
         "type": "image"
     },
-    "penta_blend": {
-        "template": os.path.join(BASE_DIR, "1_5_PentaRef2IMG_QwenImage2_1_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "1_5_PentaRef2IMG_QwenImage2_1.json"),
-        "type": "image"
-    },
-    "hexa_blend": {
-        "template": os.path.join(BASE_DIR, "1_6_HexaRef2IMG_QwenImage2_1_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "1_6_HexaRef2IMG_QwenImage2_1.json"),
-        "type": "image"
-    },
-    "hepta_blend": {
-        "template": os.path.join(BASE_DIR, "1_7_HeptaRef2IMG_QwenImage2_1_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "1_7_HeptaRef2IMG_QwenImage2_1.json"),
-        "type": "image"
-    },
-    "octa_blend": {
-        "template": os.path.join(BASE_DIR, "1_8_OctaRef2IMG_QwenImage2_1_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "1_8_OctaRef2IMG_QwenImage2_1.json"),
-        "type": "image"
-    },
     "nona_blend": {
         "template": os.path.join(BASE_DIR, "1_9_NonaRef2IMG_QwenImage2_1_api.json"),
         "ui_template": os.path.join(BASE_DIR, "1_9_NonaRef2IMG_QwenImage2_1.json"),
@@ -125,26 +105,6 @@ WORKFLOW_CONFIG = {
     "quad_ref2video": {
         "template": os.path.join(BASE_DIR, "2_4_QuadRef2Video_MinimaxH3_api.json"),
         "ui_template": os.path.join(BASE_DIR, "2_4_QuadRef2Video_MinimaxH3.json"),
-        "type": "video"
-    },
-    "penta_ref2video": {
-        "template": os.path.join(BASE_DIR, "2_5_PentaRef2Video_MinimaxH3_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "2_5_PentaRef2Video_MinimaxH3.json"),
-        "type": "video"
-    },
-    "hexa_ref2video": {
-        "template": os.path.join(BASE_DIR, "2_6_HexaRef2Video_MinimaxH3_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "2_6_HexaRef2Video_MinimaxH3.json"),
-        "type": "video"
-    },
-    "hepta_ref2video": {
-        "template": os.path.join(BASE_DIR, "2_7_HeptaRef2Video_MinimaxH3_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "2_7_HeptaRef2Video_MinimaxH3.json"),
-        "type": "video"
-    },
-    "octa_ref2video": {
-        "template": os.path.join(BASE_DIR, "2_8_OctaRef2Video_MinimaxH3_api.json"),
-        "ui_template": os.path.join(BASE_DIR, "2_8_OctaRef2Video_MinimaxH3.json"),
         "type": "video"
     },
     "nona_ref2video": {
@@ -419,18 +379,6 @@ def run_image_workflow(workflow_type, image_filenames, prompt_text, aspect_ratio
             if megapixels is not None:
                 workflow["491"]["inputs"]["megapixels"] = float(megapixels)
 
-    elif workflow_type in ("penta_blend", "hexa_blend", "hepta_blend", "octa_blend"):
-        # Node order matches images.image_1 ... images.image_N in the generated
-        # 5/6/7/8-reference API workflows.
-        multi_ref_nodes = ["489", "491", "497", "493", "494", "498", "495", "496"]
-        for idx, nid in enumerate(multi_ref_nodes):
-            if idx < len(image_filenames) and nid in workflow:
-                workflow[nid]["inputs"]["image"] = image_filenames[idx]
-        if "501" in workflow and "inputs" in workflow["501"]:
-            workflow["501"]["inputs"]["aspect_ratio"] = aspect_ratio
-            if megapixels is not None:
-                workflow["501"]["inputs"]["megapixels"] = float(megapixels)
-
     elif workflow_type == "nona_blend":
         nona_nodes = ["489", "491", "493", "494", "495", "496", "497", "498", "499"]
         for idx, nid in enumerate(nona_nodes):
@@ -498,33 +446,89 @@ def run_video_workflow(workflow_type, params):
         elif "length" in params and params["length"]:
             workflow["74"]["inputs"]["length"] = int(params["length"])
 
-    # 2-6. One through nine reference-image to video workflows.
-    elif workflow_type in (
-        "single_ref2video", "dual_ref2video", "tri_ref2video", "quad_ref2video",
-        "penta_ref2video", "hexa_ref2video", "hepta_ref2video", "octa_ref2video",
-        "nona_ref2video",
-    ):
-        conditioning = workflow.get("77", {}).get("inputs", {})
-        for index in range(9):
-            key = f"ref_images.ref_image_{index}"
-            image_key = (
-                "image"
-                if index == 0 and workflow_type == "single_ref2video"
-                else f"image{index + 1}"
-            )
-            if key in conditioning and image_key in params:
-                source_node = str(conditioning[key][0])
-                workflow[source_node]["inputs"]["image"] = params[image_key]
-        if params.get("prompt"):
-            conditioning["prompt"] = params["prompt"]
-        if params.get("duration") is not None and "76" in workflow:
+    # 2. 单图参考生视频 (Single Ref to Video)
+    elif workflow_type == "single_ref2video":
+        workflow["7"]["inputs"]["image"] = params["image"]
+        if "prompt" in params and params["prompt"]:
+            workflow["77"]["inputs"]["prompt"] = params["prompt"]
+        if "duration" in params and params["duration"] is not None and "76" in workflow and "inputs" in workflow["76"]:
             workflow["76"]["inputs"]["value"] = int(round(float(params["duration"])))
-        elif params.get("length"):
-            conditioning["length"] = int(params["length"])
-        if "82" in workflow:
-            if params.get("aspect_ratio"):
+        elif "length" in params and params["length"]:
+            workflow["77"]["inputs"]["length"] = int(params["length"])
+        if "82" in workflow and "inputs" in workflow["82"]:
+            if "aspect_ratio" in params and params["aspect_ratio"]:
                 workflow["82"]["inputs"]["aspect_ratio"] = params["aspect_ratio"]
-            if params.get("megapixels") is not None:
+            if "megapixels" in params and params["megapixels"] is not None:
+                workflow["82"]["inputs"]["megapixels"] = float(params["megapixels"])
+
+    # 3. 双图参考生视频 (Dual Ref to Video)
+    elif workflow_type == "dual_ref2video":
+        workflow["7"]["inputs"]["image"] = params["image1"]
+        workflow["92"]["inputs"]["image"] = params["image2"]
+        if "prompt" in params and params["prompt"]:
+            workflow["77"]["inputs"]["prompt"] = params["prompt"]
+        if "duration" in params and params["duration"] is not None and "76" in workflow and "inputs" in workflow["76"]:
+            workflow["76"]["inputs"]["value"] = int(round(float(params["duration"])))
+        elif "length" in params and params["length"]:
+            workflow["77"]["inputs"]["length"] = int(params["length"])
+        if "82" in workflow and "inputs" in workflow["82"]:
+            if "aspect_ratio" in params and params["aspect_ratio"]:
+                workflow["82"]["inputs"]["aspect_ratio"] = params["aspect_ratio"]
+            if "megapixels" in params and params["megapixels"] is not None:
+                workflow["82"]["inputs"]["megapixels"] = float(params["megapixels"])
+
+    # 4. 三图参考生视频 (Tri Ref to Video)
+    elif workflow_type == "tri_ref2video":
+        workflow["7"]["inputs"]["image"] = params["image1"]
+        workflow["92"]["inputs"]["image"] = params["image2"]
+        workflow["93"]["inputs"]["image"] = params["image3"]
+        if "prompt" in params and params["prompt"]:
+            workflow["77"]["inputs"]["prompt"] = params["prompt"]
+        if "duration" in params and params["duration"] is not None and "76" in workflow and "inputs" in workflow["76"]:
+            workflow["76"]["inputs"]["value"] = int(round(float(params["duration"])))
+        elif "length" in params and params["length"]:
+            workflow["77"]["inputs"]["length"] = int(params["length"])
+        if "82" in workflow and "inputs" in workflow["82"]:
+            if "aspect_ratio" in params and params["aspect_ratio"]:
+                workflow["82"]["inputs"]["aspect_ratio"] = params["aspect_ratio"]
+            if "megapixels" in params and params["megapixels"] is not None:
+                workflow["82"]["inputs"]["megapixels"] = float(params["megapixels"])
+
+    # 5. 四图参考生视频 (Quad Ref to Video)
+    elif workflow_type == "quad_ref2video":
+        workflow["7"]["inputs"]["image"] = params["image1"]
+        workflow["92"]["inputs"]["image"] = params["image2"]
+        workflow["93"]["inputs"]["image"] = params["image3"]
+        workflow["94"]["inputs"]["image"] = params["image4"]
+        if "prompt" in params and params["prompt"]:
+            workflow["77"]["inputs"]["prompt"] = params["prompt"]
+        if "duration" in params and params["duration"] is not None and "76" in workflow and "inputs" in workflow["76"]:
+            workflow["76"]["inputs"]["value"] = int(round(float(params["duration"])))
+        elif "length" in params and params["length"]:
+            workflow["77"]["inputs"]["length"] = int(params["length"])
+        if "82" in workflow and "inputs" in workflow["82"]:
+            if "aspect_ratio" in params and params["aspect_ratio"]:
+                workflow["82"]["inputs"]["aspect_ratio"] = params["aspect_ratio"]
+            if "megapixels" in params and params["megapixels"] is not None:
+                workflow["82"]["inputs"]["megapixels"] = float(params["megapixels"])
+
+    # 6. 九图参考生视频 (Nona Ref to Video)
+    elif workflow_type == "nona_ref2video":
+        nona_nodes = ["7", "92", "93", "94", "95", "96", "98", "99", "100"]
+        for idx, nid in enumerate(nona_nodes):
+            key = f"image{idx+1}"
+            if key in params:
+                workflow[nid]["inputs"]["image"] = params[key]
+        if "prompt" in params and params["prompt"]:
+            workflow["77"]["inputs"]["prompt"] = params["prompt"]
+        if "duration" in params and params["duration"] is not None and "76" in workflow and "inputs" in workflow["76"]:
+            workflow["76"]["inputs"]["value"] = int(round(float(params["duration"])))
+        elif "length" in params and params["length"]:
+            workflow["77"]["inputs"]["length"] = int(params["length"])
+        if "82" in workflow and "inputs" in workflow["82"]:
+            if "aspect_ratio" in params and params["aspect_ratio"]:
+                workflow["82"]["inputs"]["aspect_ratio"] = params["aspect_ratio"]
+            if "megapixels" in params and params["megapixels"] is not None:
                 workflow["82"]["inputs"]["megapixels"] = float(params["megapixels"])
 
     # 7. 视频编辑 (图+视频生视频)
@@ -789,72 +793,6 @@ def api_quad_blend():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def _api_fixed_multi_blend(image_count: int):
-    """Shared handler for 5-8 reference Qwen-Image 2.1 generation."""
-    prefixes = {5: "penta", 6: "hexa", 7: "hepta", 8: "octa"}
-    try:
-        prompt_text = request.form.get('prompt', '').strip()
-        if not prompt_text:
-            return jsonify({"success": False, "error": "Missing 'prompt' text"}), 400
-
-        aspect_ratio = request.form.get('aspect_ratio', '16:9 (Widescreen)').strip()
-        negative_prompt = request.form.get('negative_prompt', '').strip()
-        seed = int(request.form['seed']) if 'seed' in request.form and request.form['seed'].isdigit() else None
-        steps = int(request.form['steps']) if 'steps' in request.form and request.form['steps'].isdigit() else 25
-        cfg = float(request.form['cfg']) if 'cfg' in request.form else 1.0
-        megapixels = float(request.form.get('megapixels', 1.0))
-
-        images = []
-        for i in range(1, image_count + 1):
-            key = f'image{i}'
-            filename = upload_to_comfyui(request.files[key]) if key in request.files else request.form.get(key, '').strip()
-            if not filename:
-                return jsonify({"success": False, "error": f"'{key}' is required"}), 400
-            images.append(filename)
-
-        img_data, output_filename = run_image_workflow(
-            f"{prefixes[image_count]}_blend", images, prompt_text,
-            aspect_ratio, seed, steps, cfg, negative_prompt, megapixels
-        )
-        buffer = BytesIO(img_data)
-        buffer.seek(0)
-        return send_file(buffer, mimetype='image/png', as_attachment=False, download_name=output_filename)
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/penta_blend', methods=['POST'])
-@app.route('/api/image/penta_blend', methods=['POST'])
-@app.route('/api/five_blend', methods=['POST'])
-def api_penta_blend():
-    """Qwen-Image 2.1 five-reference blend/edit endpoint."""
-    return _api_fixed_multi_blend(5)
-
-
-@app.route('/api/hexa_blend', methods=['POST'])
-@app.route('/api/image/hexa_blend', methods=['POST'])
-@app.route('/api/six_blend', methods=['POST'])
-def api_hexa_blend():
-    """Qwen-Image 2.1 six-reference blend/edit endpoint."""
-    return _api_fixed_multi_blend(6)
-
-
-@app.route('/api/hepta_blend', methods=['POST'])
-@app.route('/api/image/hepta_blend', methods=['POST'])
-@app.route('/api/seven_blend', methods=['POST'])
-def api_hepta_blend():
-    """Qwen-Image 2.1 seven-reference blend/edit endpoint."""
-    return _api_fixed_multi_blend(7)
-
-
-@app.route('/api/octa_blend', methods=['POST'])
-@app.route('/api/image/octa_blend', methods=['POST'])
-@app.route('/api/eight_blend', methods=['POST'])
-def api_octa_blend():
-    """Qwen-Image 2.1 eight-reference blend/edit endpoint."""
-    return _api_fixed_multi_blend(8)
-
-
 @app.route('/api/nona_blend', methods=['POST'])
 @app.route('/api/image/nona_blend', methods=['POST'])
 def api_nona_blend():
@@ -918,22 +856,20 @@ def api_image_multi_edit():
                     images.append(request.form.get(k).strip())
 
         count = len(images)
-        workflow_by_count = {
-            1: "edit",
-            2: "dual_blend",
-            3: "tri_blend",
-            4: "quad_blend",
-            5: "penta_blend",
-            6: "hexa_blend",
-            7: "hepta_blend",
-            8: "octa_blend",
-            9: "nona_blend",
-        }
-        wf = workflow_by_count.get(count)
-        if wf is None:
+        if count == 1:
+            wf = "edit"
+        elif count == 2:
+            wf = "dual_blend"
+        elif count == 3:
+            wf = "tri_blend"
+        elif count == 4:
+            wf = "quad_blend"
+        elif count == 9:
+            wf = "nona_blend"
+        else:
             return jsonify({
                 "success": False,
-                "error": f"Unsupported image count: {count}. Qwen-Image 2.1 supports 1-9 images."
+                "error": f"Unsupported image count: {count}. Qwen-Image 2.1 支持 1, 2, 3, 4 或 9 张图片。"
             }), 400
 
         img_data, output_filename = run_image_workflow(
@@ -1104,68 +1040,6 @@ def api_video_quad_ref():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def _api_video_fixed_ref(image_count: int):
-    prefixes = {
-        5: "penta",
-        6: "hexa",
-        7: "hepta",
-        8: "octa",
-    }
-    try:
-        params = {
-            "prompt": request.form.get('prompt', '').strip(),
-            "duration": float(request.form.get('duration', 15.0)),
-            "megapixels": float(request.form.get('megapixels', 0.9)),
-            "aspect_ratio": request.form.get('aspect_ratio', '16:9 (Widescreen)').strip(),
-            "steps": int(request.form['steps']) if 'steps' in request.form and request.form['steps'].isdigit() else 8,
-            "seed": int(request.form['seed']) if 'seed' in request.form and request.form['seed'].isdigit() else None,
-        }
-        if 'length' in request.form and request.form['length'].isdigit():
-            params['length'] = int(request.form['length'])
-
-        for index in range(1, image_count + 1):
-            key = f'image{index}'
-            filename = upload_to_comfyui(request.files[key]) if key in request.files else request.form.get(key, '').strip()
-            if not filename:
-                return jsonify({"success": False, "error": f"'{key}' is required"}), 400
-            params[key] = filename
-
-        video_data, output_filename = run_video_workflow(f"{prefixes[image_count]}_ref2video", params)
-        buffer = BytesIO(video_data)
-        buffer.seek(0)
-        return send_file(buffer, mimetype='video/mp4', as_attachment=False, download_name=output_filename)
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/video/penta_ref', methods=['POST'])
-@app.route('/api/video/five_ref', methods=['POST'])
-def api_video_penta_ref():
-    """Minimax-H3 five-reference image to video."""
-    return _api_video_fixed_ref(5)
-
-
-@app.route('/api/video/hexa_ref', methods=['POST'])
-@app.route('/api/video/six_ref', methods=['POST'])
-def api_video_hexa_ref():
-    """Minimax-H3 six-reference image to video."""
-    return _api_video_fixed_ref(6)
-
-
-@app.route('/api/video/hepta_ref', methods=['POST'])
-@app.route('/api/video/seven_ref', methods=['POST'])
-def api_video_hepta_ref():
-    """Minimax-H3 seven-reference image to video."""
-    return _api_video_fixed_ref(7)
-
-
-@app.route('/api/video/octa_ref', methods=['POST'])
-@app.route('/api/video/eight_ref', methods=['POST'])
-def api_video_octa_ref():
-    """Minimax-H3 eight-reference image to video."""
-    return _api_video_fixed_ref(8)
-
-
 @app.route('/api/video/nona_ref', methods=['POST'])
 def api_video_nona_ref():
     """Minimax-H3 九图参考生视频"""
@@ -1232,26 +1106,28 @@ def api_video_multi_ref():
         if 'length' in request.form and request.form['length'].isdigit():
             params['length'] = int(request.form['length'])
 
-        workflow_by_count = {
-            1: "single_ref2video",
-            2: "dual_ref2video",
-            3: "tri_ref2video",
-            4: "quad_ref2video",
-            5: "penta_ref2video",
-            6: "hexa_ref2video",
-            7: "hepta_ref2video",
-            8: "octa_ref2video",
-            9: "nona_ref2video",
-        }
-        wf = workflow_by_count.get(count)
-        if wf is None:
+        if count == 1:
+            params["image"] = images[0]
+            wf = "single_ref2video"
+        elif count == 2:
+            params["image1"], params["image2"] = images[0], images[1]
+            wf = "dual_ref2video"
+        elif count == 3:
+            params["image1"], params["image2"], params["image3"] = images[0], images[1], images[2]
+            wf = "tri_ref2video"
+        elif count == 4:
+            for i in range(4):
+                params[f"image{i+1}"] = images[i]
+            wf = "quad_ref2video"
+        elif count == 9:
+            for i in range(9):
+                params[f"image{i+1}"] = images[i]
+            wf = "nona_ref2video"
+        else:
             return jsonify({
                 "success": False,
                 "error": f"Unsupported reference image count: {count}. 支持 1, 2, 3, 4 或 9 张参考图。"
             }), 400
-
-        for index, image in enumerate(images):
-            params["image" if count == 1 and index == 0 else f"image{index + 1}"] = image
 
         video_data, output_filename = run_video_workflow(wf, params)
 
@@ -1421,7 +1297,7 @@ def index():
                     "fast_mode": 0.4,
                     "recommended_range": [0.4, 0.9],
                     "strongly_discouraged": "< 0.4 or > 0.9 (out of safe generation bounds)",
-                    "note": "For ref2video (1-9 refs) and ImageAudio2Video (digital human), megapixels should be 0.9 by default, or 0.4 for fast mode. Do not exceed this range."
+                    "note": "For ref2video (1/2/3/4/9 ref) and ImageAudio2Video (digital human), megapixels should be 0.9 by default, or 0.4 for fast mode. Do not exceed this range."
                 }
             }
         },
@@ -1432,12 +1308,8 @@ def index():
                 "/api/blend": "Qwen-Image 2.1 双图融合 (image1, image2, prompt, aspect_ratio, megapixels)",
                 "/api/triple_blend": "Qwen-Image 2.1 三图融合 (image1~image3, prompt, aspect_ratio, megapixels)",
                 "/api/quad_blend": "Qwen-Image 2.1 四图融合 (image1~image4, prompt, aspect_ratio, megapixels)",
-                "/api/penta_blend": "Qwen-Image 2.1 五图融合 (image1~image5, prompt, aspect_ratio, megapixels)",
-                "/api/hexa_blend": "Qwen-Image 2.1 六图融合 (image1~image6, prompt, aspect_ratio, megapixels)",
-                "/api/hepta_blend": "Qwen-Image 2.1 七图融合 (image1~image7, prompt, aspect_ratio, megapixels)",
-                "/api/octa_blend": "Qwen-Image 2.1 八图融合 (image1~image8, prompt, aspect_ratio, megapixels)",
                 "/api/nona_blend": "Qwen-Image 2.1 九图融合 (image1~image9, prompt, aspect_ratio, megapixels)",
-                "/api/image/multi_edit": "Qwen-Image 2.1 动态多图编辑 (自动支持 1-9 张参考图, 支持 megapixels)"
+                "/api/image/multi_edit": "Qwen-Image 2.1 动态多图编辑 (自动按图数 1/2/3/4/9 路由, 支持 megapixels)"
             },
             "video": {
                 "/api/video/image2video": "Minimax-H3 图生视频 (image, prompt, duration[3-15s, def 15s], scale_to_length[480/704/768, def 704])",
@@ -1445,12 +1317,8 @@ def index():
                 "/api/video/dual_ref": "Minimax-H3 双图参考生视频 (image1, image2, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
                 "/api/video/tri_ref": "Minimax-H3 三图参考生视频 (image1~image3, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
                 "/api/video/quad_ref": "Minimax-H3 四图参考生视频 (image1~image4, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
-                "/api/video/penta_ref": "Minimax-H3 五图参考生视频 (image1~image5, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
-                "/api/video/hexa_ref": "Minimax-H3 六图参考生视频 (image1~image6, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
-                "/api/video/hepta_ref": "Minimax-H3 七图参考生视频 (image1~image7, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
-                "/api/video/octa_ref": "Minimax-H3 八图参考生视频 (image1~image8, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
                 "/api/video/nona_ref": "Minimax-H3 九图参考生视频 (image1~image9, prompt, duration[3-15s], megapixels[0.4-0.9], aspect_ratio)",
-                "/api/video/multi_ref": "Minimax-H3 智能多图参考生视频 (自动支持 1-9 张参考图, 支持 duration[3-15s], megapixels[0.4-0.9])",
+                "/api/video/multi_ref": "Minimax-H3 智能多图参考生视频 (自动按图数 1/2/3/4/9 路由, 支持 duration[3-15s], megapixels[0.4-0.9])",
                 "/api/video/edit": "Minimax-H3 视频编辑 (image 参考图 + video 源视频 + prompt 指令, scale_to_length[480/704/768, def 704], 时长自动继承原视频无需设置)",
                 "/api/video/digital_human": "Minimax-H3 数字人 (image 角色图 + audio 声音文件 + prompt, duration[3-15s, def 15s], megapixels[0.4-0.9, def 0.9])"
             },
