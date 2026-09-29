@@ -354,6 +354,42 @@ MiniMax H3 是一款音视频联合生成的 Packed-DiT 架构模型，在长序
 
 本方案通过底层算子重构、模型结构精简、少步蒸馏与图级编译，构建了“**结构化剪枝 + 权重/激活正交旋转量化 + Turbo LoRA 轨迹蒸馏 + 时空自适应稀疏注意力 + 稠密平滑注意力回退 + ViT3D 解码器量化 + 图编译器融合**”的全栈加速体系。
 
+
+
+```mermaid
+flowchart TD
+    subgraph ModelCompression ["1. 模型级压缩与少步蒸馏"]
+        A[MiniMax H3 原生超大模型 ~20B] -->|结构化深度/宽度剪枝| B[剪枝版 DiT 主干: 减少 13B 参数]
+        B -->|离线 Regular Hadamard 变换| C[INT8 ConvRot 权重格式]
+        C -->|挂载 Turbo 8-Step LoRA| D[少步蒸馏 DiT: 50步压缩至8步 + CFG=1.0]
+    end
+
+    subgraph RuntimeCompilation ["2. 运行期图编译与硬件分发"]
+        D --> E[torch.compile / TorchDynamo 图捕获]
+        E -->|AOTInductor + Triton| F[非注意力算子全融合: RMSNorm / SiLU / Bias / 残差]
+        E -->|Comfy Kitchen 底层拦截| G[量化张量路由: aten.linear -> int8_linear]
+    end
+
+    subgraph AttentionEngine ["3. 双轨注意力引擎"]
+        G --> H{注意力调度器}
+        H -->|步数 0~10% 或 90~100% / 敏感层| I[SageAttention 2.2: 稠密低比特计算]
+        I --- I1[平滑 K 中心化校准 + Fused Block-Hadamard + INT8 MMA]
+        
+        H -->|步数 10%~90% 且 Tokens >= 4096| J[Sol-Attention: 运行时稀疏跳块]
+        J --- J1[2D Frame Morton 曲线重排: 增强时空空间局部性]
+        J --- J2[exact_kv 约束: 文本/音频/参考图条件前缀全量保留]
+        J --- J3[统计门控 μ + 1.80σ: 剪除 75%+ 无效 KV Blocks]
+        J --- J4[存活块使用 INT8 QK 与 INT8 PV 计算]
+    end
+
+    subgraph VAEDecoding ["4. 像素重建加速"]
+        AttentionEngine --> K[去噪完成潜变量: 24通道 3D Latent]
+        K --> L[MiniMax H3 专用 VAE 解码]
+        L --> M[36层 ViT3D Decoder: 2048维 Transformer]
+        M -->|INT8 ConvRot 线性层加速| N[高帧率/高清 视频输出]
+    end
+```
+
 #### 4.4.2 扩散轨迹蒸馏：Turbo LoRA 8 步极限加速原理
 
 原生扩散与 Flow Matching 模型求解常微分方程（ODE）或随机微分方程（SDE）时，由于积分路径弯曲，通常需要 30~50 个迭代步数（Sampling Steps），且往往依赖无分类器引导（Classifier-Free Guidance, CFG），导致单步需执行正向与负向两次模型前向。
@@ -528,7 +564,144 @@ MiniMax H3 VAE 的解码器包含：
 2. **CPU 调度开销抹除**：
    通过生成静态/半静态执行图，极大减轻了 Python 解释器在每个去噪步内分发数百个微内核的 CPU 瓶颈，使 GPU 计算核心能够以接近 100% 的满载占空比运行。
 
+#### 4.4.9. ComfyUI 生产级工作流拓扑与节点配置工程规范
 
+本节基于完整的生产工作流 JSON，梳理整个加速流水线的节点依赖、选型与精确参数字典。
+
+```mermaid
+graph LR
+    subgraph ModelLoadPipeline ["模型与打补丁流水线"]
+        U[UNETLoader<br>minimax_h3_ref2va_pruned_int8_convrot] --> L[LoraLoaderBypassModelOnly<br>Turbo 8-Step bf16 LoRA]
+        L --> SAGE[PathchSageAttentionKJ<br>auto / allow_compile=True]
+        SAGE --> SOL[SolAttnPatch<br>tau=1.8 / morton=True / int8=True]
+        SOL --> SHIFT[MiniMaxH3SigmaShift<br>shift_video=6 / shift_audio=3]
+        SHIFT --> K[KSampler]
+    end
+
+    subgraph ConditioningPipeline ["多模态前处理流水线"]
+        CLIP[CLIPLoader<br>qwen3vl_32b_int8_convrot] --> R2V[MiniMaxH3ReferenceToVideo]
+        IMG[LoadImage] --> R2V
+        RES[ResolutionSelector<br>16:9 / 1344x768] --> R2V
+        MATH[MathExpression<br>17k+5 帧长严格对齐] --> R2V
+        R2V -->|positive| K
+        R2V -->|positive| ZERO[ConditioningZeroOut]
+        ZERO -->|negative| K
+        R2V -->|LATENT| K
+    end
+
+    subgraph DecodePipeline ["双路音视频合成流水线"]
+        K -->|Latent 视频| VDEC[VAEDecode<br>minimax_h3_video_vae_int8_convrot]
+        K -->|Latent 音频| ADEC[VAEDecodeAudio<br>minimax_h3_audio_vae_fp32]
+        VDEC --> COMB[VHS_VideoCombine<br>24fps / H.264 MP4]
+        ADEC --> COMB
+    end
+```
+
+**（1）模型与组件加载规格清单**
+
+| 节点类型                    | 节点实例名称          | 核心文件 / 模型路径                                          | 运行配置参数                             | 作用与机制                                                   |
+| :-------------------------- | :-------------------- | :----------------------------------------------------------- | :--------------------------------------- | :----------------------------------------------------------- |
+| `UNETLoader`                | 主干 DiT 加载器       | `minimax_h3_ref2va_pruned_int8_convrot.safetensors`          | `weight_dtype: "default"`                | 载入结构化剪枝 13B、且全权重经 Hadamard 预旋转量化的 INT8 主干模型。 |
+| `LoraLoaderBypassModelOnly` | Turbo 蒸馏加速 LoRA   | `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | `strength_model: 1.0`                    | 注入 8 步蒸馏扩散轨迹，将常规 50 步去噪压缩至 8 步，并内化 CFG 引导。 |
+| `CLIPLoader`                | 多模态文本/视觉编码器 | `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`            | `type: "minimax"`<br>`device: "default"` | 载入基于 Qwen3-VL 32B 的多模态编码器，提取第 50 层的联合隐藏状态作为条件注入。 |
+| `VAELoader` (Video)         | 视频潜空间解码器      | `minimax_h3_video_vae_int8_convrot.safetensors`              | 默认                                     | 载入 36 层 ViT3D Decoder 架构的 INT8 ConvRot 视频 VAE，解码 24 通道时空潜变量。 |
+| `VAELoader` (Audio)         | 音频潜空间解码器      | `minimax_h3_audio_vae_fp32.safetensors`                      | 默认                                     | 载入 32 通道 40Hz 的立体声音频 VAE，保证音频频域高保真合成。 |
+
+---
+
+**（2）链式打补丁流水线（Sequential Patching Chain）**
+
+加速核心通过对 Model 对象进行链式包装，依次挂载各层优化钩子：
+
+1. **`LoraLoaderBypassModelOnly`（挂载 Turbo LoRA）**：
+
+   - 挂载 `minimax_h3_ref2v_turbo_8step`，利用低秩适配器（Rank Adapter）重塑主干模型的流速度场，使之具备 8 步大步长收敛与 CFG=1.0 内化能力；
+   - 旁路加载（Bypass Model Only）模式避免对 CLIP 文本编码器产生非必要污染与显存膨胀。
+
+2. **`PathchSageAttentionKJ`（注入 SageAttention）**：
+
+   - `sage_attention`: `"auto"`（自动探测 GPU 架构与可用 Triton/CUDA 内核，激活平滑 K 与正交旋转机制）；
+   - `allow_compile`: `true`（关键配置：确保底层的替换算子暴露 PyTorch Dynamo 兼容的 Trace 签名，允许后续与 `torch.compile` 无缝编译）。
+
+3. **`SolAttnPatch`（注入 Sol-Attention）**：
+
+   - 串联在 SageAttention 之后，作为模型的第一道自注意力拦截器（First-Refusal Override）。
+
+   - **实战配置字典**：
+
+     ```json
+     {
+       "tau": 1.8,
+       "start_percent": 0.1,
+       "end_percent": 0.9,
+       "min_tokens": 4096,
+       "int8_qk": true,
+       "sink_conditioning": "exact_kv",
+       "morton": true,
+       "morton_curve": "2d_frame",
+       "int8_pv": true,
+       "use_tma": true,
+       "dense_blocks": ""
+     }
+     ```
+
+   - **运行机制**：在 10%~90% 去噪步数且 Token 数量 $\ge 4096$ 时，接管 Self-Attention 执行 2D Morton 重排与 $\mu + 1.8\sigma$ 质心剪枝；在不符合条件的步数与层级，自动回退传递给 `PathchSageAttentionKJ` 运行稠密 INT8 计算。
+
+4. **`MiniMaxH3SigmaShift`（时空与音频时间步偏移）**：
+
+   - `shift_video`: `6.0`
+   - `shift_audio`: `3.0`
+   - **机制**：MiniMax H3 的采样器在统一调度轴运行，但内部视频与音频具有不同的特征演化速率。通过此节点注入时间步映射函数，将单去噪步长动态分配为视频轴较缓、音频轴平滑的闭式时间转换。
+
+---
+
+**（3）时空帧长严格对齐公式（MathExpression 计算）**
+
+MiniMax H3 的时空 VAE 编码器具有时间轴 $vae\_ratio\_t = 4$、空间轴 $vae\_ratio = 16$ 的固定压缩率，其时间序列必须严格满足：
+$$\text{Frame Count} \equiv 5 \pmod{17} \quad (\text{即 } 17k + 5)$$
+若输入的视频帧数不满足此栅格要求，VAE 采样与时空位置编码（3D RoPE）将产生尺寸失配抛出异常。
+
+工作流中使用 `PrimitiveInt`（输入秒数，例如 15 秒）配合 `MathExpression` 节点，通过如下数学表达式实现动态合法帧长闭式计算：
+
+```python
+# 输入 a 为设定秒数，24 为目标帧率 FPS
+# 核心逻辑：确保最少 5 帧，且不足 17k+5 时向上补齐至最近的周期点
+max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17
+```
+
+**对齐样例**：
+
+- 输入 15 秒 $\to$ 理论帧数 $15 \times 24 = 360$ 帧；
+- $360 \pmod{17} = 3$；
+- 向上对齐到 $(5 - 3) \pmod{17} = 2$ 帧；
+- 输出实际总帧数：$360 + 2 = 362$ 帧（$362 = 17 \times 21 + 5$），完美对齐硬件步进要求。
+
+---
+
+**（4）Turbo 采样去噪超参数调优（KSampler）**
+
+搭配 8 步蒸馏 LoRA 使用时，采样器各项参数需严格遵循蒸馏扩散物理特性：
+
+| KSampler 参数  | 设定值                | 调优依据与工程原理                                           |
+| :------------- | :-------------------- | :----------------------------------------------------------- |
+| `steps`        | `8`                   | 匹配 `minimax_h3_ref2v_turbo_8step` 的蒸馏轨迹。步骤过多会导致画面过度锐化与高频伪影，少于 8 步则导致未充分去噪。 |
+| `cfg`          | `1.0`                 | **蒸馏模型必须锁定为 1.0**。Turbo 蒸馏在训练时已将提示词引导内化，若开启 CFG（> 1.0）将引发严重的色彩过饱和、数值爆炸及对比度溢出。 |
+| `negative`     | `ConditioningZeroOut` | 由于 CFG = 1.0，负向提示词不参与梯度外推。通过 `ConditioningZeroOut` 节点直接将正向条件置零作为负向输入，避免二次文本编码的计算开销。 |
+| `sampler_name` | `"euler"`             | 一阶单步欧拉求解器，计算延迟最低，与扩散蒸馏流匹配度最高。   |
+| `scheduler`    | `"linear_quadratic"`  | 线形-二次混合调度。在初期（大噪声阶段）采用线性步进保证构图平稳，在末期切换为二次平滑步进以极小步长精准收敛高频细节。 |
+| `denoise`      | `1.0`                 | 完整去噪模式。                                               |
+
+---
+
+**（5）最终音视频合成（VHS_VideoCombine）**
+
+经 `VAEDecode`（视频图像流）与 `VAEDecodeAudio`（立体声音频流）解压后，送入 `VHS_VideoCombine` 进行封包：
+
+- `frame_rate`: `24.0`
+- `format`: `"video/h264-mp4"`
+- `pix_fmt`: `"yuv420p"`
+- `crf`: `19`（视觉无损恒定质量压缩）
+- `save_output`: `true`
 
 ---
 
