@@ -2,6 +2,8 @@
 
 ![kelvoy-travel-hero](apps/web/public/images/kelvoy-travel-hero.jpg)
 
+**中文** | [English](README_en.md)
+
 **可旅（Kelvoy）——AI 旅行 Vlog 生产工作台。可旅，让每一场旅行都有 vlog。** 本项目为第三届 NVIDIA DGX Spark 黑客松参赛项目。
 
 ## 📖项目简介
@@ -29,7 +31,7 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
 - **成本可控与积分核算**：本地 DGX Spark 自部署为主、国内 API 弹性溢出；动作级积分原子预留 / 结算 / 释放，成片版本化 + ffprobe 验证 + 用量页；
 - **本地优先架构**：SQLite 唯一真源 + 本地磁盘产物 + 无 Redis / Postgres / 对象存储（ADR-0004）。
 
-> 详细产品方案见 [docs/AI旅行Vlog生产工作台_PRD_v0.2.md](docs/AI旅行Vlog生产工作台_PRD_v0.2.md)，项目报告书见 [docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md)。
+> 详细产品方案见 [PRD v0.2](docs/AI旅行Vlog生产工作台_PRD_v0.2.md)；项目报告书、[Web 技术白皮书](docs/Web技术白皮书.md)与 [Web 端操作手册](docs/Web端操作手册.md)见 `docs/` 目录，DEMO 演示文稿（V0.1–V0.3）在 `docs/demo/`。
 
 ## 一句话 Pitch
 
@@ -63,7 +65,33 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
 | `packages/engine` | 流水线核心（无 IO） | stages / providers / schema / state / rules，Worker 与 CLI 共用 |
 | `packages/store` | 唯一拥有 SQLite 的地方 | 期 / 角色 / 目的地 / 模板 / 任务 + 积分四表，乐观锁 |
 | `packages/cli` | 内部工具 | run / import-* / seed-catalog / create-user / grant-credits |
-| `comfyui-bridge` | ComfyUI 工作流模板 | Qwen-Image 2.1（1–9 参考图）、MiniMax H3（多模态参考）等 20 余份工作流 |
+| `comfyui-bridge` | ComfyUI 工作流与桥接服务 | 图像 10 条（Qwen-Image 2.1：纯文生 + 1–9 参考图）、视频 12 条（MiniMax H3：图生视频 + 1–9 参考 + 图 / 音组合）、音乐 1 条（ACE-STEP），另含桥接服务脚本与 Spark GB10 / RTX 4090 参考图数量基准报告 |
+| `infra/dgx` | DGX 部署笔记 | 双机侦察记录、端口规划、systemd user 服务与发布流程 |
+| `assets` | 演示与共享素材 | `demo/`：官方角色与五目的地实景参考图；`shared/`：授权音乐、LUT、片头片尾 |
+| `scripts` | 基准与验收脚本 | 队列 / 并发 / 期列表 / 用量等性能基准，DGX 工作流验收与演示音乐生成 |
+| `spike` | 一次性硬件验证 | M0 阶段 ComfyUI 冒烟、Worker 单镜 / 三镜链路验证与评测记录 |
+
+### 仓库结构
+
+```
+Kelvoy/
+├── apps/
+│   ├── web/              # Hono API + React/Vite 前端（工作台）
+│   └── worker/           # GPU Worker：任务消费 + ffmpeg 合成
+├── packages/
+│   ├── engine/           # 流水线核心（无 IO）
+│   ├── store/            # SQLite 唯一真源 + 积分
+│   └── cli/              # 内部工具（run / import / seed / 账号与积分）
+├── services/inference/   # 常驻 Python 推理适配（ComfyUI）
+├── comfyui-bridge/       # 23 条 ComfyUI 工作流 + 桥接服务 + 基准报告
+├── infra/dgx/            # DGX 侦察记录与部署笔记
+├── assets/
+│   ├── demo/             # 官方角色 / 目的地实景参考图与 catalog.json
+│   └── shared/           # 共享音乐、LUT、片头片尾
+├── scripts/              # 性能基准与 DGX 验收脚本
+├── spike/                # 一次性硬件验证（M0）
+└── docs/                 # PRD / 报告书 / 白皮书 / 手册 / ADR / DEMO PPT
+```
 
 ### 技术栈
 
@@ -132,8 +160,6 @@ make typecheck    # 五个 TS 包类型检查
 make test         # bun test + pytest（SQLite 测试用 :memory:，无需起服务）
 make lint         # ruff（Python 侧）
 ```
-
-
 
 ## 📆项目团队
 

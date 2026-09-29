@@ -14,6 +14,10 @@ services/inference/.pytest_cache/
 services/inference/.ruff_cache/
 
 # Runtime data
+__pycache__
+.codex-ppt-build/
+.chart-data-K8HPer/
+.chart-data-Mrb2c6/
 projects/
 data/
 *.db
