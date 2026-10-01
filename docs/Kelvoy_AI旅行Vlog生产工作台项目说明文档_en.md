@@ -761,7 +761,7 @@ Play the full cut, download the MP4, and view this episode's estimated and used 
 
 ### 10.2 Project Timeline
 
-[2026.9.29] **馄饨** kept optimizing the code and shipped the third release. **张小白** drafted the demo deck; **小腾子** refined the deck and produced the demo video. **张小白** finalized the project documentation and submitted the entry.
+[2026.9.29] **馄饨** kept optimizing the code and shipped the third release. **张小白** added the 4–8-reference image/video generation interfaces with [documentation](../comfyui-bridge/AI_USAGE_GUIDE.md), produced the [demo deck](demo/Kelvoy可旅_DEMO-V0.3.pptx) and the [demo video](https://www.bilibili.com/video/BV1PWaW6oEo1), wrote the ["Ten-Day Diary" hackathon essay](https://zhuanlan.zhihu.com/p/2088388112300892508), finalized the [project report](Kelvoy_AI旅行Vlog生产工作台项目说明文档.md), and submitted the entry.
 
 [2026.9.28] **馄饨** found GPT extremely slow and opened a new Claude account (fingers crossed it won't be banned again).
 

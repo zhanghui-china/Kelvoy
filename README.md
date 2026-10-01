@@ -16,7 +16,7 @@ Kelvoy - AI 旅行 Vlog 生产工作台，中文名称为"可旅"。Kelvoy 源�
 
 **项目内容：**
 
-Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多模态创作项目，围绕"角色资产 → 目的地符号包 → 分镜脚本 → 关键帧 / 直出视频 → 固定一秒剪辑 → 成片分享"构建完整闭环。用户定一个虚拟出镜角色、选一个景区级旅游目的地，在脚本、关键帧（传统路径）、片段三个人工节点做选择，得到一期 5–10 镜、每镜 3-4 秒、约 30 秒、9:16 竖屏（默认）或 16:9 横屏的目的地 Vlog；同一角色走遍不同目的地，形成一个旅行账号的内容。
+Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多模态创作项目，围绕"角色资产 → 目的地符号包 → 分镜脚本 → 关键帧 / 直出视频 → 逐镜剪辑合成 → 成片分享"构建完整闭环。用户定一个虚拟出镜角色、选一个景区级旅游目的地，在脚本、关键帧（传统路径）、片段三个人工节点做选择，得到一期 5–10 镜、每镜 3-4 秒、约 30 秒、9:16 竖屏（默认）或 16:9 横屏的目的地 Vlog；同一角色走遍不同目的地，形成一个旅行账号的内容。
 
 **项目背景与动机：**
 
@@ -29,7 +29,7 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
 - **虚拟角色 × 真实目的地垂直体裁**：角色是账号级资产（人设、外形跨期一致，每期可换穿搭），目的地是共享资产（官方维护景区级符号包 + 地标实景参考图）；
 - **两条创作路径**：新项目默认"人物参考图 + 地标实景图"双参考图直出视频（MiniMax H3），省去图片生成；传统路径支持每镜 1–3 张关键帧候选（Qwen-Image 2.1）逐镜挑选；
 - **三个人工审核点**：脚本审核（可改、可删、可按指令重生成）、关键帧审核（传统路径）、片段审核（质量红线逐条确认），不确定性压在便宜的静帧阶段；
-- **固定一秒剪辑**：每镜严格 30 帧 @30fps，字幕烧录、2 帧片内转场、LUT、片头片尾、AI 标识全部在 ffmpeg 合成阶段完成；
+- **逐镜剪辑合成**：每镜 3–4 秒，字幕烧录、2 帧片内转场、LUT、片头片尾、AI 标识全部在 ffmpeg 合成阶段完成；
 - **成本可控与积分核算**：本地 DGX Spark 自部署为主、国内 API 弹性溢出；动作级积分原子预留 / 结算 / 释放，成片版本化 + ffprobe 验证 + 用量页；
 - **本地优先架构**：SQLite 唯一真源 + 本地磁盘产物 + 无 Redis / Postgres / 对象存储（ADR-0004）。
 
@@ -44,11 +44,11 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
 ```
 角色（三视图参考，账号级资产） + 目的地（景区级符号包）
   → [Brief] 新建一期：季节 / 语气 / 画幅 / 模板 / 创作方式
-  → [S1] 脚本生成 24–30 镜分镜 JSON（含逐镜字幕）── 审核 1：改脚本
+  → [S1] 脚本生成 5–10 镜分镜 JSON（含逐镜字幕）── 审核 1：改脚本
   → [S2] 角色资产版本快照
   → [S3] 关键帧生成（传统路径，每镜 1–3 候选）── 审核 2：挑关键帧
   → [S4] 视频生成（双参考直出 / 图生视频）── 审核 3：挑片段
-  → [S5] 合成设置 → 合成输出：每镜 1 秒 + LUT + 字幕 + 转场 + AI 标识 MP4
+  → [S5] 合成设置 → 合成输出：每镜 3–4 秒 + LUT + 字幕 + 转场 + AI 标识 MP4
 ```
 
 **直出路径（新项目默认）**：脚本审核通过后，角色参考图 + 地标实景图直接送 MiniMax H3 双参考图生视频工作流，从素材检查直达片段审核，不产生图片候选与关键帧审核。
@@ -101,8 +101,32 @@ Kelvoy/
 - **图像模型**：Qwen-Image 2.1（ComfyUI，单参考 = 角色、双参考 = 角色 + 地标）
 - **视频模型**：MiniMax H3（ComfyUI，双参考直出 / 单参考图生视频）
 - **音乐**：授权素材库检索（MVP 不生成）
-- **合成**：FFmpeg（每镜 30 帧整数窗口、LUT、ASS 字幕、2 帧转场、AI 标识）
+- **合成**：FFmpeg（每镜整数帧窗口、LUT、ASS 字幕、2 帧转场、AI 标识）
 - **框架**：Bun + TypeScript monorepo、Hono、React 18 + Vite 5、FastAPI + Pydantic、SQLite
+
+## 📚文档索引
+
+| 位置                                                                                          | 内容                             |
+| --------------------------------------------------------------------------------------------- | -------------------------------- |
+| [docs/AI旅行Vlog生产工作台_PRD_v0.2.md](docs/AI旅行Vlog生产工作台_PRD_v0.2.md)               | 产品需求文档 PRD v0.2（现行）    |
+| [docs/AI旅行Vlog生产工作台_PRD_v0.1.md](docs/AI旅行Vlog生产工作台_PRD_v0.1.md)               | PRD v0.1（历史版本）             |
+| [docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md) | 项目报告书（中文）               |
+| [docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档_en.md](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档_en.md) | 项目报告书（英文）               |
+| [docs/Web技术白皮书.md](docs/Web技术白皮书.md)                                                | Web 技术白皮书                   |
+| [docs/Web端操作手册.md](docs/Web端操作手册.md)                                                | Web 端操作手册                   |
+| [docs/DGX Spark黑客松可旅（Kelvoy）十日谈开发历程.md](docs/DGX%20Spark黑客松可旅（Kelvoy）十日谈开发历程.md) | 十日谈开发历程（赛事征文）       |
+| [docs/minimax_h3_acceleration_technical_specification.md](docs/minimax_h3_acceleration_technical_specification.md) | MiniMax H3 全链路加速技术规格    |
+| [docs/architecture.md](docs/architecture.md)                                                  | 架构实现状态文档                 |
+| [docs/decisions/](docs/decisions/)                                                            | 架构决策记录（ADR 0001–0007）    |
+| [docs/guides/](docs/guides/)                                                                  | M0 手册与发布迁移指南            |
+| [docs/demo/](docs/demo/)                                                                      | DEMO 演示文稿（V0.1–V0.3）       |
+| [docs/audit/](docs/audit/)                                                                    | 代码审计与验收记录               |
+| [docs/ui/](docs/ui/)                                                                          | 产品界面设计稿（v8 PR 系列）     |
+| [docs/M3-0-备案路径调研.md](docs/M3-0-备案路径调研.md)                                        | 备案路径调研（商业化阶段参考）   |
+| [comfyui-bridge/AI_USAGE_GUIDE.md](comfyui-bridge/AI_USAGE_GUIDE.md)                          | ComfyUI 工作流使用指南           |
+| [infra/dgx/README.md](infra/dgx/README.md)                                                    | DGX 侦察记录与部署笔记           |
+| [apps/worker/README.md](apps/worker/README.md)                                                | Worker 与合成环境说明            |
+| [services/inference/README.md](services/inference/README.md)                                  | 推理服务协议与验收边界           |
 
 ## 🚀 快速开始
 
@@ -172,7 +196,7 @@ make lint         # ruff（Python 侧）
 | [般度五子](https://github.com/Bandukids)    | 队员、ComfyUI 服务部署与开发、图像/视频管线       |
 | [馄饨](https://github.com/nativeas)         | 队员、PRD 编写、Web 前后台开发、审片台与积分系统  |
 
-[2026.9.29] **馄饨**继续优化代码，并提交第三版。**张小白**制作DEMO PPT初稿，**小腾子**优化PPT并制作DEMO视频。**张小白**完善项目文档并提交作品。
+[2026.9.29] **馄饨**继续优化代码，并提交第三版。**张小白**追加4-8参考图生图和生视频接口及[文档](comfyui-bridge/AI_USAGE_GUIDE.md)、制作[DEMO PPT](docs/demo/Kelvoy可旅_DEMO-V0.3.pptx)并制作[DEMO视频](https://www.bilibili.com/video/BV1PWaW6oEo1)、编写[”十日谈“征文](https://zhuanlan.zhihu.com/p/2088388112300892508)、完善[项目说明书](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md)并提交作品。
 
 [2026.9.28] **馄饨** 发现GPT超级慢，重新开了一个Claude用户（保佑他不被再封）。
 

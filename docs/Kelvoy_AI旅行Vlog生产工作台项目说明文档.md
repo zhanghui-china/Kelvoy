@@ -823,7 +823,7 @@ max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17
 
 ### 10.2 项目动态
 
-[2026.9.29] **馄饨**继续优化代码，并提交第三版。**张小白**制作DEMO PPT初稿，**小腾子**优化PPT并制作DEMO视频。**张小白**完善项目文档并提交作品。
+[2026.9.29] **馄饨**继续优化代码，并提交第三版。**张小白**追加4-8参考图生图和生视频接口及[文档](comfyui-bridge/AI_USAGE_GUIDE.md)、制作[DEMO PPT](docs/demo/Kelvoy可旅_DEMO-V0.3.pptx)并制作[DEMO视频](https://www.bilibili.com/video/BV1PWaW6oEo1)、编写[”十日谈“征文](https://zhuanlan.zhihu.com/p/2088388112300892508)、完善[项目说明书](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md)并提交作品。
 
 [2026.9.28] **馄饨** 发现GPT超级慢，重新开了一个Claude用户（保佑他不被再封）。
 

@@ -4,7 +4,9 @@
 
 [中文](README.md) | **English**
 
-**Kelvoy — an AI travel vlog production workbench. Let every journey have its vlog.** This project is an entry for the 3rd NVIDIA DGX Spark Hackathon.
+**Kelvoy — an AI travel vlog production workbench. Let every journey have its vlog.**
+
+This project is an entry for the 3rd NVIDIA DGX Spark Hackathon.
 
 ## 📖 About the Project
 
@@ -14,7 +16,7 @@ Kelvoy is an AI travel vlog production workbench, known in Chinese as "可旅" (
 
 **What it does:**
 
-Kelvoy is a multimodal creation project focused on "virtual character × real destination" travel content, building a closed loop around: character assets → destination symbol packs → storyboard scripts → keyframes / direct video → fixed one-second cuts → delivery and sharing. Pick one virtual on-camera character and one scenic-level destination, make choices at three human checkpoints (script, keyframes on the classic path, and clips), and get a 24–30-shot, one-second-per-shot, ~30-second travel vlog in 9:16 portrait (default) or 16:9 landscape. The same character can travel across destinations, forming the content of a serialized travel account.
+Kelvoy is a multimodal creation project focused on "virtual character × real destination" travel content, building a closed loop around: character assets → destination symbol packs → storyboard scripts → keyframes / direct video → per-shot cutting & compose → delivery and sharing. Pick one virtual on-camera character and one scenic-level destination, make choices at three human checkpoints (script, keyframes on the classic path, and clips), and get a 5–10-shot, 3–4-seconds-per-shot, ~30-second travel vlog in 9:16 portrait (default) or 16:9 landscape. The same character can travel across destinations, forming the content of a serialized travel account.
 
 **Background and motivation:**
 
@@ -27,11 +29,11 @@ This repository contains a Bun/TypeScript monorepo with a web workbench, a GPU w
 - **Vertical genre — virtual character × real destination:** Characters are account-level assets (persona and appearance stay consistent across episodes, outfits can change each time); destinations are shared assets (officially maintained scenic-level symbol packs + landmark reference photos).
 - **Two creation paths:** New projects default to dual-reference direct video (character reference + landmark photo → MiniMax H3), skipping image generation; the classic path offers 1–3 keyframe candidates per shot (Qwen-Image 2.1) for manual selection.
 - **Three human review gates:** Script review (edit, delete, or regenerate by instruction), keyframe review (classic path), and clip review (confirm the quality red lines item by item) — uncertainty is pushed into the cheap still-image stages.
-- **Fixed one-second cutting:** Every shot is exactly 30 frames @30fps; subtitle burn-in, 2-frame cross dissolves, LUT, intro/outro, and AI labeling are all done in the ffmpeg compose stage.
+- **Per-shot cutting & compose:** each shot runs 3–4 seconds; subtitle burn-in, 2-frame cross dissolves, LUT, intro/outro, and AI labeling are all done in the ffmpeg compose stage.
 - **Controllable cost with credit accounting:** Self-hosted on DGX Spark first, with domestic API overflow; per-action credits are atomically reserved / settled / released, final cuts are versioned and ffprobe-verified, and a usage page shows the totals.
 - **Local-first architecture:** SQLite as the single source of truth + artifacts on local disk + no Redis / Postgres / object storage (ADR-0004).
 
-> For details, see the [PRD v0.2](docs/AI旅行Vlog生产工作台_PRD_v0.2.md) (Chinese); the project report, the [Web technical whitepaper](docs/Web技术白皮书.md), and the [Web user manual](docs/Web端操作手册.md) live under `docs/`, and the demo decks (V0.1–V0.3) are in `docs/demo/`.
+> For details, see the [PRD v0.2](docs/AI旅行Vlog生产工作台_PRD_v0.2.md) (Chinese); the [project report](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md), the [Web technical whitepaper](docs/Web技术白皮书.md), and the [Web user manual](docs/Web端操作手册.md) live under `docs/`, and the demo decks (V0.1–V0.3) are in `docs/demo/`.
 
 ## One-line Pitch
 
@@ -42,11 +44,11 @@ This repository contains a Bun/TypeScript monorepo with a web workbench, a GPU w
 ```
 Character (three-view references, account-level asset) + Destination (scenic-level symbol pack)
   → [Brief] New episode: season / tone / aspect / template / creation mode
-  → [S1] Script generation: 24–30-shot storyboard JSON (with per-shot captions) ── Review 1: revise the script
+  → [S1] Script generation: 5–10-shot storyboard JSON (with per-shot captions) ── Review 1: revise the script
   → [S2] Character asset version snapshot
   → [S3] Keyframe generation (classic path, 1–3 candidates per shot) ── Review 2: pick keyframes
   → [S4] Video generation (dual-reference direct / image-to-video) ── Review 3: pick clips
-  → [S5] Compose setup → final render: 1s per shot + LUT + subtitles + transitions + AI label MP4
+  → [S5] Compose setup → final render: 3–4s per shot + LUT + subtitles + transitions + AI label MP4
 ```
 
 **Direct path (default for new projects):** after script review, the character reference image and the landmark photo are sent straight to the MiniMax H3 dual-reference image-to-video workflow. The flow goes from asset checks directly to clip review — no image candidates and no keyframe gate.
@@ -99,8 +101,32 @@ Kelvoy/
 - **Image model:** Qwen-Image 2.1 (ComfyUI; single reference = character, dual reference = character + landmark)
 - **Video model:** MiniMax H3 (ComfyUI; dual-reference direct generation / keyframe image-to-video)
 - **Music:** licensed library retrieval (not generated in the MVP)
-- **Compose:** FFmpeg (integer 30-frame windows per shot, LUT, ASS subtitles, 2-frame transitions, AI label)
+- **Compose:** FFmpeg (integer-frame windows per shot, LUT, ASS subtitles, 2-frame transitions, AI label)
 - **Frameworks:** Bun + TypeScript monorepo, Hono, React 18 + Vite 5, FastAPI + Pydantic, SQLite
+
+## 📚 Document Index
+
+| Location                                                                                     | Content                                        |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| [docs/AI旅行Vlog生产工作台_PRD_v0.2.md](docs/AI旅行Vlog生产工作台_PRD_v0.2.md)                | Product requirements document, PRD v0.2 (current) |
+| [docs/AI旅行Vlog生产工作台_PRD_v0.1.md](docs/AI旅行Vlog生产工作台_PRD_v0.1.md)                | PRD v0.1 (historical)                          |
+| [docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md) | Project report (Chinese)                       |
+| [docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档_en.md](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档_en.md) | Project report (English)                       |
+| [docs/Web技术白皮书.md](docs/Web技术白皮书.md)                                                | Web technical whitepaper                       |
+| [docs/Web端操作手册.md](docs/Web端操作手册.md)                                                | Web user manual                                |
+| [docs/DGX Spark黑客松可旅（Kelvoy）十日谈开发历程.md](docs/DGX%20Spark黑客松可旅（Kelvoy）十日谈开发历程.md) | Ten-Day Diary dev story (hackathon essay, Chinese) |
+| [docs/minimax_h3_acceleration_technical_specification.md](docs/minimax_h3_acceleration_technical_specification.md) | MiniMax H3 full-stack acceleration spec        |
+| [docs/architecture.md](docs/architecture.md)                                                  | Architecture implementation-status doc         |
+| [docs/decisions/](docs/decisions/)                                                           | Architecture decision records (ADR 0001–0007)  |
+| [docs/guides/](docs/guides/)                                                                 | M0 handbook & release migration guide          |
+| [docs/demo/](docs/demo/)                                                                     | Demo decks (V0.1–V0.3)                         |
+| [docs/audit/](docs/audit/)                                                                   | Code audits & acceptance records               |
+| [docs/ui/](docs/ui/)                                                                         | UI design drafts (v8 PR series)                |
+| [docs/M3-0-备案路径调研.md](docs/M3-0-备案路径调研.md)                                        | Filing-path research (commercialization phase) |
+| [comfyui-bridge/AI_USAGE_GUIDE.md](comfyui-bridge/AI_USAGE_GUIDE.md)                          | ComfyUI workflow usage guide                   |
+| [infra/dgx/README.md](infra/dgx/README.md)                                                    | DGX recon notes & deployment                   |
+| [apps/worker/README.md](apps/worker/README.md)                                                | Worker & compose environment notes             |
+| [services/inference/README.md](services/inference/README.md)                                  | Inference service protocol & acceptance        |
 
 ## 🚀 Quick Start
 
@@ -171,7 +197,7 @@ make lint         # ruff (Python side)
 | [般度五子](https://github.com/Bandukids)    | ComfyUI deployment & development, image/video pipeline |
 | [馄饨](https://github.com/nativeas)         | PRD writing, web frontend & backend, review desk & credit system |
 
-[2026.9.29] **馄饨 (Huntun)** kept optimizing the code and shipped the third release. **张小白 (Zhang Xiaobai)** drafted the demo deck, **小腾子 (Xiaotengzi)** refined the deck and produced the demo video. **张小白** finalized the project documentation and submitted the entry.
+[2026.9.29] **馄饨 (Huntun)** kept optimizing the code and shipped the third release. **张小白 (Zhang Xiaobai)** added the 4–8-reference image/video generation interfaces with [documentation](comfyui-bridge/AI_USAGE_GUIDE.md), produced the [demo deck](docs/demo/Kelvoy可旅_DEMO-V0.3.pptx) and the [demo video](https://www.bilibili.com/video/BV1PWaW6oEo1), wrote the ["Ten-Day Diary" hackathon essay](https://zhuanlan.zhihu.com/p/2088388112300892508), finalized the [project report](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md), and submitted the entry.
 
 [2026.9.28] **馄饨** found GPT extremely slow and opened a new Claude account (fingers crossed it won't be banned again).
 
