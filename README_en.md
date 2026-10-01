@@ -67,7 +67,7 @@ Tailored for the **NVIDIA DGX Spark (GB10, 128GB unified memory)**, with a **"lo
 | `packages/engine` | Pipeline core (IO-free) | stages / providers / schema / state / rules, shared by worker and CLI |
 | `packages/store` | The only place that owns SQLite | Episodes / personas / destinations / templates / tasks + four credit tables, optimistic locking |
 | `packages/cli` | Internal tooling | run / import-* / seed-catalog / create-user / grant-credits |
-| `comfyui-bridge` | ComfyUI workflows & bridge services | 10 image workflows (Qwen-Image 2.1: text-to-image + 1–9 references), 12 video workflows (MiniMax H3: image-to-video + 1–9 references + image/audio combos), 1 music workflow (ACE-STEP), plus bridge service scripts and reference-count benchmarks on Spark GB10 / RTX 4090 |
+| `comfyui-bridge` | ComfyUI workflows & bridge services | 11 image workflows (Qwen-Image 2.1: text-to-image + 1–10 references), 12 video workflows (MiniMax H3: image-to-video + 1–9 references + image/audio combos), 1 music workflow (ACE-STEP), plus bridge service scripts and reference-count benchmarks on Spark GB10 / RTX 4090 |
 | `infra/dgx` | DGX deployment notes | Dual-machine reconnaissance, port planning, systemd user services, release procedures |
 | `assets` | Demo & shared assets | `demo/`: official characters and landmark reference photos; `shared/`: licensed music, LUTs, intro/outro |
 | `scripts` | Benchmark & acceptance scripts | Queue / concurrency / episode-list / usage benchmarks, DGX workflow acceptance, demo music generation |
@@ -85,7 +85,7 @@ Kelvoy/
 │   ├── store/            # SQLite single source of truth + credits
 │   └── cli/              # Internal tooling (run / import / seed / accounts & credits)
 ├── services/inference/   # Resident Python inference adapter (ComfyUI)
-├── comfyui-bridge/       # 23 ComfyUI workflows + bridge services + benchmarks
+├── comfyui-bridge/       # 24 ComfyUI workflows + bridge services + benchmarks
 ├── infra/dgx/            # DGX reconnaissance and deployment notes
 ├── assets/
 │   ├── demo/             # Official characters / landmark photos + catalog.json

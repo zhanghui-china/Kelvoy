@@ -32,7 +32,7 @@
       "shift_video": 6,
       "shift_audio": 3,
       "model": [
-        "100",
+        "102",
         0
       ]
     }
@@ -41,10 +41,6 @@
     "class_type": "MiniMaxH3ImageToVideo",
     "inputs": {
       "prompt": "一个男人过来和女人亲吻，法式热吻",
-      "clip": [
-        "87",
-        0
-      ],
       "width": [
         "9",
         3
@@ -64,6 +60,10 @@
       "first_frame": [
         "9",
         0
+      ],
+      "clip": [
+        "87",
+        0
       ]
     }
   },
@@ -79,10 +79,6 @@
   "49": {
     "class_type": "KSampler",
     "inputs": {
-      "model": [
-        "90",
-        0
-      ],
       "seed": 85451655070020,
       "control_after_generate": "randomize",
       "steps": 6,
@@ -101,6 +97,10 @@
       "latent_image": [
         "74",
         1
+      ],
+      "model": [
+        "90",
+        0
       ]
     }
   },
@@ -207,15 +207,6 @@
       ],
       "audio": [
         "38",
-        0
-      ]
-    }
-  },
-  "100": {
-    "class_type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
-    "inputs": {
-      "model": [
-        "102",
         0
       ]
     }

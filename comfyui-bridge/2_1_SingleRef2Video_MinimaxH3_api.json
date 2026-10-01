@@ -7,52 +7,11 @@
       "device": "default"
     }
   },
-  "16": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "3",
-        0
-      ]
-    }
-  },
-  "30": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "video VAE",
-      "VAE": [
-        "4",
-        0
-      ]
-    }
-  },
-  "31": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "audio VAE",
-      "VAE": [
-        "5",
-        0
-      ]
-    }
-  },
   "2": {
     "class_type": "UNETLoader",
     "inputs": {
       "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
       "weight_dtype": "default"
-    }
-  },
-  "32": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "video VAE"
-    }
-  },
-  "39": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "audio VAE"
     }
   },
   "76": {
@@ -118,7 +77,7 @@
         0
       ],
       "vae": [
-        "39",
+        "5",
         0
       ]
     }
@@ -131,7 +90,7 @@
         0
       ],
       "vae": [
-        "32",
+        "4",
         0
       ]
     }
@@ -162,15 +121,19 @@
       ],
       "ref_image_size": "max",
       "vae": [
-        "32",
+        "4",
         0
       ],
       "audio_vae": [
-        "39",
+        "5",
         0
       ],
       "ref_images.ref_image_0": [
         "7",
+        0
+      ],
+      "clip": [
+        "3",
         0
       ]
     }
@@ -226,6 +189,10 @@
       "latent_image": [
         "77",
         1
+      ],
+      "model": [
+        "88",
+        0
       ]
     }
   },
@@ -245,15 +212,6 @@
       "shift_audio": 3,
       "model": [
         "91",
-        0
-      ]
-    }
-  },
-  "89": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "88",
         0
       ]
     }

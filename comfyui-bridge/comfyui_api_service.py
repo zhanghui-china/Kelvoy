@@ -5,7 +5,7 @@ ComfyUI Unified Multi-Modal API Service
 统一的 ComfyUI HTTP 中间件桥接服务，支持：
 1. Qwen-Image 2.1 文生图 (/api/text2img)
 2. Qwen-Image 2.1 单图编辑 (/api/edit, /api/image/edit)
-3. Qwen-Image 2.1 1-9 图融合/编辑 (/api/blend, /api/triple_blend, /api/quad_blend, /api/nona_blend, /api/image/multi_edit)
+3. Qwen-Image 2.1 1-10 图融合/编辑 (/api/blend, /api/triple_blend, /api/quad_blend, /api/nona_blend, /api/deca_blend, /api/image/multi_edit)
 4. Minimax-H3 图生视频 (/api/video/image2video, /api/image2video)
 5. Minimax-H3 1-9 多图参考生视频 (/api/video/single_ref, /api/video/dual_ref, /api/video/tri_ref, /api/video/quad_ref, /api/video/penta_ref, /api/video/hexa_ref, /api/video/hepta_ref, /api/video/octa_ref, /api/video/nona_ref, /api/video/multi_ref)
 6. Minimax-H3 视频编辑/图+视频生视频 (/api/video/edit, /api/video/video_edit, /api/video/image_video2video)
@@ -98,6 +98,11 @@ WORKFLOW_CONFIG = {
     "nona_blend": {
         "template": os.path.join(BASE_DIR, "1_9_NonaRef2IMG_QwenImage2_1_api.json"),
         "ui_template": os.path.join(BASE_DIR, "1_9_NonaRef2IMG_QwenImage2_1.json"),
+        "type": "image"
+    },
+    "deca_blend": {
+        "template": os.path.join(BASE_DIR, "1_10_DecaRef2IMG_QwenImage2_1_api.json"),
+        "ui_template": os.path.join(BASE_DIR, "1_10_DecaRef2IMG_QwenImage2_1.json"),
         "type": "image"
     },
 
@@ -434,6 +439,18 @@ def run_image_workflow(workflow_type, image_filenames, prompt_text, aspect_ratio
     elif workflow_type == "nona_blend":
         nona_nodes = ["489", "491", "493", "494", "495", "496", "497", "498", "499"]
         for idx, nid in enumerate(nona_nodes):
+            if idx < len(image_filenames):
+                workflow[nid]["inputs"]["image"] = image_filenames[idx]
+        if "501" in workflow and "inputs" in workflow["501"]:
+            workflow["501"]["inputs"]["aspect_ratio"] = aspect_ratio
+            if megapixels is not None:
+                workflow["501"]["inputs"]["megapixels"] = float(megapixels)
+
+    elif workflow_type == "deca_blend":
+        # Node order matches images.image_1 ... images.image_10 in the generated
+        # 10-reference API workflow (503 is the appended DecaRef loader).
+        deca_nodes = ["489", "491", "493", "494", "495", "496", "497", "498", "499", "503"]
+        for idx, nid in enumerate(deca_nodes):
             if idx < len(image_filenames):
                 workflow[nid]["inputs"]["image"] = image_filenames[idx]
         if "501" in workflow and "inputs" in workflow["501"]:
@@ -890,9 +907,45 @@ def api_nona_blend():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/deca_blend', methods=['POST'])
+@app.route('/api/image/deca_blend', methods=['POST'])
+@app.route('/api/ten_blend', methods=['POST'])
+def api_deca_blend():
+    """Qwen-Image 2.1 十图融合/编辑接口"""
+    try:
+        prompt_text = request.form.get('prompt', '').strip()
+        if not prompt_text:
+            return jsonify({"success": False, "error": "Missing 'prompt' text"}), 400
+
+        aspect_ratio = request.form.get('aspect_ratio', '16:9 (Widescreen)').strip()
+        negative_prompt = request.form.get('negative_prompt', '').strip()
+        seed = int(request.form['seed']) if 'seed' in request.form and request.form['seed'].isdigit() else None
+        steps = int(request.form['steps']) if 'steps' in request.form and request.form['steps'].isdigit() else 25
+        cfg = float(request.form['cfg']) if 'cfg' in request.form else 1.0
+        megapixels = float(request.form.get('megapixels', 1.0))
+
+        images = []
+        for i in range(1, 11):
+            k = f'image{i}'
+            fn = upload_to_comfyui(request.files[k]) if k in request.files else request.form.get(k, '').strip()
+            if not fn:
+                return jsonify({"success": False, "error": f"'{k}' is required"}), 400
+            images.append(fn)
+
+        img_data, output_filename = run_image_workflow(
+            "deca_blend", images, prompt_text, aspect_ratio, seed, steps, cfg, negative_prompt, megapixels
+        )
+
+        buffer = BytesIO(img_data)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='image/png', as_attachment=False, download_name=output_filename)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/image/multi_edit', methods=['POST'])
 def api_image_multi_edit():
-    """通用多图编辑接口 (自动识别 1/2/3/4/9 张图片)"""
+    """通用多图编辑接口 (自动识别 1-10 张图片)"""
     try:
         prompt_text = request.form.get('prompt', '').strip()
         if not prompt_text:
@@ -911,7 +964,7 @@ def api_image_multi_edit():
             for f in uploaded_files:
                 images.append(upload_to_comfyui(f))
         else:
-            for k in ['image'] + [f'image{i}' for i in range(1, 10)]:
+            for k in ['image'] + [f'image{i}' for i in range(1, 11)]:
                 if k in request.files:
                     images.append(upload_to_comfyui(request.files[k]))
                 elif request.form.get(k):
@@ -928,12 +981,13 @@ def api_image_multi_edit():
             7: "hepta_blend",
             8: "octa_blend",
             9: "nona_blend",
+            10: "deca_blend",
         }
         wf = workflow_by_count.get(count)
         if wf is None:
             return jsonify({
                 "success": False,
-                "error": f"Unsupported image count: {count}. Qwen-Image 2.1 supports 1-9 images."
+                "error": f"Unsupported image count: {count}. Qwen-Image 2.1 supports 1-10 images."
             }), 400
 
         img_data, output_filename = run_image_workflow(

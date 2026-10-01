@@ -7,52 +7,11 @@
       "device": "default"
     }
   },
-  "16": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "3",
-        0
-      ]
-    }
-  },
-  "30": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "video VAE",
-      "VAE": [
-        "4",
-        0
-      ]
-    }
-  },
-  "31": {
-    "class_type": "SetNode",
-    "inputs": {
-      "Constant": "audio VAE",
-      "VAE": [
-        "5",
-        0
-      ]
-    }
-  },
   "2": {
     "class_type": "UNETLoader",
     "inputs": {
       "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
       "weight_dtype": "default"
-    }
-  },
-  "32": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "video VAE"
-    }
-  },
-  "39": {
-    "class_type": "GetNode",
-    "inputs": {
-      "Constant": "audio VAE"
     }
   },
   "50": {
@@ -111,7 +70,7 @@
         0
       ],
       "vae": [
-        "39",
+        "5",
         0
       ]
     }
@@ -124,7 +83,7 @@
         0
       ],
       "vae": [
-        "32",
+        "4",
         0
       ]
     }
@@ -176,6 +135,14 @@
       "negative": [
         "50",
         0
+      ],
+      "model": [
+        "88",
+        0
+      ],
+      "latent_image": [
+        "103",
+        1
       ]
     }
   },
@@ -195,15 +162,6 @@
       "shift_audio": 3,
       "model": [
         "91",
-        0
-      ]
-    }
-  },
-  "89": {
-    "class_type": "Anything Everywhere",
-    "inputs": {
-      "anything": [
-        "88",
         0
       ]
     }
@@ -242,21 +200,21 @@
         "108",
         1
       ],
-      "task_type": "auto — 自动判断",
+      "task_type": "I2VA",
       "audio_mode": "lock_source",
       "audio_denoise_strength": 0.35,
-      "add_source_as_reference": true,
+      "add_source_as_reference": false,
       "prompt_primary_audio_ordinal": 1,
       "strict_prompt_tags": true,
       "ref_image_size": "match",
       "reference_video_policy": "official_2_to_15s",
       "allow_above_reference_area": true,
       "video_vae": [
-        "32",
+        "4",
         0
       ],
       "audio_vae": [
-        "39",
+        "5",
         0
       ],
       "drive_audio": [
@@ -265,6 +223,10 @@
       ],
       "first_frame": [
         "7",
+        0
+      ],
+      "clip": [
+        "3",
         0
       ]
     }
@@ -311,7 +273,7 @@
     "inputs": {
       "aspect_ratio": "16:9 (Widescreen)",
       "megapixels": 0.9,
-      "multiple": 8
+      "multiple": 32
     }
   }
 }

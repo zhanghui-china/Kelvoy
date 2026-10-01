@@ -67,7 +67,7 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
 | `packages/engine` | 流水线核心（无 IO） | stages / providers / schema / state / rules，Worker 与 CLI 共用 |
 | `packages/store` | 唯一拥有 SQLite 的地方 | 期 / 角色 / 目的地 / 模板 / 任务 + 积分四表，乐观锁 |
 | `packages/cli` | 内部工具 | run / import-* / seed-catalog / create-user / grant-credits |
-| `comfyui-bridge` | ComfyUI 工作流与桥接服务 | 图像 10 条（Qwen-Image 2.1：纯文生 + 1–9 参考图）、视频 12 条（MiniMax H3：图生视频 + 1–9 参考 + 图 / 音组合）、音乐 1 条（ACE-STEP），另含桥接服务脚本与 Spark GB10 / RTX 4090 参考图数量基准报告 |
+| `comfyui-bridge` | ComfyUI 工作流与桥接服务 | 图像 11 条（Qwen-Image 2.1：纯文生 + 1–10 参考图）、视频 12 条（MiniMax H3：图生视频 + 1–9 参考 + 图 / 音组合）、音乐 1 条（ACE-STEP），另含桥接服务脚本与 Spark GB10 / RTX 4090 参考图数量基准报告 |
 | `infra/dgx` | DGX 部署笔记 | 双机侦察记录、端口规划、systemd user 服务与发布流程 |
 | `assets` | 演示与共享素材 | `demo/`：官方角色与五目的地实景参考图；`shared/`：授权音乐、LUT、片头片尾 |
 | `scripts` | 基准与验收脚本 | 队列 / 并发 / 期列表 / 用量等性能基准，DGX 工作流验收与演示音乐生成 |
@@ -85,7 +85,7 @@ Kelvoy/
 │   ├── store/            # SQLite 唯一真源 + 积分
 │   └── cli/              # 内部工具（run / import / seed / 账号与积分）
 ├── services/inference/   # 常驻 Python 推理适配（ComfyUI）
-├── comfyui-bridge/       # 23 条 ComfyUI 工作流 + 桥接服务 + 基准报告
+├── comfyui-bridge/       # 24 条 ComfyUI 工作流 + 桥接服务 + 基准报告
 ├── infra/dgx/            # DGX 侦察记录与部署笔记
 ├── assets/
 │   ├── demo/             # 官方角色 / 目的地实景参考图与 catalog.json
