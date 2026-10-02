@@ -67,7 +67,7 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
 | `packages/engine` | 流水线核心（无 IO） | stages / providers / schema / state / rules，Worker 与 CLI 共用 |
 | `packages/store` | 唯一拥有 SQLite 的地方 | 期 / 角色 / 目的地 / 模板 / 任务 + 积分四表，乐观锁 |
 | `packages/cli` | 内部工具 | run / import-* / seed-catalog / create-user / grant-credits |
-| `comfyui-bridge` | ComfyUI 工作流与桥接服务 | 图像 11 条（Qwen-Image 2.1：纯文生 + 1–10 参考图）、视频 12 条（MiniMax H3：图生视频 + 1–9 参考 + 图 / 音组合）、音乐 1 条（ACE-STEP），另含桥接服务脚本与 Spark GB10 / RTX 4090 参考图数量基准报告 |
+| `comfyui-bridge` | ComfyUI 工作流与桥接服务 | 图像 11 条（Qwen-Image 2.1：纯文生 + 1–10 参考图）、视频 12 条（MiniMax H3：图生视频 + 1–9 参考 + 图 / 音组合）、音乐 2 条（ACE-STEP + MinimaxMusic 3）、TTS 2 条（语音合成 + 音色克隆 Qwen3-TTS）、LTX-2.5 图生视频，另含桥接服务脚本与基准报告 |
 | `infra/dgx` | DGX 部署笔记 | 双机侦察记录、端口规划、systemd user 服务与发布流程 |
 | `assets` | 演示与共享素材 | `demo/`：官方角色与五目的地实景参考图；`shared/`：授权音乐、LUT、片头片尾 |
 | `scripts` | 基准与验收脚本 | 队列 / 并发 / 期列表 / 用量等性能基准，DGX 工作流验收与演示音乐生成 |
@@ -85,7 +85,7 @@ Kelvoy/
 │   ├── store/            # SQLite 唯一真源 + 积分
 │   └── cli/              # 内部工具（run / import / seed / 账号与积分）
 ├── services/inference/   # 常驻 Python 推理适配（ComfyUI）
-├── comfyui-bridge/       # 24 条 ComfyUI 工作流 + 桥接服务 + 基准报告
+├── comfyui-bridge/       # 28 条 ComfyUI 工作流 + 桥接服务 + 基准报告
 ├── infra/dgx/            # DGX 侦察记录与部署笔记
 ├── assets/
 │   ├── demo/             # 官方角色 / 目的地实景参考图与 catalog.json
@@ -100,7 +100,9 @@ Kelvoy/
 - **脚本模型**：StepFun API（结构化分镜 JSON + 按指令优化重生成）
 - **图像模型**：Qwen-Image 2.1（ComfyUI，单参考 = 角色、双参考 = 角色 + 地标）
 - **视频模型**：MiniMax H3（ComfyUI，双参考直出 / 单参考图生视频）
-- **音乐**：授权素材库检索（MVP 不生成）
+- **音乐**：ACE-STEP 1.5 XL（文生音乐） + MinimaxMusic 3（文生音乐，支持长至 180s）
+- **语音**：Qwen3-TTS（语音合成 Voice Design + 音色克隆 Voice Clone）
+- **LTX 视频**：LTX-2.5 22B Distilled Transformer（图生视频，双阶段采样）
 - **合成**：FFmpeg（每镜整数帧窗口、LUT、ASS 字幕、2 帧转场、AI 标识）
 - **框架**：Bun + TypeScript monorepo、Hono、React 18 + Vite 5、FastAPI + Pydantic、SQLite
 
@@ -108,6 +110,11 @@ Kelvoy/
 
 | 位置                                                                                          | 内容                             |
 | --------------------------------------------------------------------------------------------- | -------------------------------- |
+| [comfyui-bridge/Q21_REF_RETEST_SPARK_20261001.md](comfyui-bridge/Q21_REF_RETEST_SPARK_20261001.md) | Qwen-Image 2.1 全案例回归测试 |
+| [comfyui-bridge/Q21_MP_BENCHMARK_SPARK_20261001.md](comfyui-bridge/Q21_MP_BENCHMARK_SPARK_20261001.md) | Qwen-Image 2.1 分辨率基准测试 |
+| [comfyui-bridge/H3_REF_VIDEO_TEST_SPARK_20261001.md](comfyui-bridge/H3_REF_VIDEO_TEST_SPARK_20261001.md) | MiniMax-H3 参考图视频测试 |
+| [comfyui-bridge/H3_COMBO_MULTIMODAL_TEST_SPARK_20261001.md](comfyui-bridge/H3_COMBO_MULTIMODAL_TEST_SPARK_20261001.md) | 多模态组合场景测试 |
+| [comfyui-bridge/H3_NIMG1VID_V3_TEST_SPARK_20261002.md](comfyui-bridge/H3_NIMG1VID_V3_TEST_SPARK_20261002.md) | N图+1视频 V3 严格人物隔离测试 |
 | [docs/AI旅行Vlog生产工作台_PRD_v0.2.md](docs/AI旅行Vlog生产工作台_PRD_v0.2.md)               | 产品需求文档 PRD v0.2（现行）    |
 | [docs/AI旅行Vlog生产工作台_PRD_v0.1.md](docs/AI旅行Vlog生产工作台_PRD_v0.1.md)               | PRD v0.1（历史版本）             |
 | [docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md) | 项目报告书（中文）               |

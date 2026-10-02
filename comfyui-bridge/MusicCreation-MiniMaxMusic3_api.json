@@ -1,0 +1,137 @@
+{
+  "12": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "6",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "EmptyMiniMaxMusic3LatentAudio",
+    "inputs": {
+      "seconds": [
+        "6",
+        1
+      ],
+      "batch_size": 1
+    }
+  },
+  "6": {
+    "class_type": "MiniMaxMusic3TextEncode",
+    "inputs": {
+      "lyrics": [
+        "16",
+        0
+      ],
+      "seed": 331220451036722,
+      "cfg_scale": 60,
+      "top_k": 1,
+      "clip": [
+        "2",
+        0
+      ],
+      "caption": [
+        "15",
+        0
+      ],
+      "max_duration": [
+        "14",
+        0
+      ]
+    }
+  },
+  "14": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 180
+    }
+  },
+  "15": {
+    "class_type": "Text Multiline",
+    "inputs": {
+      "text": "Style Description：Healing Japanese modern pop ballad with cinematic strings, soft piano and minimalist ambient electronic sound. Gentle narrative verses, emotionally explosive choruses, ethereal bridge and fading outro, perfectly structured for a complete 4+ minute track.\nStructure：Intro (40s) + Verse 1 + Pre-Chorus 1 + Chorus 1 + Interlude (15s) + Verse 2 + Pre-Chorus 2 + Chorus 2 + Bridge + Emotional Rise + Final Chorus + Outro (30s)"
+    }
+  },
+  "16": {
+    "class_type": "Text Multiline",
+    "inputs": {
+      "text": "【Intro】\n（ピアノ単音スロー、弦楽器徐々に侵入、風の環境音、40秒）\n【Verse 1】\n夕暮れが街を染めてゆく\n足元に落ちる淡い影\n過ぎた日の温もりだけが\n胸の奥 揺らいでいる\n【Pre-Chorus 1】\n遠く響く君の声は\n時を超え 届く気がする\n寂しさに閉ざした瞳に\n微かな 光が宿る\n【Chorus 1】\n残り星が瞬く空で\n君と交わした約束が\n風に乗り 続いてゆく\n消えないよ 忘れないよ\n届かない夜もあるけど\n心はずっとそばにいる\n星屑が紡ぐ永遠を\nずっと守り続けるから\n【Interlude】\n（ピアノ＋ストリングス、15秒、緩やかな旋律）\n【Verse 2】\n季節が巡り変わっても\n変わらない思いがある\n雨上がりの澄んだ空に\n君の面影探してる\n【Pre-Chorus 2】\n辛い日も泣いた夜も\n全部抱え進んでゆく\n遠くても離れていても\n絆は途切れないから\n【Chorus 2】\n残り星が瞬く空で\n君と交わした約束が\n風に乗り 続いてゆく\n消えないよ 忘れないよ\n届かない夜もあるけど\n心はずっとそばにいる\n星屑が紡ぐ永遠を\nずっと守り続けるから\n【Bridge】\n何度も迷い 何度も立ち止まり\n暗闇に飲まれそうでも\n胸に灯るこの想いだけは\n強く強く 燃えている\n【Emotional Rise】\n時間が流れ 景色変わっても\n唯一の真実がここにある\n君と見た星空は\n今もずっと 輝いてる\n【Final Chorus】\n残り星が歌う空で\n二人の約束生きている\n涙も痛みも超えてゆく\n繋がってる 離れないで\n遠い未来待っているから\nいつの日か逢えるように\n星屑が贈る願い込めて\n永遠に咲き続ける想い\n【Outro Short】\n残り星の下で\nずっと待ってる\n【Outro】\n（ピアノ単音に戻り、弦楽器ゆっくりフェードアウト、30秒静寂收尾）"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "5": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_music3_dit_fp16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "4": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 392789299065936,
+      "steps": 30,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "11",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "4",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_music3_dav.safetensors"
+    }
+  },
+  "7": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "filename_prefix": "audio/audio_minimax_music3",
+      "format": "mp3",
+      "audio": [
+        "9",
+        0
+      ],
+      "format.quality": "V0",
+      "quality": "V0"
+    }
+  }
+}

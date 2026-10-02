@@ -8,10 +8,14 @@ ComfyUI Unified Multi-Modal API Service
 3. Qwen-Image 2.1 1-10 图融合/编辑 (/api/blend, /api/triple_blend, /api/quad_blend, /api/nona_blend, /api/deca_blend, /api/image/multi_edit)
 4. Minimax-H3 图生视频 (/api/video/image2video, /api/image2video)
 5. Minimax-H3 1-9 多图参考生视频 (/api/video/single_ref, /api/video/dual_ref, /api/video/tri_ref, /api/video/quad_ref, /api/video/penta_ref, /api/video/hexa_ref, /api/video/hepta_ref, /api/video/octa_ref, /api/video/nona_ref, /api/video/multi_ref)
-6. Minimax-H3 视频编辑/图+视频生视频 (/api/video/edit, /api/video/video_edit, /api/video/image_video2video)
-7. Minimax-H3 数字人/图+音频生视频 (/api/video/digital_human, /api/video/image_audio2video)
-8. ACE STEP 1.5XL 音乐生成 (/api/music, /api/music/acestep)
-9. 健康检查与接口规范 (/health, /)
+6. Minimax-H3 多模态参考生视频 (/api/video/multi_modal)：最多 9 图 + 3 视频 + 3 音频，总文件数 ≤ 12
+7. Minimax-H3 视频编辑/图+视频生视频 (/api/video/edit, /api/video/video_edit, /api/video/image_video2video)
+8. Minimax-H3 数字人/图+音频生视频 (/api/video/digital_human, /api/video/image_audio2video)
+9. 语音合成 Voice Design (/api/tts) — Qwen3-TTS
+10. 音色克隆 Voice Clone (/api/voice_clone) — Qwen3-TTS
+11. 音乐生成 (/api/music) — MinimaxMusic 3 & ACE-STEP 1.5
+12. LTX-2.5 图生视频 (/api/video/ltx)
+13. 健康检查与接口规范 (/health, /)
 
 启动方式:
     python comfyui_api_service.py
@@ -157,6 +161,12 @@ WORKFLOW_CONFIG = {
         "ui_template": os.path.join(BASE_DIR, "2_9_NonaRef2Video_MinimaxH3.json"),
         "type": "video"
     },
+    "multi_modal2video": {
+        # 以 2_9 为基座：保留 9 图槽位与完整管线，视频/音频槽位按请求动态注入
+        "template": os.path.join(BASE_DIR, "2_9_NonaRef2Video_MinimaxH3_api.json"),
+        "ui_template": os.path.join(BASE_DIR, "2_9_NonaRef2Video_MinimaxH3.json"),
+        "type": "video"
+    },
     "video_edit": {
         "template": os.path.join(BASE_DIR, "2_10_ImageVideo2Video_MinimaxH3_api.json"),
         "ui_template": os.path.join(BASE_DIR, "2_10_ImageVideo2Video_MinimaxH3.json"),
@@ -173,6 +183,30 @@ WORKFLOW_CONFIG = {
         "template": os.path.join(BASE_DIR, "3_1_Text2Music_ACESTEP_api.json"),
         "ui_template": os.path.join(BASE_DIR, "3_1_Text2Music_ACESTEP.json"),
         "type": "audio"
+    },
+
+    # 语音合成 (Qwen3-TTS Voice Design)
+    "tts": {
+        "template": os.path.join(BASE_DIR, "VoiceDesign-QwenTTS.json"),
+        "type": "audio"
+    },
+
+    # 音色克隆 (Qwen3-TTS Voice Clone)
+    "voice_clone": {
+        "template": os.path.join(BASE_DIR, "VoiceClone-QwenTTS.json"),
+        "type": "audio"
+    },
+
+    # MinimaxMusic 3 音乐生成
+    "music_minimax": {
+        "template": os.path.join(BASE_DIR, "MusicCreation-MiniMaxMusic3_api.json"),
+        "type": "audio"
+    },
+
+    # LTX-2.5 图生视频
+    "ltx_video": {
+        "template": os.path.join(BASE_DIR, "LTX25-ImageToVideo_api.json"),
+        "type": "video"
     }
 }
 
@@ -264,6 +298,23 @@ def queue_prompt(prompt, client_id):
     return resp.json()
 
 
+def check_node_errors(result):
+    """检查 ComfyUI 返回的 node_errors（HTTP 200 但节点校验失败时静默跳过节点）"""
+    if isinstance(result, dict) and result.get("node_errors"):
+        errors = result["node_errors"]
+        # 构建简洁的错误摘要
+        summary = []
+        for node_id, node_err in errors.items():
+            if isinstance(node_err, dict):
+                details = node_err.get("errors", [])
+                for e in details:
+                    summary.append(f"Node#{node_id}: {e.get('message', 'unknown error')}")
+            else:
+                summary.append(f"Node#{node_id}: {node_err}")
+        if summary:
+            raise RuntimeError(f"ComfyUI node validation failed: {'; '.join(summary[:5])}")
+
+
 def get_history(prompt_id):
     """查询任务执行结果历史"""
     resp = requests.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}", timeout=30)
@@ -296,8 +347,13 @@ def wait_for_completion(ws, prompt_id, timeout=GENERATION_TIMEOUT):
     while True:
         if time.time() - start_time > timeout:
             raise TimeoutError(f"Task execution timed out after {timeout} seconds")
+        # 刷新剩余超时，确保长时间任务不被中途 socket 超时打断
+        ws.settimeout(max(1, timeout - (time.time() - start_time)))
         try:
             out = ws.recv()
+        except websocket.WebSocketTimeoutException:
+            # socket 超时不等于任务失败，继续等待
+            continue
         except Exception as e:
             raise ConnectionError(f"WebSocket error: {e}")
 
@@ -321,7 +377,17 @@ def execute_and_fetch_output(workflow, client_id, expected_types=('images', 'vid
     ws = websocket.WebSocket()
     try:
         ws.connect(f"ws://{SERVER_ADDRESS}/ws?clientId={client_id}", timeout=10)
+        # connect(timeout=10) sets the socket timeout for ALL subsequent
+        # recv()/send() calls to 10 seconds. Long-running ComfyUI nodes
+        # (e.g. TextEncoder processing 5+ reference images at 0.9MP) can
+        # easily exceed 10s without emitting a WebSocket progress message,
+        # causing a false "Connection timed out" and killing a generation
+        # that would have succeeded. Raise the socket timeout to match
+ # GENERATION_TIMEOUT so wait_for_completion's elapsed-time check is
+        # the sole authority on when to give up.
+        ws.settimeout(GENERATION_TIMEOUT)
         result = queue_prompt(workflow, client_id)
+        check_node_errors(result)
         prompt_id = result.get('prompt_id')
         if not prompt_id:
             raise RuntimeError(f"Failed to queue prompt: {result}")
@@ -584,6 +650,78 @@ def run_video_workflow(workflow_type, params):
             if "megapixels" in params and params["megapixels"] is not None:
                 workflow["112"]["inputs"]["megapixels"] = float(params["megapixels"])
 
+    # 9. 多模态参考生视频 (9 图 + 3 视频 + 3 音频, 总数 ≤ 12)
+    elif workflow_type == "multi_modal2video":
+        conditioning = workflow["77"]["inputs"]
+        images = params.get("images", [])
+        videos = params.get("videos", [])
+        audios = params.get("audios", [])
+
+        # 图片槽位: 接前 N 张, 未用的 ref_image_k 从 API 工作流中摘除 (可选输入)
+        for index in range(9):
+            key = f"ref_images.ref_image_{index}"
+            if index < len(images) and key in conditioning:
+                source_node = str(conditioning[key][0])
+                workflow[source_node]["inputs"]["image"] = images[index]
+            else:
+                conditioning.pop(key, None)
+
+        # 视频槽位: VHS_LoadVideo(200+i) -> ImageScale(210+i) -> ref_video_i;
+        # loader 的 AUDIO 输出(2)按同序号配对到 ref_video_audio_i
+        for vi, vfile in enumerate(videos):
+            loader_id = str(200 + vi)
+            scale_id = str(210 + vi)
+            workflow[loader_id] = {
+                "class_type": "VHS_LoadVideo",
+                "inputs": {
+                    "video": vfile,
+                    "force_rate": 24,
+                    "custom_width": 0,
+                    "custom_height": 0,
+                    "frame_load_cap": 0,
+                    "skip_first_frames": 0,
+                    "select_every_nth": 1,
+                    "format": "AnimateDiff",
+                },
+            }
+            workflow[scale_id] = {
+                "class_type": "LayerUtility: ImageScaleByAspectRatio V2",
+                "inputs": {
+                    "aspect_ratio": "original",
+                    "proportional_width": 1,
+                    "proportional_height": 1,
+                    "fit": "letterbox",
+                    "method": "lanczos",
+                    "round_to_multiple": "32",
+                    "scale_to_side": params.get("scale_to_side", "shortest"),
+                    "scale_to_length": int(params.get("scale_to_length", 704)),
+                    "background_color": "#000000",
+                    "image": [loader_id, 0],
+                },
+            }
+            conditioning[f"ref_videos.ref_video_{vi}"] = [scale_id, 0]
+            if params.get("pair_video_audio", True):
+                conditioning[f"ref_video_audios.ref_video_audio_{vi}"] = [loader_id, 2]
+
+        # 独立音频槽位: LoadAudio(220+j) -> ref_audio_j
+        for ai, afile in enumerate(audios):
+            aloader_id = str(220 + ai)
+            workflow[aloader_id] = {
+                "class_type": "LoadAudio",
+                "inputs": {"audio": afile},
+            }
+            conditioning[f"ref_audios.ref_audio_{ai}"] = [aloader_id, 0]
+
+        if params.get("prompt"):
+            conditioning["prompt"] = params["prompt"]
+        if params.get("duration") is not None and "76" in workflow:
+            workflow["76"]["inputs"]["value"] = int(round(float(params["duration"])))
+        if "82" in workflow:
+            if params.get("aspect_ratio"):
+                workflow["82"]["inputs"]["aspect_ratio"] = params["aspect_ratio"]
+            if params.get("megapixels") is not None:
+                workflow["82"]["inputs"]["megapixels"] = float(params["megapixels"])
+
     else:
         raise ValueError(f"Unknown video workflow type: {workflow_type}")
 
@@ -637,6 +775,128 @@ def run_music_workflow(params):
             print(f"Warning: Failed to save copy in {OUTPUT_AUDIO_DIR}: {e}")
 
     return audio_data, output_filename
+
+
+def run_tts_workflow(params):
+    """Qwen3-TTS 语音合成 (Voice Design)"""
+    client_id = str(uuid.uuid4())
+    workflow = load_workflow_template("tts")
+
+    if "75" in workflow and "inputs" in workflow["75"]:
+        workflow["75"]["inputs"]["text"] = params.get("text", "")
+    if "76" in workflow and "inputs" in workflow["76"]:
+        workflow["76"]["inputs"]["text"] = params.get("voice_description", "")
+    if "73" in workflow and "inputs" in workflow["73"]:
+        workflow["73"]["inputs"]["seed"] = params.get("seed") or random.randint(1, 10**15)
+
+    audio_data, output_filename = execute_and_fetch_output(workflow, client_id, expected_types=('audio',))
+    return audio_data, output_filename
+
+
+def run_voice_clone_workflow(params):
+    """Qwen3-TTS 音色克隆 (FB_Qwen3TTSVoiceClone + Whisper 自动转写)"""
+    client_id = str(uuid.uuid4())
+    workflow = load_workflow_template("voice_clone")
+
+    # Node 151: LoadAudio — 参考音频
+    if "151" in workflow and "inputs" in workflow["151"]:
+        workflow["151"]["inputs"]["audio"] = params["ref_audio"]
+
+    # Node 153: Text Multiline — 目标文本
+    if "153" in workflow and "inputs" in workflow["153"]:
+        workflow["153"]["inputs"]["text"] = params.get("text", "")
+
+    # Node 150: FB_Qwen3TTSVoiceClone — 种子
+    if "150" in workflow and "inputs" in workflow["150"]:
+        workflow["150"]["inputs"]["seed"] = params.get("seed") or random.randint(1, 10**15)
+
+    # Node 152 自动用 Whisper 转写参考音频，无需手动提供 ref_text
+
+    audio_data, output_filename = execute_and_fetch_output(workflow, client_id, expected_types=('audio',))
+    return audio_data, output_filename
+
+
+def run_music_minimax_workflow(params):
+    """MinimaxMusic 3 音乐生成 (MusicCreation-MiniMaxMusic3)"""
+    client_id = str(uuid.uuid4())
+    workflow = load_workflow_template("music_minimax")
+    seed = params.get("seed") or random.randint(1, 10**15)
+
+    # Node 15: Text Multiline — 风格描述 (caption)
+    if "15" in workflow and "inputs" in workflow["15"]:
+        workflow["15"]["inputs"]["text"] = params.get("style", params.get("prompt", ""))
+
+    # Node 16: Text Multiline — 歌词
+    if "16" in workflow and "inputs" in workflow["16"]:
+        workflow["16"]["inputs"]["text"] = params.get("lyrics", "[inst][verse]\n[chorus]\n[/inst]")
+
+    # Node 14: PrimitiveFloat — 时长(秒)
+    if "14" in workflow and "inputs" in workflow["14"]:
+        workflow["14"]["inputs"]["value"] = float(params.get("duration", 60.0))
+
+    # Node 6: MiniMaxMusic3TextEncode — 种子与 CFG
+    if "6" in workflow and "inputs" in workflow["6"]:
+        workflow["6"]["inputs"]["seed"] = seed
+        if params.get("cfg_scale"):
+            workflow["6"]["inputs"]["cfg_scale"] = float(params["cfg_scale"])
+
+    # Node 4: KSampler — 种子与步数
+    if "4" in workflow and "inputs" in workflow["4"]:
+        workflow["4"]["inputs"]["seed"] = seed
+        if params.get("steps"):
+            workflow["4"]["inputs"]["steps"] = int(params["steps"])
+
+    audio_data, output_filename = execute_and_fetch_output(workflow, client_id, expected_types=('audio',))
+    return audio_data, output_filename
+
+
+def run_ltx_video_workflow(params):
+    """LTX-2.5 图生视频 (Image2Video LTX-2.5)"""
+    client_id = str(uuid.uuid4())
+    workflow = load_workflow_template("ltx_video")
+    seed = params.get("seed") or random.randint(1, 10**15)
+
+    # Node 9: LoadImage — 输入图片
+    if "9" in workflow and "inputs" in workflow["9"]:
+        workflow["9"]["inputs"]["image"] = params["image"]
+
+    # Node 181: CLIPTextEncode — 提示词
+    if "181" in workflow and "inputs" in workflow["181"]:
+        workflow["181"]["inputs"]["text"] = params.get("prompt", "")
+
+    # Node 183: PrimitiveInt — 时长(秒)
+    if "183" in workflow and "inputs" in workflow["183"]:
+        workflow["183"]["inputs"]["value"] = int(params.get("duration", 15))
+
+    # Node 51: KSampler — 第一阶段采样
+    if "51" in workflow and "inputs" in workflow["51"]:
+        workflow["51"]["inputs"]["seed"] = seed
+        if params.get("steps"):
+            workflow["51"]["inputs"]["steps"] = int(params["steps"])
+        if params.get("cfg"):
+            workflow["51"]["inputs"]["cfg"] = float(params["cfg"])
+
+    # Node 155: KSampler — 第二阶段时序细化
+    if "155" in workflow and "inputs" in workflow["155"]:
+        workflow["155"]["inputs"]["seed"] = seed
+        if params.get("refine_steps"):
+            workflow["155"]["inputs"]["steps"] = int(params["refine_steps"])
+
+    # Node 5: ImageScaleByAspectRatio — 画面缩放
+    if "5" in workflow and "inputs" in workflow["5"]:
+        if params.get("scale_to_length"):
+            workflow["5"]["inputs"]["scale_to_length"] = int(params["scale_to_length"])
+
+    video_data, output_filename = execute_and_fetch_output(workflow, client_id, expected_types=('gifs', 'videos', 'images'))
+
+    if OUTPUT_VIDEO_DIR and os.path.exists(OUTPUT_VIDEO_DIR):
+        try:
+            with open(os.path.join(OUTPUT_VIDEO_DIR, output_filename), "wb") as f:
+                f.write(video_data)
+        except Exception as e:
+            print(f"Warning: Failed to save copy in {OUTPUT_VIDEO_DIR}: {e}")
+
+    return video_data, output_filename
 
 
 # ==================== HTTP 路由 ====================
@@ -1002,6 +1262,67 @@ def api_image_multi_edit():
 
 
 # ---------- 视频类 ----------
+
+@app.route('/api/video/multi_modal', methods=['POST'])
+@app.route('/api/video/full_ref', methods=['POST'])
+def api_video_multi_modal():
+    """Minimax-H3 多模态参考生视频：最多 9 图 + 3 视频 + 3 音频，总文件数 ≤ 12"""
+    try:
+        def collect(kind, max_count):
+            items = []
+            uploads = request.files.getlist(kind)
+            if uploads:
+                for f in uploads:
+                    items.append(upload_to_comfyui(f))
+            else:
+                for i in range(1, max_count + 1):
+                    k = f"{'image' if kind == 'images' else kind[:-1]}{i}"
+                    if k in request.files:
+                        items.append(upload_to_comfyui(request.files[k]))
+                    elif request.form.get(k, '').strip():
+                        items.append(request.form.get(k).strip())
+            return items
+
+        # 每类多读一个字段（10/4/4）用于让上限校验能看到并拒绝超额请求
+        images = collect('images', 10)
+        videos = collect('videos', 4)
+        audios = collect('audios', 4)
+
+        if len(images) > 9:
+            return jsonify({"success": False, "error": f"Too many images: {len(images)}. MiniMax H3 supports at most 9 reference images."}), 400
+        if len(videos) > 3:
+            return jsonify({"success": False, "error": f"Too many videos: {len(videos)}. MiniMax H3 supports at most 3 reference videos."}), 400
+        if len(audios) > 3:
+            return jsonify({"success": False, "error": f"Too many audios: {len(audios)}. MiniMax H3 supports at most 3 reference audios."}), 400
+        total = len(images) + len(videos) + len(audios)
+        if total < 1 or total > 12:
+            return jsonify({"success": False, "error": f"Invalid total reference files: {total}. MiniMax H3 accepts 1-12 files (<=9 images + <=3 videos + <=3 audios)."}), 400
+
+        pair_video_audio = request.form.get('pair_video_audio', 'true').strip().lower() != 'false'
+        params = {
+            "images": images,
+            "videos": videos,
+            "audios": audios,
+            "pair_video_audio": pair_video_audio,
+            "prompt": request.form.get('prompt', '').strip(),
+            "duration": float(request.form.get('duration', 15.0)),
+            "megapixels": float(request.form.get('megapixels', 0.9)),
+            "aspect_ratio": request.form.get('aspect_ratio', '16:9 (Widescreen)').strip(),
+            "steps": int(request.form['steps']) if 'steps' in request.form and request.form['steps'].isdigit() else 8,
+            "seed": int(request.form['seed']) if 'seed' in request.form and request.form['seed'].isdigit() else None,
+            "scale_to_side": request.form.get('scale_to_side', 'shortest').strip(),
+            "scale_to_length": int(request.form.get('scale_to_length', 704)),
+        }
+        if 'length' in request.form and request.form['length'].isdigit():
+            params['length'] = int(request.form['length'])
+
+        video_data, output_filename = run_video_workflow("multi_modal2video", params)
+
+        buffer = BytesIO(video_data)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='video/mp4', as_attachment=False, download_name=output_filename)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/video/image2video', methods=['POST'])
 @app.route('/api/image2video', methods=['POST'])
@@ -1441,6 +1762,133 @@ def health_check():
         "comfyui": comfy_status,
         "server_address": SERVER_ADDRESS
     })
+
+
+# ==================== 语音合成 (Voice Design) ====================
+
+@app.route('/api/tts', methods=['POST'])
+def api_tts():
+    """Qwen3-TTS 语音合成 (Voice Design)"""
+    try:
+        data = request.get_json(silent=True) or {}
+        text = data.get('text', '').strip()
+        voice_description = data.get('voice_description', '').strip()
+
+        if not text:
+            return jsonify({"success": False, "error": "Missing 'text'"}), 400
+        if not voice_description:
+            return jsonify({"success": False, "error": "Missing 'voice_description' (must be English)"}), 400
+
+        params = {"text": text, "voice_description": voice_description, "seed": data.get("seed")}
+        audio_data, output_filename = run_tts_workflow(params)
+
+        buffer = BytesIO(audio_data)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='audio/mp3', as_attachment=False, download_name=output_filename)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ==================== 音色克隆 (Voice Clone) ====================
+
+@app.route('/api/voice_clone', methods=['POST'])
+def api_voice_clone():
+    """Qwen3-TTS 音色克隆"""
+    try:
+        ref_audio_fn = None
+        if 'audio' in request.files:
+            ref_audio_fn = upload_to_comfyui(request.files['audio'])
+        elif request.form.get('audio', '').strip():
+            ref_audio_fn = request.form.get('audio').strip()
+        elif request.get_json(silent=True) and request.get_json(silent=True).get('audio'):
+            ref_audio_fn = request.get_json(silent=True).get('audio')
+
+        if not ref_audio_fn:
+            return jsonify({"success": False, "error": "Missing reference 'audio' file or filename"}), 400
+
+        text = request.form.get('text') or (request.get_json(silent=True) or {}).get('text', '')
+        if not text.strip():
+            return jsonify({"success": False, "error": "Missing 'text' (target speech)"}), 400
+
+        params = {
+            "ref_audio": ref_audio_fn,
+            "text": text.strip(),
+            "seed": request.form.get('seed') or (request.get_json(silent=True) or {}).get('seed'),
+        }
+        audio_data, output_filename = run_voice_clone_workflow(params)
+
+        buffer = BytesIO(audio_data)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='audio/wav', as_attachment=False, download_name=output_filename)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ==================== MinimaxMusic 3 ====================
+
+@app.route('/api/music/minimax', methods=['POST'])
+def api_music_minimax():
+    """MinimaxMusic 3 音乐生成"""
+    try:
+        data = request.get_json(silent=True) or {}
+        style = data.get('style', data.get('prompt', '')).strip()
+        if not style:
+            return jsonify({"success": False, "error": "Missing 'style'"}), 400
+
+        params = {
+            "style": style,
+            "lyrics": data.get('lyrics', ''),
+            "duration": data.get('duration', 60.0),
+            "cfg_scale": data.get('cfg_scale', 7.0),
+            "steps": data.get('steps', 28),
+            "seed": data.get('seed'),
+        }
+        audio_data, output_filename = run_music_minimax_workflow(params)
+
+        buffer = BytesIO(audio_data)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='audio/mp3', as_attachment=False, download_name=output_filename)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ==================== LTX-2.5 图生视频 ====================
+
+@app.route('/api/video/ltx', methods=['POST'])
+@app.route('/api/video/ltx_image2video', methods=['POST'])
+def api_video_ltx():
+    """LTX-2.5 图生视频"""
+    try:
+        image_fn = None
+        if 'image' in request.files:
+            image_fn = upload_to_comfyui(request.files['image'])
+        elif request.form.get('image', '').strip():
+            image_fn = request.form.get('image').strip()
+
+        if not image_fn:
+            return jsonify({"success": False, "error": "Missing 'image'"}), 400
+
+        prompt = request.form.get('prompt', '').strip()
+        if not prompt:
+            return jsonify({"success": False, "error": "Missing 'prompt'"}), 400
+
+        params = {
+            "image": image_fn,
+            "prompt": prompt,
+            "duration": request.form.get('duration', 15),
+            "steps": request.form.get('steps', 6),
+            "refine_steps": request.form.get('refine_steps', 4),
+            "cfg": request.form.get('cfg', 1.0),
+            "scale_to_length": request.form.get('scale_to_length', 720),
+            "seed": int(request.form['seed']) if 'seed' in request.form and request.form['seed'].isdigit() else None,
+        }
+        video_data, output_filename = run_ltx_video_workflow(params)
+
+        buffer = BytesIO(video_data)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='video/mp4', as_attachment=False, download_name=output_filename)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/', methods=['GET'])

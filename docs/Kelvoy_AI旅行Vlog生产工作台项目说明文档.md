@@ -262,7 +262,11 @@ draft → generating_kf → kf_ready → kf_selected → generating_clip → cli
 | 图生视频（传统路径） | `services/inference /video/` → ComfyUI | MiniMax H3 单参考（已审核关键帧） | 3–5 秒素材截取 1 秒；预算 240 秒 |
 | 双参考直出（默认路径） | `services/inference /video/` → ComfyUI | MiniMax H3 双参考（角色 + 场景） | 3–5 秒素材截取 1 秒；预算 270 秒；无图片积分 |
 | 视频溢出 | `providers/kling-api.ts`、`jimeng-api.ts` | 可灵 / 即梦 API | 本地重试 ≤ 2 次后自动切换 |
-| 音乐 | `providers/music-library.ts` | 授权素材库检索（不生成） | 文件名与 bpm 须与 MUSIC_CATALOG 对齐 |
+| 音乐（生成） | `comfyui-bridge /api/music` | ACE-STEP 1.5 XL + **MinimaxMusic 3** | 文生音乐；MinimaxMusic 3 支持风格 + 歌词 + 时长（最长 180s） |
+| 音乐（检索） | `providers/music-library.ts` | 授权素材库 | 按语气检索已有曲目 |
+| 语音合成 | `comfyui-bridge /api/tts` | **Qwen3-TTS Voice Design** | 英文声音描述 → 高质量多语言语音 |
+| 音色克隆 | `comfyui-bridge /api/voice_clone` | **Qwen3-TTS Voice Clone** | 参考音频 + 目标文本 → 克隆语音（内置 Whisper 自动转写） |
+| LTX 视频 | `comfyui-bridge /api/video/ltx` | **LTX-2.5 22B Distilled Transformer** | 图生视频；双阶段采样；支持 2–20 秒 |
 | 合成 | `apps/worker compose/ffmpeg.ts` | ffmpeg（自研，跑在 worker） | 每镜 30 帧整数窗口、卡拍、LUT、ASS 字幕、2 帧转场、片头片尾、AI 标识 |
 
 **comfyui-bridge 工作流模板**：Qwen-Image 2.1 图像（1 / 2 / 3 / 4 / 9 参考图）与 MiniMax H3 视频（纯文生、单参考、双参考、三 / 四 / 九参考、图 + 视频、图 + 音频）共 20 余份 API 工作流 JSON，另有 ACE-STEP 文生音乐工作流与 `comfyui_api_service.py` / `comfyui_edit_service.py` 桥接服务。
@@ -307,6 +311,7 @@ draft → generating_kf → kf_ready → kf_selected → generating_clip → cli
 | kelvoy-worker（apps/worker） | — | 任务消费循环 + ffmpeg 合成 |
 | kelvoy-inference（services/inference） | 8100 | FastAPI 推理适配 |
 | ComfyUI | 8188 | 图像 / 视频模型执行（Qwen-Image 2.1、MiniMax H3） |
+| comfyui-bridge | 6000 | ComfyUI HTTP 桥接（图像 / 视频 / 音乐 / 语音 / LTX） |
 
 **关键环境变量**：`KELVOY_PROJECTS_ROOT`（产物根目录，默认 `projects`）、`KELVOY_FONT_FILE`（CJK 字体，drawtext 标题与 AI 标识必需）、`KELVOY_COMFYUI_BASE_URL`（默认 `http://127.0.0.1:8188`）、`INFERENCE_BASE_URL`（默认 `http://127.0.0.1:8100`）、`STEPFUN_API_KEY`（脚本生成）、`PORT`（web 端口）。
 
@@ -774,6 +779,7 @@ max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17
 ## 七、项目完整性
 
 - **功能完整**：六阶段流水线 + 审核点 + 两条创作路径 + 合成设置 + 审片台 + 积分用量 + 版本化成片 + 导出分享，核心链路全部跑通；
+- **ComfyUI 桥接完整**：图像（Qwen-Image 2.1 文生 + 1–10 参考图融合）、视频（MiniMax H3 全系列 + 多模态混合 ≤12 文件 + LTX-2.5 图生视频）、音乐（ACE-STEP + MinimaxMusic 3）、语音（Qwen3-TTS 语音合成 + 音色克隆），共 **18 类 HTTP 端点**，全部通过 Spark 实测；
 - **前后端完整**：Web 工作台（Hono + React 18 + Vite 5 + TypeScript，含官网单页、登录、分享页与帮助中心）+ Worker 编排 + 本地 SQLite 存储；
 - **模型链路完整**：脚本（StepFun API）+ 图像（ComfyUI + Qwen-Image 2.1）+ 视频（ComfyUI + MiniMax H3 双参考直出 / 图生视频）+ 音乐（授权素材库）+ 合成（ffmpeg）；
 - **运行稳定**：DGX Spark 本地部署，systemd user 服务，任务租约 + 优雅停机 + 事务化结果提交；

@@ -263,7 +263,11 @@ Any generating state may enter `failed`; marking regeneration in reviews 2/3 mov
 | Image-to-video (classic) | `services/inference /video/` → ComfyUI | MiniMax H3 single-reference (approved keyframe) | 3–5s material cut to 1s; 240s budget |
 | Dual-reference direct (default) | `services/inference /video/` → ComfyUI | MiniMax H3 dual-reference (character + scene) | 3–5s material cut to 1s; 270s budget; no image credits |
 | Video overflow | `providers/kling-api.ts`, `jimeng-api.ts` | Kling / Jimeng APIs | Automatic switch after ≤ 2 local retries |
-| Music | `providers/music-library.ts` | Licensed-library retrieval (not generated) | File names and BPM must match MUSIC_CATALOG |
+| Music (generated) | `comfyui-bridge /api/music` | ACE-STEP 1.5 XL + **MinimaxMusic 3** | Text-to-music; style + lyrics + duration (up to 180s) |
+| Music (retrieval) | `providers/music-library.ts` | Licensed library | Search existing tracks by tone |
+| Voice Design | `comfyui-bridge /api/tts` | **Qwen3-TTS Voice Design** | English voice description → multilingual speech |
+| Voice Clone | `comfyui-bridge /api/voice_clone` | **Qwen3-TTS Voice Clone** | Reference audio + text → cloned speech (Whisper auto-transcription) |
+| LTX Video | `comfyui-bridge /api/video/ltx` | **LTX-2.5 22B Distilled Transformer** | Image-to-video; dual-stage sampling; 2–20 seconds |
 | Compose | `apps/worker compose/ffmpeg.ts` | ffmpeg (in-house, on the worker) | Integer 30-frame windows, beat cutting, LUT, ASS subtitles, 2-frame transitions, intro/outro, AI label |
 
 **comfyui-bridge workflow templates**: Qwen-Image 2.1 image workflows (text-to-image plus 1–9 references) and MiniMax H3 video workflows (image-to-video, 1–9 references, image+video, image+audio) — 20+ API workflow JSONs in total — plus an ACE-STEP text-to-music workflow and the `comfyui_api_service.py` / `comfyui_edit_service.py` bridge services.
@@ -308,6 +312,7 @@ The frontend uses **React built-in state + polling**. Main API endpoints:
 | kelvoy-worker (apps/worker) | — | Task consumption loop + ffmpeg compose |
 | kelvoy-inference (services/inference) | 8100 | FastAPI inference adapter |
 | ComfyUI | 8188 | Image/video model execution (Qwen-Image 2.1, MiniMax H3) |
+| comfyui-bridge | 6000 | ComfyUI HTTP bridge (image / video / music / voice / LTX) |
 
 **Key environment variables**: `KELVOY_PROJECTS_ROOT` (artifact root, default `projects`), `KELVOY_FONT_FILE` (CJK font, required by drawtext titles and the AI label), `KELVOY_COMFYUI_BASE_URL` (default `http://127.0.0.1:8188`), `INFERENCE_BASE_URL` (default `http://127.0.0.1:8100`), `STEPFUN_API_KEY` (script generation), `PORT` (web port).
 
@@ -712,6 +717,7 @@ Play the full cut, download the MP4, and view this episode's estimated and used 
 ## 7. Completeness
 
 - **Functionally complete**: six-stage pipeline + review gates + two creation paths + compose setup + review desk + credits/usage + versioned delivery + export & sharing — the core loop is fully wired;
+- **ComfyUI bridge complete**: image (Qwen-Image 2.1 text + 1–10 ref blend), video (MiniMax H3 full series + multimodal ≤12 files + LTX-2.5), music (ACE-STEP + MinimaxMusic 3), voice (Qwen3-TTS design + clone) — **18 HTTP endpoints**, all tested on Spark;
 - **Full frontend & backend**: web workbench (Hono + React 18 + Vite 5 + TypeScript, with the landing page, login, share page, and help center) + worker orchestration + local SQLite storage;
 - **Complete model chain**: scripts (StepFun API) + images (ComfyUI + Qwen-Image 2.1) + video (ComfyUI + MiniMax H3 dual-reference / image-to-video) + music (licensed library) + compose (ffmpeg);
 - **Stable operation**: local DGX Spark deployment, systemd user services, task leases + graceful shutdown + transactional commits;

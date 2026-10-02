@@ -67,7 +67,7 @@ Tailored for the **NVIDIA DGX Spark (GB10, 128GB unified memory)**, with a **"lo
 | `packages/engine` | Pipeline core (IO-free) | stages / providers / schema / state / rules, shared by worker and CLI |
 | `packages/store` | The only place that owns SQLite | Episodes / personas / destinations / templates / tasks + four credit tables, optimistic locking |
 | `packages/cli` | Internal tooling | run / import-* / seed-catalog / create-user / grant-credits |
-| `comfyui-bridge` | ComfyUI workflows & bridge services | 11 image workflows (Qwen-Image 2.1: text-to-image + 1–10 references), 12 video workflows (MiniMax H3: image-to-video + 1–9 references + image/audio combos), 1 music workflow (ACE-STEP), plus bridge service scripts and reference-count benchmarks on Spark GB10 / RTX 4090 |
+| `comfyui-bridge` | ComfyUI workflows & bridge services | 11 image workflows (Qwen-Image 2.1), 12 video workflows (MiniMax H3), 2 music workflows (ACE-STEP + MinimaxMusic 3), 2 TTS workflows (Voice Design + Voice Clone via Qwen3-TTS), 1 LTX-2.5 video workflow, plus bridge services and benchmarks |
 | `infra/dgx` | DGX deployment notes | Dual-machine reconnaissance, port planning, systemd user services, release procedures |
 | `assets` | Demo & shared assets | `demo/`: official characters and landmark reference photos; `shared/`: licensed music, LUTs, intro/outro |
 | `scripts` | Benchmark & acceptance scripts | Queue / concurrency / episode-list / usage benchmarks, DGX workflow acceptance, demo music generation |
@@ -85,7 +85,7 @@ Kelvoy/
 │   ├── store/            # SQLite single source of truth + credits
 │   └── cli/              # Internal tooling (run / import / seed / accounts & credits)
 ├── services/inference/   # Resident Python inference adapter (ComfyUI)
-├── comfyui-bridge/       # 24 ComfyUI workflows + bridge services + benchmarks
+├── comfyui-bridge/       # 28 ComfyUI workflows + bridge services + benchmarks
 ├── infra/dgx/            # DGX reconnaissance and deployment notes
 ├── assets/
 │   ├── demo/             # Official characters / landmark photos + catalog.json
@@ -100,7 +100,9 @@ Kelvoy/
 - **Script model:** StepFun API (structured storyboard JSON + instruction-based regeneration)
 - **Image model:** Qwen-Image 2.1 (ComfyUI; single reference = character, dual reference = character + landmark)
 - **Video model:** MiniMax H3 (ComfyUI; dual-reference direct generation / keyframe image-to-video)
-- **Music:** licensed library retrieval (not generated in the MVP)
+- **Music:** ACE-STEP 1.5 XL + MinimaxMusic 3 (text-to-music, up to 180s)
+- **Voice:** Qwen3-TTS (Voice Design + Voice Clone)
+- **LTX Video:** LTX-2.5 22B Distilled Transformer (image-to-video, dual-stage sampling)
 - **Compose:** FFmpeg (integer-frame windows per shot, LUT, ASS subtitles, 2-frame transitions, AI label)
 - **Frameworks:** Bun + TypeScript monorepo, Hono, React 18 + Vite 5, FastAPI + Pydantic, SQLite
 
@@ -108,6 +110,11 @@ Kelvoy/
 
 | Location                                                                                     | Content                                        |
 | -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| [comfyui-bridge/Q21_REF_RETEST_SPARK_20261001.md](comfyui-bridge/Q21_REF_RETEST_SPARK_20261001.md) | Qwen-Image 2.1 full regression test |
+| [comfyui-bridge/Q21_MP_BENCHMARK_SPARK_20261001.md](comfyui-bridge/Q21_MP_BENCHMARK_SPARK_20261001.md) | Qwen-Image 2.1 resolution benchmark |
+| [comfyui-bridge/H3_REF_VIDEO_TEST_SPARK_20261001.md](comfyui-bridge/H3_REF_VIDEO_TEST_SPARK_20261001.md) | MiniMax-H3 ref-image video test |
+| [comfyui-bridge/H3_COMBO_MULTIMODAL_TEST_SPARK_20261001.md](comfyui-bridge/H3_COMBO_MULTIMODAL_TEST_SPARK_20261001.md) | Multi-modal combo test |
+| [comfyui-bridge/H3_NIMG1VID_V3_TEST_SPARK_20261002.md](comfyui-bridge/H3_NIMG1VID_V3_TEST_SPARK_20261002.md) | N-image+1-video V3 strict isolation test |
 | [docs/AI旅行Vlog生产工作台_PRD_v0.2.md](docs/AI旅行Vlog生产工作台_PRD_v0.2.md)                | Product requirements document, PRD v0.2 (current) |
 | [docs/AI旅行Vlog生产工作台_PRD_v0.1.md](docs/AI旅行Vlog生产工作台_PRD_v0.1.md)                | PRD v0.1 (historical)                          |
 | [docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md](docs/Kelvoy_AI旅行Vlog生产工作台项目说明文档.md) | Project report (Chinese)                       |

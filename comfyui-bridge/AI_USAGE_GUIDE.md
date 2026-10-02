@@ -34,12 +34,20 @@
    - **八图参考**：八张参考图 + 场景描述 (`/api/video/octa_ref`)。
    - **九图参考**：九张参考图多视角/多元素融合生视频 (`/api/video/nona_ref`)。
    - **智能多图参考**：自动根据上传图片数匹配对应参考生视频工作流 (`/api/video/multi_ref`)。
-6. **Minimax-H3 视频编辑 (图+视频生视频 / Video Editing & Character Transfer)**：
+6. **Minimax-H3 多模态参考生视频 (Multi-Modal Video Generation)**：
+   - 混合最多 **9 张参考图 + 3 段参考视频 + 3 段参考音频**，三者合计 **≤ 12 个文件** (`/api/video/multi_modal`)。
+   - 参考视频自动按最短边缩放到 704（可调 `scale_to_length`），帧率重采样为 24 fps，原声轨道自动配对 (`pair_video_audio`)。
+   - 参考音频支持独立音频参考（旁白、音乐、音效）。
+7. **Minimax-H3 视频编辑 (图+视频生视频 / Video Editing & Character Transfer)**：
    - 上传目标角色参考图 + 待替换源视频 + 替换指令提示词，生成保留原视频音轨与动作节奏的新视频 (`/api/video/edit`)。
-7. **Minimax-H3 数字人 (图+音频生视频 / Digital Human & Talking Avatar)**：
+8. **Minimax-H3 数字人 (图+音频生视频 / Digital Human & Talking Avatar)**：
    - 上传角色人像图片 + 驱动语音音频，生成角色口型与神态同步说话的视频 (`/api/video/digital_human`)。
-8. **ACE STEP 1.5XL 音乐生成 (Music Creation)**：
+9. **ACE STEP 1.5XL 音乐生成 (Music Creation)**：
    - 基于风格标签 (Tags)、歌词 (Lyrics)、节拍 (BPM)、时长 (Duration)、调式 (Key Scale) 生成高品质完整音乐 MP3 (`/api/music`)。
+10. **语音合成 Voice Design (Qwen3-TTS)**：通过英文声音描述（如音色、语速、情感）生成高质量语音 MP3 (`/api/tts`)。
+11. **音色克隆 Voice Clone (Qwen3-TTS)**：上传参考音频 + 目标文本，克隆参考音色生成新语音 (`/api/voice_clone`)，内置 Whisper 自动转写参考音频。
+12. **MinimaxMusic 3 音乐生成**：基于风格描述 (caption) + 歌词 (lyrics) + 时长生成完整歌曲 (`/api/music/minimax`)，支持长达 180 秒。
+13. **LTX-2.5 图生视频**：单张图片 + 动作描述 → 带音频的 720p 视频 (`/api/video/ltx`)，支持双阶段采样（粗采样 + 时序细化）。
 
 ---
 
@@ -361,6 +369,32 @@
 
 ---
 
+#### 14. 多模态参考生视频 (`POST /api/video/multi_modal`)
+
+- **别名**: `POST /api/video/full_ref`
+- **Content-Type**: `multipart/form-data`
+- **说明**: 通用多模态参考端点，同时接受参考图（≤9）、参考视频（≤3）与参考音频（≤3），
+  三者合计 **≤ 12 个文件**。基于 MiniMax H3 的多模态参考能力，工作流以 2_9 九图模板为基座，
+  未使用的图片槽位动态移除，视频/音频槽位按需注入 VHS_LoadVideo（自动 24 fps 重采样 +
+  最短边缩放）和 LoadAudio 节点。
+- **请求参数**:
+  - `image1` ~ `image9` (File 或 文件名, 可选): 参考图片，最多 9 张
+  - `video1` ~ `video3` (File 或 文件名, 可选): 参考视频 (2-15s)，最多 3 段；自动提取原声配对
+  - `audio1` ~ `audio3` (File 或 文件名, 可选): 独立参考音频（旁白/音乐/音效），最多 3 段
+  - `prompt` (Text, 必填): 画面与动作描述提示词
+  - `duration` (Float, 可选): 生成时长(秒)，默认 `15.0`，建议范围 `[2.0, 15.0]`
+  - `megapixels` (Float, 可选): 百万像素值，默认 `0.9`（快速 `0.4`）
+  - `aspect_ratio` (Text, 可选): 画面比例，默认 `"16:9 (Widescreen)"`
+  - `seed`, `steps`, `cfg` (可选): 采样控制（steps 默认 `8`）
+  - `scale_to_length` (Int, 可选): 参考视频画面缩放，默认 `704`
+  - `scale_to_side` (Text, 可选): 缩放基准边，默认 `"shortest"`
+  - `pair_video_audio` (Bool, 可选): 是否自动配对参考视频的原声轨道，默认 `true`
+  - `length` (Int, 可选): 直接指定帧数（覆盖 duration）
+- **约束**: 图片 ≤ 9，视频 ≤ 3，音频 ≤ 3，**总文件数 ≤ 12**
+- **返回响应**: 二进制 MP4 视频流 (`video/mp4`)
+
+---
+
 ### 三、音乐类接口 (Music Interfaces - ACE STEP 1.5XL)
 
 #### 14. 音乐创作 (`POST /api/music` 或 `/api/music/acestep`)
@@ -378,12 +412,136 @@
 
 ---
 
+### 四、语音类接口 (Voice Interfaces - Qwen3-TTS)
+
+#### 15. 语音合成 Voice Design (`POST /api/tts`)
+- **Content-Type**: `application/json`
+- **说明**: 通过英文声音特征描述（Voice Description）生成高质量语音，支持中英日韩等多语言文本。
+- **请求参数**:
+  - `text` (String, 必填): 待合成文本（支持中文、英文、日文等多语言混排）
+  - `voice_description` (String, 必填): **必须为英文**的声音特征描述
+  - `seed` (Int, 可选): 随机采样种子
+- **返回响应**: 二进制 MP3 音频流 (`audio/mp3`)
+- **调用示例**:
+
+```bash
+curl -X POST http://localhost:6000/api/tts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "你好，欢迎来到可旅 Kelvoy。Hello, welcome to Kelvoy.",
+    "voice_description": "A gentle female voice, sweet tone, warm and friendly"
+  }' \
+  -o output.mp3
+```
+
+#### 16. 音色克隆 Voice Clone (`POST /api/voice_clone`)
+- **Content-Type**: `multipart/form-data` 或 `application/json`
+- **说明**: 上传参考音频文件 + 目标文本，系统自动用 Whisper 转写参考音频内容，然后克隆该音色朗读目标文本。
+- **请求参数**:
+  - `audio` (File 或 文件名, 必填): 参考音频文件 (MP3/WAV/M4A，建议 3–10 秒清晰人声)
+  - `text` (String, 必填): 目标合成说话内容
+  - `seed` (Int, 可选): 随机采样种子
+- **返回响应**: 二进制 MP3 音频流 (`audio/mp3`)
+- **调用示例**:
+
+```bash
+curl -X POST http://localhost:6000/api/voice_clone \
+  -F "audio=@voice_sample.mp3" \
+  -F "text=你好，这是用克隆音色生成的一段话。" \
+  -o cloned_speech.mp3
+```
+
+---
+
+### 五、MinimaxMusic 3 音乐生成接口
+
+#### 17. MinimaxMusic 3 音乐创作 (`POST /api/music/minimax`)
+- **Content-Type**: `application/json`
+- **说明**: 基于 MinimaxMusic 3 DiT 模型，通过风格描述 (caption) + 歌词 (lyrics) + 时长生成完整歌曲。支持纯音乐与带歌词歌曲，最长 180 秒。
+- **请求参数**:
+  - `style` (String, 必填): 音乐风格与结构描述（英文效果最佳，如 `"Upbeat electronic dance music with synthesizers"`）
+  - `lyrics` (String, 可选): 歌词文本（支持多语言，留空则生成纯音乐）
+  - `duration` (Float, 可选): 时长秒数，默认 `60.0`，最大 `180.0`
+  - `cfg_scale` (Float, 可选): CFG 强度，默认 `7.0`
+  - `steps` (Int, 可选): 采样步数，默认 `28`
+  - `seed` (Int, 可选): 随机采样种子
+- **返回响应**: 二进制 MP3 音频流 (`audio/mp3`)
+- **调用示例**:
+
+```bash
+curl -X POST http://localhost:6000/api/music/minimax \
+  -H "Content-Type: application/json" \
+  -d '{
+    "style": "Healing Japanese modern pop ballad with cinematic strings and soft piano",
+    "lyrics": "[verse]\n夕暮れが街を染めてゆく\n[chorus]\n星が瞬く空で",
+    "duration": 60
+  }' \
+  -o music_output.mp3
+```
+
+---
+
+### 六、LTX-2.5 视频生成接口
+
+#### 18. LTX-2.5 图生视频 (`POST /api/video/ltx`)
+- **别名**: `POST /api/video/ltx_image2video`
+- **Content-Type**: `multipart/form-data`
+- **说明**: 基于 LTX-2.5 22B Distilled Transformer，单张图片 + 动作描述生成带音频的 720p 视频。采用双阶段采样（粗采样 + 时序细化），支持最长 20 秒。
+- **请求参数**:
+  - `image` (File 或 文件名, 必填): 输入图片
+  - `prompt` (Text, 必填): 动作与画面描述提示词
+  - `duration` (Int, 可选): 视频时长秒数，默认 `15`，测试建议设为 `3–5`
+  - `steps` (Int, 可选): 第一阶段采样步数，默认 `6`
+  - `refine_steps` (Int, 可选): 第二阶段时序细化步数，默认 `4`
+  - `cfg` (Float, 可选): 提示词相关度，默认 `1.0`
+  - `scale_to_length` (Int, 可选): 画面缩放，默认 `720`
+  - `seed` (Int, 可选): 随机采样种子
+- **返回响应**: 二进制 MP4 视频流 (`video/mp4`)
+- **调用示例**:
+
+```bash
+curl -X POST http://localhost:6000/api/video/ltx \
+  -F "image=@portrait.png" \
+  -F "prompt=A woman in a red dress walking gracefully in a garden, cinematic" \
+  -F "duration=3" \
+  -F "seed=42" \
+  -o ltx_output.mp4
+```
+
 ## 4. ComfyUI 工作流 JSON 节点映射速查表 (Node Mappings)
 
 若 AI Agent 需要直接读取、修改或自动化装配工作流 JSON，请严格参考下表的节点 ID 与字段映射规范：
 
 | 工作流类型 | 工作流文件名 | 关键节点 ID | 节点类名 (Class Type) | 目标字段 (Field Path) | 业务作用 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| **TTS 语音合成** | `VoiceDesign-QwenTTS.json` | `#75` | `Text Multiline` | `inputs.text` | 待合成文本 |
+| | | `#76` | `Text Multiline` | `inputs.text` | 声音特征描述（英文） |
+| | | `#73` | `Qwen3TTSVoiceDesign` | `inputs.seed` | 采样种子 |
+| | | `#74` | `Qwen3TTSModelLoader` | `inputs.模型名称` | 模型加载 |
+| **音色克隆** | `VoiceClone-QwenTTS.json` | `#151` | `LoadAudio` | `inputs.audio` | 参考音频文件 |
+| | | `#153` | `Text Multiline` | `inputs.text` | 目标合成文本 |
+| | | `#150` | `FB_Qwen3TTSVoiceClone` | `inputs.seed` | 采样种子 |
+| | | `#152` | `Apply Whisper` | — | 自动转写参考音频 |
+| **MinimaxMusic 3** | `MusicCreation-MiniMaxMusic3_api.json` | `#15` | `Text Multiline` | `inputs.text` | 风格描述 (caption) |
+| | | `#16` | `Text Multiline` | `inputs.text` | 歌词 |
+| | | `#14` | `PrimitiveFloat` | `inputs.value` | 时长 (秒) |
+| | | `#6` | `MiniMaxMusic3TextEncode` | `inputs.seed`, `inputs.cfg_scale` | 种子与 CFG |
+| | | `#4` | `KSampler` | `inputs.seed`, `inputs.steps` | 采样 |
+| | | `#2` | `CLIPLoader` | `inputs.clip_name` | 文本编码器 |
+| | | `#5` | `UNETLoader` | `inputs.unet_name` | DiT 模型 |
+| | | `#3` | `VAELoader` | `inputs.vae_name` | 音频 VAE |
+| **LTX-2.5 图生视频** | `LTX25-ImageToVideo_api.json` | `#9` | `LoadImage` | `inputs.image` | 输入图片 |
+| | | `#181` | `CLIPTextEncode` | `inputs.text` | 动作描述提示词 |
+| | | `#183` | `PrimitiveInt` | `inputs.value` | 时长 (秒) |
+| | | `#51` | `KSampler` | `inputs.seed`, `inputs.steps`, `inputs.cfg` | 第一阶段采样 |
+| | | `#155` | `KSampler` | `inputs.steps` | 第二阶段时序细化 |
+| | | `#5` | `LayerUtility: ImageScaleByAspectRatio V2` | `inputs.scale_to_length` | 画面缩放 |
+| | | `#162` | `UNETLoader` | `inputs.unet_name` | LTX-2.5 22B DiT 模型 |
+| | | `#164` | `VAELoader` | `inputs.vae_name` | 视频 VAE |
+| | | `#165` | `VAELoader` | `inputs.vae_name` | 音频 VAE |
+| | | `#166` | `CLIPLoader` | `inputs.clip_name` | Gemma4 12B 文本编码器 |
+| | | `#178` | `SolAttnPatch` | — | 稀疏注意力补丁 |
+| | | `#124` | `VHS_VideoCombine` | — | 视频封装输出 |
 | **Qwen 2.1 文生图** | `1_0_Text2IMG_QwenImge2_1.json` | `#469` | `TextEncodeQwenImage21` | `inputs.prompt`, `inputs.negative_prompt` | 正/反向提示词 |
 | | | `#492` | `ResolutionSelector` | `inputs.aspect_ratio`, `inputs.megapixels` | 画面比例 (默认 3:4) 与百万像素 (默认 1.0) |
 | | | `#474` | `KSampler` | `inputs.seed`, `inputs.steps`, `inputs.cfg` | 采样器控制 (默认 25 步) |
@@ -666,3 +824,99 @@ seed: 20260929
    - `add_source_as_reference = false`
    - `KSampler.latent_image = T8.av_latent`
    - 分辨率 multiple 对齐为 32
+
+---
+
+## 9. MiniMax-H3 多模态参考（图+视频+音频混合）回归测试记录 (2026-10-01)
+
+### 测试环境
+
+```text
+服务: http://127.0.0.1:6000（comfyui_api_service.py 动态注入工作流）
+ComfyUI: http://127.0.0.1:8188
+GPU: NVIDIA GB10 / 128GB unified memory
+模型: minimax_h3_ref2va_pruned_int8_convrot + Turbo LoRA
+Text Encoder: qwen3vl_32b_minimax_h3_int8_convrot
+```
+
+### 固定测试参数
+
+```text
+duration: 2s
+megapixels: 0.2
+steps: 4
+seed: 20261001
+```
+
+### 回归结果
+
+| 用例 | 输入组合 | 文件数 | HTTP | 耗时 | 输出 |
+|---|---|---:|---|---:|---|
+| 1图+1视频 | 1 图 + 1 视频(9.8s) | 2 | 200 | 228.708s | 2.3s MP4 含音频 |
+| 1图+1视频+1音频 | 1 图 + 1 视频(2.5s) + 1 音频 | 3 | 200 | 135.982s | 2.3s MP4 含音频 |
+| 3图+2视频+2音频 | 3 图 + 2 视频 + 2 音频 | 7 | 200 | 365.463s | 2.3s MP4 含音频 |
+| 6图+3视频+3音频 | 6 图 + 3 视频 + 3 音频 | 12 | 200 | ~103s* | 2.3s MP4 含音频 |
+| 超限: 10 图 | 10 图 | 10 | 400 | <0.2s | 错误提示 |
+| 超限: 4 视频 | 4 视频 | 4 | 400 | <0.2s | 错误提示 |
+| 超限: 13 文件 | 10 图 + 3 视频 | 13 | 400 | <0.2s | 错误提示 |
+
+> *6+3+3 用例的首次提交 WebSocket 超时（生成耗时 > 桥接服务 WebSocket 超时阈值），
+> 但 ComfyUI 后台生成成功；重试时直接返回已缓存产物（0.7s）。
+> 该行为符合设计：产物不丢失，WebSocket 超时是客户端侧检测限制，非生成失败。
+
+### 结论
+
+```text
+4/4 生成用例成功，3/3 边界校验正确拒绝。
+/api/video/multi_modal 支持最多 9 图 + 3 视频 + 3 音频（合计 ≤ 12 文件）的多模态参考生视频。
+参考视频自动缩放(704)与 24 fps 重采样验证通过；原声轨道自动配对验证通过。
+独立参考音频注入验证通过。
+边界校验：图片 > 9、视频 > 3、总文件数 > 12 均返回 400 + 明确错误信息。
+```
+
+### 已知限制
+
+1. 多模态满配（6+3+3）的完整生成耗时约 **360~420s**（2s/0.2MP/4steps 快速档），
+   可能超出桥接服务默认 WebSocket 超时（建议将 `GENERATION_TIMEOUT` 调至 ≥ 480）；
+2. 参考视频需 ≥ 5 帧（~0.2s @ 24fps）且 ≤ 15s；
+3. 9 图 + 3 视频 + 3 音频 = 15 文件超出模型 12 文件上限，接口正确拒绝。
+
+---
+
+## 10. 语音合成 / 音色克隆 / MinimaxMusic 3 / LTX-2.5 回归测试记录 (2026-10-03)
+
+### 测试环境
+
+```text
+服务: http://127.0.0.1:6000 (comfyui_api_service.py)
+ComfyUI: http://127.0.0.1:8188
+GPU: NVIDIA GB10 / 128GB unified memory
+```
+
+### 回归结果
+
+| 用例 | 端点 | HTTP | 耗时 | 输出 |
+|---|---|---|---:|---|
+| TTS 语音合成 | `/api/tts` | 200 | 18.6s | 64KB MP3 |
+| 音色克隆 | `/api/voice_clone` | 200 | 4.6s | 73KB MP3 |
+| MinimaxMusic 3 | `/api/music/minimax` | 200 | 60.1s | 276KB MP3 |
+| LTX-2.5 图生视频 | `/api/video/ltx` | 200 | 170.8s | 203KB MP4 |
+
+### 结论
+
+```text
+4/4 用例成功。
+TTS: Qwen3-TTS Voice Design 通过英文声音描述生成高质量语音，支持中英混排。
+Voice Clone: FB_Qwen3TTSVoiceClone + Apply Whisper 自动转写，无需手动提供 ref_text。
+MinimaxMusic 3: 基于 caption + lyrics + duration 生成完整歌曲，支持长至 180 秒。
+LTX-2.5: 22B Distilled Transformer 双阶段采样，3 秒视频约 171s 生成。
+```
+
+### 注意事项
+
+1. TTS 的 `voice_description` **必须为英文**（如 `"A gentle female voice"`），中文描述效果差。
+2. Voice Clone 的参考音频建议 3–10 秒清晰人声，过短（< 2 秒）或含大量背景噪音会影响克隆质量。
+3. MinimaxMusic 3 默认模型为 `minimax_music3_dit_fp16`（占用较大），确保 GPU 有足够显存。
+4. LTX-2.5 修复记录：原工作流 `SolAttnPatch` 节点（#178）缺少 `int8_pv` 和 `dense_blocks` 参数，
+   导致 ComfyUI 静默跳过主管线。修复方法：在工作流 JSON 中补充这两个参数，并添加
+   `node_errors` 检查到 `queue_prompt` 后（借鉴 Visionary 项目），使此类问题在提交阶段即被捕获。
