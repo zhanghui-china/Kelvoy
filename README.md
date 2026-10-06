@@ -240,3 +240,11 @@ make lint         # ruff（Python 侧）
 ## 开源协议
 
 本项目采用 [Apache License 2.0](LICENSE) 开源许可证。
+
+## 旅行 Vlog 生产 Skill
+
+[`kelvoy-vlog`](skills/kelvoy-vlog/SKILL.md) 通过已有 Kelvoy 实例和素材，提供建期、续跑、三个审核点协作、指定镜头返工和重新合成。可用 `$kelvoy-vlog` 调用；`.agents/skills/kelvoy-vlog` 相对符号链接指向仓库内唯一技能目录。
+
+首版契约核对范围是 2026-10-05 GX10 部署记录 `c8ab053` 及相关补丁。当前 main 已新增 `compose_ready`、固定一秒剪辑等能力，不能直接套用首版旧部署流程；使用前按 [API 与版本说明](skills/kelvoy-vlog/references/kelvoy-api.md) 确认目标实例。三个审核点仍需用户决定，素材建设、部署与平台发布不在首版范围。
+
+提供可访问服务地址并在浏览器登录，避免在聊天中发送密码。例如：“使用 kelvoy-vlog，用已有阿澄、黄山和名山登顶模板做一期安静的旅行 Vlog。”组织决策见 [ADR-0006](docs/decisions/0006-agent-production-skill.md)，检查结果与真实验收待办见 [验收记录](docs/superpowers/specs/2026-10-06-kelvoy-vlog-skill-validation.md)。
