@@ -1,3 +1,4 @@
+import { API_CONTRACT } from "@kelvoy/engine";
 import { close, createUser, getUserByUsername, grantCredits, open } from "@kelvoy/store";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
@@ -98,6 +99,17 @@ describe("GET/PATCH /api/me/settings", () => {
     expect(first.user.user_id).not.toBe(second.user.user_id);
     expect(first.balance).toEqual({ available: 100_000, reserved: 0 });
     expect(second.balance).toEqual({ available: 0, reserved: 0 });
+  });
+  test("reports the API contract version only to a signed-in account", async () => {
+    const app = buildApp();
+    await seedUser("first", "hunter2");
+    const anonymous = await app.request("/api/me");
+    expect(anonymous.status).toBe(401);
+    expect(JSON.stringify(await anonymous.json())).not.toContain("api_contract");
+    const cookie = await loginCookie(app, "first", "hunter2");
+    const body = await (await app.request("/api/me", { headers: { cookie } })).json() as { api_contract: number };
+    expect(body.api_contract).toBe(API_CONTRACT);
+    expect(Number.isInteger(body.api_contract)).toBe(true);
   });
   test("rejects grid as a newly saved default mode", async () => {
     const app = buildApp();

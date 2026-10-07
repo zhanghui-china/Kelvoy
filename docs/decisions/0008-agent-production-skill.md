@@ -37,5 +37,5 @@
 - **契约来源**：Skill 的 API 与流程描述以 GitHub main 为准，不再保留 `c8ab053`、`pacing_version`、`music.enabled`、单镜 `/retry`、`/recompose` 接受 failed 等旧部署内容。
 - **新增覆盖**：`compose_ready` 与固定一秒剪辑、积分预留与 402、期级 `/retry`、`/report-bad`、`/script/regenerate|optimize`、`/convert-cuts`、`video_source=references` 默认路径（无关键帧审核）、`episode.final` 成片元数据。积分仍由运维发放，Skill 不发放。
 - **证据不再随 Skill 发布**：原 API 参考里的证据等级表和提交号随旧契约一并删除。需要追溯时看对应 main 提交的 `apps/web/src/server/routes/` 与 `packages/engine/src/`，不在运行时文档里维护第二份版本史。
-- **版本探测**：`/api/health` 目前只返回 `{"status":"ok"}`。Skill 暂以 `GET /api/me` 响应是否含 `balance` 判断实例是否为 main 契约，不发写请求探测。给 health 或 me 增加明确的版本字段会改动对外 `/api/*` 契约，须另写 ADR，未决。
+- **版本探测**：在已登录的 `GET /api/me` 响应里增加 `api_contract` 整数（常量 `API_CONTRACT` 定义在 `packages/engine/src/schema/api.ts`，当前为 1）。不放 `/api/health`：该接口匿名，且部署有公网入口，匿名暴露版本等于提供指纹；Skill 本来就需要会话，读 `/api/me` 即可。用递增整数而非 commit，因为客户端要回答的是“是否符合我描述的契约”，哈希不可比较。已有 `/api/*` 请求或响应形状发生会让旧客户端出错的变化时递增；纯新增字段不递增。这是向后兼容的新增字段，不跨模块边界，不另立 ADR。commit 暴露暂不做，真有排查需求再用 systemd drop-in 注入环境变量。
 - **不变**：Skill 仍只经公开 HTTP API 与会话执行，不直写 SQLite、不碰推理或 ComfyUI，三个审核点只能由用户决定；范围仍是已有角色、目的地、模板的单期生产。

@@ -1,4 +1,4 @@
-import { validateChangePasswordRequest, validateUserSettingsPatch } from "@kelvoy/engine";
+import { API_CONTRACT, validateChangePasswordRequest, validateUserSettingsPatch } from "@kelvoy/engine";
 import { getCreditBalance, getUserById, listCreditLedger, setPasswordById, updateUserSettings } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
@@ -14,7 +14,7 @@ me.get("/", async (c) => {
   const user = await getUserById(c.get("ownerId"));
   if (!user) return c.json({ ok: false, error: "unauthorized" }, 401);
   return c.json({ ok: true, user: { user_id: user.user_id, username: user.username },
-    balance: getCreditBalance(user.user_id) });
+    balance: getCreditBalance(user.user_id), api_contract: API_CONTRACT });
 });
 
 me.get("/settings", async (c) => {

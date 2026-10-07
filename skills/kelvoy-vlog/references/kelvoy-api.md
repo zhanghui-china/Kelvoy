@@ -1,6 +1,6 @@
 # Kelvoy API 参考
 
-契约对应 GitHub main（GX10 部署于 `b19ee81`）。健康接口没有版本字段；实例不是 main 时，以只读接口判断：`GET /api/me` 的响应里没有 `balance` 就是旧实例，停止并告知用户。不用写请求去探测。
+本文对应 `api_contract` **1**（GitHub main，GX10 部署于 `b19ee81`）。`GET /api/me` 返回 `api_contract`：不是 1（更大）或缺失（旧实例）都停止并告知用户，不要凭记忆继续。`/api/health` 匿名，没有版本字段。不用写请求去探测。
 
 ## 传输与会话
 
@@ -20,7 +20,7 @@ POST /api/auth/login
 | 请求 | 响应要点 |
 | --- | --- |
 | `GET /api/health` | `{"status":"ok"}`，只证明 Web 可达 |
-| `GET /api/me` | `{"ok":true,"user":{…},"balance":{"available":N,"reserved":N}}`，验证会话并读积分余额 |
+| `GET /api/me` | `{"ok":true,"user":{…},"balance":{"available":N,"reserved":N},"api_contract":1}`，验证会话、读积分余额、读契约版本 |
 | `GET /api/me/credits` | `{"ok":true,"balance":{…},"ledger":[…]}`，流水 |
 | `GET /api/personas` `/destinations` `/templates` | `{"ok":true,"<复数名>":[…]}` |
 | `GET /api/episodes` | `{"ok":true,"episodes":[…]}`，用于续跑和建期结果核对 |

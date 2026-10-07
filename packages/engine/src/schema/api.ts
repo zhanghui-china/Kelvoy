@@ -143,3 +143,14 @@ export interface ChangePasswordRequest {
   current_password: string;
   new_password: string;
 }
+
+/**
+ * Version of the public `/api/*` request/response contract, reported by the
+ * authenticated GET /api/me so external clients (skills/kelvoy-vlog) can tell
+ * whether an instance matches the contract they were written for. Bump it
+ * whenever an existing `/api/*` request or response shape changes in a way a
+ * client written against the previous number would break on; purely additive
+ * fields do not need a bump. 1 = credits + compose_ready + fixed_1s flow
+ * (main b19ee81). Deliberately not on /api/health: that route is anonymous.
+ */
+export const API_CONTRACT = 1;
