@@ -4,7 +4,7 @@
 
 ## 交付与检查
 
-交付 `skills/kelvoy-vlog` 的入口与两个参考文档、`.agents/skills/kelvoy-vlog` 相对符号链接、README／PRD §2 更新与 ADR-0006。没有增加 API、脚本、数据库或生产服务变更。
+交付 `skills/kelvoy-vlog` 的入口与两个参考文档、`.agents/skills/kelvoy-vlog` 相对符号链接、README／PRD §2 更新与 ADR-0008。没有增加 API、脚本、数据库或生产服务变更。
 
 | 检查 | 结果与范围 |
 | --- | --- |

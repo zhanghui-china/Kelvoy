@@ -1,4 +1,4 @@
-# 0006 · 仓库内旅行 Vlog 生产 Skill 复用已有 Web API
+# 0008 · 仓库内旅行 Vlog 生产 Skill 复用已有 Web API
 
 - **Date**: 2026-10-06
 - **Status**: Accepted
