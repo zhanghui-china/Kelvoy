@@ -1,162 +1,140 @@
-# Kelvoy API 与版本说明
+# Kelvoy API 参考
 
-## 基线与证据等级
-
-契约核对日期：2026-10-06。首版目标是 2026-10-05 GX10 部署记录 `c8ab053` 及相关补丁；首次调研源码基线为 `196fe48`。此文区分源码核对、历史部署验收与当前在线验证。
-
-发布前同步 GitHub 时核对到 main `3c34ceb`：新增 compose_ready 阶段、固定一秒剪辑、默认 references 视频来源和积分预留，且没有旧部署的 pacing_version 字段；当前 main 不在此首版契约范围。目标实例若使用这些能力，先暂停旧流程并核对对应版本，不能执行旧 clip_review→composing 直进、旧镜数／时长规则或旧请求形状。新版本适配另作后续能力扩展。
-
-| 能力 | 契约来源／部署记录 | 当前证据 |
-| --- | --- | --- |
-| Cookie 登录、列表、建期、审核、文件与分享 | 调研源码 `196fe48` 的 Web 路由及 schema | 源码已核对 |
-| 真实关键帧与视频 | 2026-10-01 GX10 部署记录，后续部署补丁 | 历史部署验证；本次未在线验证 |
-| 三视图门槛、角色引用快照 | persona-turnaround 补丁及部署记录 | 源码／补丁核对；首版只复用已可用角色 |
-| 审核推进完整性检查、局部返工 | 隔离源码中的 episode-review 与 generation 用例 | 文件核对；隔离目录不是完整 Git 仓库，不能据此断言运行版本 |
-| 失败镜头 `/retry` | manual-retry 补丁；部署记录版本 `91a231f` | 补丁核对，历史检查通过 |
-| 合成失败 `/recompose`、无配乐选择持久化 | compose-fallback／no-music-compose 补丁；2026-10-05 部署记录版本 `c8ab053` | 历史黄山成片 30.133333 秒、1080×1920、30 fps；本次未生成 |
-
-本次按部署记录地址做只读健康检查，连接超时，未登录、未读用户资料、未提交任务。上述短提交号是版本来源，不能当成自动能力检测值。首次调研源码 `196fe48` 的 assets/keyframe/video 和 inference image/video 仍是占位实现，不能用于完整出片验收。
-
-实际服务地址、登录状态与版本证据由运行环境提供。健康接口没有版本或能力字段；新实例通过维护者提供的发布版本／源码核对，记录核对时间与能力。未知接口不通过 POST 探测，也不自动降级为直写数据库或调用 Bridge。
-
-仓库维护者可按对应基线的以下来源复核（部署笔记与补丁是首次调研时的本地证据，未随此 Skill 提交）；技能复制到其他位置时仍可用本文件的契约，不强依赖这些仓库路径：
-
-- `apps/web/src/server/routes/{auth,episodes,episode-review,personas,templates,assets,share}.ts`
-- `packages/engine/src/schema/{api,episode}.ts` 与 `rules/script.ts`
-- `infra/dgx/{gx10-8e22,manual-retry,persona-turnaround,compose-fallback}-deployment.md` 与对应补丁
+契约对应 GitHub main（GX10 部署于 `b19ee81`）。健康接口没有版本字段；实例不是 main 时，以只读接口判断：`GET /api/me` 的响应里没有 `balance` 就是旧实例，停止并告知用户。不用写请求去探测。
 
 ## 传输与会话
 
-以用户提供的 `base_url` 为根，不假定端口、IP 或 SSH 目录。ID／slug 按一个 URL 段编码，产物 key 按每一段编码并保留 `/` 分隔符；拒绝 `..`、绝对路径或跨域产物地址。
+以用户提供的 `base_url` 为根，不假定端口、IP 或 SSH 目录。ID／slug 按一个 URL 段编码，产物 key 按每段编码并保留 `/`；拒绝 `..`、绝对路径、跨域地址。
 
-优先使用用户已登录且可调用 API 的浏览器会话。仅在有受保护凭据输入渠道时调用登录；没有该渠道就让用户在 `/login` 登录，不要求其在聊天中发送密码。
+优先用用户已登录且可调 API 的浏览器会话。只有存在受保护的凭据输入渠道时才调用登录，否则让用户在 `/login` 登录，不要求在聊天里发密码。
 
 ```http
 POST /api/auth/login
-Content-Type: application/json
-
 {"username":"<受保护输入>","password":"<受保护输入>"}
 ```
 
-成功 200：`{"ok":true,"user":{"user_id":"…","username":"…"}}`，响应设置 HttpOnly `kelvoy_session` cookie。后续请求沿用会话；非浏览器客户端需使用受保护 cookie jar，不输出 cookie，不提交到 Git，不将浏览器 cookie 导出到聊天。登录不会授予访问其他用户作品的权限。
+成功 200：`{"ok":true,"user":{…}}`，设置 HttpOnly `kelvoy_session` cookie。cookie 只放受保护的 jar，不输出、不提交 Git。
 
-只读接口：
+## 读取
 
-| 请求 | 成功响应要点 |
+| 请求 | 响应要点 |
 | --- | --- |
-| `GET /api/health` | 200，`{"status":"ok"}`，只证明 Web 可达 |
-| `GET /api/me/settings` | 200，`{"ok":true,"settings":{…}}`，可验证会话 |
-| `GET /api/personas` | 200，`{"ok":true,"personas":[…]}` |
-| `GET /api/destinations` | 200，`{"ok":true,"destinations":[…]}` |
-| `GET /api/templates` | 200，`{"ok":true,"templates":[…]}` |
-| `GET /api/episodes` | 200，`{"ok":true,"episodes":[…]}`，结果用于续跑与未知建期结果核对 |
-| `GET /api/episodes/<id>` | 200，`{"ok":true,"episode":{…},"row_version":7}` |
+| `GET /api/health` | `{"status":"ok"}`，只证明 Web 可达 |
+| `GET /api/me` | `{"ok":true,"user":{…},"balance":{"available":N,"reserved":N}}`，验证会话并读积分余额 |
+| `GET /api/me/credits` | `{"ok":true,"balance":{…},"ledger":[…]}`，流水 |
+| `GET /api/personas` `/destinations` `/templates` | `{"ok":true,"<复数名>":[…]}` |
+| `GET /api/episodes` | `{"ok":true,"episodes":[…]}`，用于续跑和建期结果核对 |
+| `GET /api/episodes/<id>` | `{"ok":true,"episode":{…},"persona":…,"destination":…,"row_version":7,"failed_task":{"stage":"video","shot_no":3}\|null}` |
+| `GET /api/episodes/estimate?mode=per_shot&video_source=references&candidates=3` | `{"ok":true,"estimate":{…},"credit_quote":N}`。**`estimate.estimated_credits` 其实是 GPU 分钟，向用户报价用 `credit_quote`** |
 
-不要凭列表序号当 ID。期的 `row_version` 是写入锁，与角色／目的地领域版本无关。
+名称不是 ID，不凭列表序号当 ID。`row_version` 是期级写入锁，每次写前读最新值，成功响应带新值。不同镜头共用期级锁，写入串行。
+
+## 积分
+
+所有生成类操作先预留积分，余额不足返回 **402 `insufficient_credits`**：建期、`/script/*`、`/continue`、`/regen`、`/report-bad`、`/retry`、`/recompose`。预留是分段的：建期只预留 1 份脚本积分；脚本通过、`/continue` 进入 assets 时才按镜数一次性预留全部视频（逐镜关键帧模式则是图片）积分。所以建期成功不代表后面够用，要用 `credit_quote` 预估总额。
+
+遇到 402 停下，告知需要多少、余额多少，让用户联系运维充值。Agent 不发放积分，不换账号绕过。
 
 ## 建期
 
 ```http
 POST /api/episodes
-Content-Type: application/json
-
-{"persona_id":"c_demo","destination_id":"d_demo","template_id":"t_demo","mode":"per_shot","tone":"安静的旅行记录"}
+{"persona_id":"…","destination_id":"…","template_id":"…","tone":"安静的旅行记录"}
 ```
 
-必需三个 ID；可选 `series_id/season/tone/banned/mode/outfit_override`。`mode` 为 `per_shot` 或 `grid`，首版只新建逐镜。`banned` 是字符串数组，`outfit_override` 请求值为字符串，省略表示沿用。
+必需三个 ID。可选：`name`、`requirements`、`aspect`（`9:16` 默认）、`video_source`（`references` 默认，或 `keyframe`）、`candidate_count`、`series_id`、`season`、`tone`、`banned`（字符串数组）、`outfit_override`。`mode` 只接受 `per_shot`。服务派生 owner、版本快照、`cut_policy=fixed_1s`、30 秒、render，并自动入队 brief。
 
-成功 201：`{"ok":true,"episode":{…}}`，立即保存 `episode.episode_id`。服务派生 owner、快照、`pacing_version`、9:16、30 秒、render 与估价，自动入队 brief；不另外调用 CLI 或发 script 任务。
+成功 201：`{"ok":true,"episode":{…}}`，立即记录 `episode.episode_id`。
 
-错误例：400 `{"ok":false,"error":"content_blocked","violations":[…]}`；404 `persona_not_found/destination_not_found/template_not_found`；要求三视图的部署可返回 409 `persona_turnaround_required`。最后一种应转去角色编辑页，不是乐观锁冲突。
+错误：400 `errors`／`content_blocked`（带 `violations`）；404 `persona_not_found`／`destination_not_found`／`template_not_found`；402 `insufficient_credits`。
+
+## 状态机
+
+```text
+draft → scripting → script_review → assets ─┬→ keyframing → kf_review → clipping ┐
+                                            └──────── (references) ──→ clipping ┤
+      → clip_review → compose_ready → composing → done        任一生成态可 → failed
+```
+
+`video_source=references`（默认）在 assets 之后直接进 `clipping`，**没有 kf_review**。`keyframe` 模式才有关键帧审核。`/continue` 可从四个审核态推进：`script_review`、`kf_review`、`clip_review`、`compose_ready`。`clip_review` 在 `fixed_1s` 下先进 `compose_ready`，再 `/continue` 才进 `composing`。非 `fixed_1s` 的旧期 `clip_review` 直接进 `composing`。
 
 ## 审核写入
 
-下面 `7` 只是示例版本；每次写操作前读取当前版本，成功响应也带新版本。不同镜头共用期级锁，不并行提交多镜写入。
+### 改镜头
 
-| 操作 | 方法与路径 | 请求体示例 |
+`PATCH /api/episodes/<id>/shots/<no>`，body `{"row_version":7,"patch":{…}}`，成功 `{"ok":true,"row_version":8}`。可写字段取决于期阶段，不在表内的组合返回 400 `invalid_public_patch`：
+
+| 期阶段 | 可写字段 |
+| --- | --- |
+| `script_review` | `beat`、`caption`、`size`、`camera`、`landmark`、`kf_prompt`、`motion_prompt` |
+| `kf_review` | `kf_selected`、`status`（仅 `kf_selected`）、`kf_prompt`、`motion_prompt` |
+| `keyframing` | `kf_selected`、`status` |
+| `clip_review` | `trim_start_s`、`status`（仅 `approved`，且镜为 `clip_ready`） |
+| 其他（含 `done`） | 不可改 |
+
+`size`=`wide/medium/close/detail/pov`；`camera`=`static/pan/push/follow`；`landmark` 为目的地地标 ID 或 `null`，必须存在于该期快照的地标里。`kf_selected` 必须属于该镜 `candidates`，选图时同时写 `"status":"kf_selected"`（镜为 `kf_ready`）；已是 `kf_selected` 换图只写 `kf_selected`。`fixed_1s` 下 `trim_start_s` 会被服务对齐到 1/30 秒。文本字段过内容审核，命中返回 400 `content_blocked`。
+
+**prompt 只能在 `script_review` 和 `kf_review` 改，`references` 模式只剩 `script_review`。** `clip_review`／`done` 阶段无法改 prompt，`/regen` 只会用已有 prompt 重做。
+
+### 脚本动作（仅 `script_review`）
+
+| 操作 | 请求 |
+| --- | --- |
+| 整体重写脚本 | `POST /api/episodes/<id>/script/regenerate` `{"row_version":7}` |
+| 按意见优化脚本 | `POST /api/episodes/<id>/script/optimize` `{"row_version":7,"instruction":"…"}`，instruction 1–500 字 |
+| 删镜头 | `POST /api/episodes/<id>/shots/<no>/remove` `{"row_version":7}`，不能低于 24 镜 |
+| 重排 | `POST /api/episodes/<id>/shots/reorder` `{"row_version":7,"order":[…全部现有镜号…]}` |
+
+脚本动作返回 `{"ok":true,"row_version":8,"task_id":"…"}`，是异步任务。处理期间所有写操作返回 400 `action_pending`，只观察，完成后重新读作品。删镜和重排会重跑脚本规则，违规整单驳回：400 `script_rule_violation`，`violations` 带原因。规则：24–30 镜、同景别不连续超过 2 镜、至少 5 个地标镜、地标引用有效。
+
+### 继续
+
+`POST /api/episodes/<id>/continue` `{"row_version":7}` → `{"ok":true,"row_version":8}`。推进前服务校验：
+
+- `kf_review`：至少一镜 `kf_selected`；每个镜要么 `approved` 且有 clip，要么 `kf_selected` 且所选 key 在 `candidates` 里。否则 400 `keyframes_not_selected`。
+- `clip_review`／`compose_ready`：所有镜 `approved` 且有 clip，否则 400 `clips_not_approved`。
+- 非审核态 400 `illegal_transition`；脚本任务进行中 400 `action_pending`；余额不足 402。
+
+## 返工、重试、重合成
+
+| 操作 | 请求 | 约束 |
 | --- | --- | --- |
-| 改脚本／prompt | `PATCH /api/episodes/<id>/shots/<no>` | `{"row_version":7,"patch":{"beat":"缓慢转身","motion_prompt":"角色缓慢转身，镜头静止"}}` |
-| 首次选关键帧 | 同上 | `{"row_version":7,"patch":{"kf_selected":"kf/03_a.png","status":"kf_selected"}}` |
-| 已选状态换候选 | 同上 | `{"row_version":7,"patch":{"kf_selected":"kf/03_b.png"}}` |
-| 审核视频／选切点 | 同上 | `{"row_version":7,"patch":{"trim_start_s":0.2,"status":"approved"}}` |
-| 删除镜头 | `POST /api/episodes/<id>/shots/<no>/remove` | `{"row_version":7}` |
-| 重排所有现有镜头 | `POST /api/episodes/<id>/shots/reorder` | `{"row_version":7,"order":[2,1,3,4,5]}` |
-| 审核通过后继续 | `POST /api/episodes/<id>/continue` | `{"row_version":7}` |
+| 重做某镜 | `POST /api/episodes/<id>/shots/<no>/regen` `{"row_version":7,"regen_stage":"video"}` | `regen_stage`=`keyframe`/`video`，可省略，服务按镜状态推断；明确传更稳。镜须为 `kf_ready`／`clip_ready`／`approved`。期须在对应审核态或 `done`。`references` 模式不支持 `keyframe`；`keyframe` 模式做 `video` 需要有效的已选关键帧。整期回到相应审核态，其他镜保留 |
+| 坏镜免费重做 | `POST /api/episodes/<id>/shots/<no>/report-bad` | 同 `/regen` 的 body 与约束，仅视频阶段、每镜第一次免费 |
+| 重试失败任务 | `POST /api/episodes/<id>/retry` `{"row_version":7}` | **期级**，不分镜。服务取最近一个可重试的失败任务；没有则 400 `no_failed_task`。先读 `GET` 详情里的 `failed_task` 告诉用户是哪一步 |
+| 重新合成 | `POST /api/episodes/<id>/recompose` `{"row_version":7}` | 只允许 `done`。合成失败走 `/retry` |
+| 旧期转固定一秒 | `POST /api/episodes/<id>/convert-cuts` `{"row_version":7}` | 仅无 `cut_policy=fixed_1s` 的旧期，且在 `clip_review`／`done` 且全部镜有 clip。转换后所有镜回到 `clip_ready`，须重新审核，让用户决定 |
 
-成功 200：`{"ok":true,"row_version":8}`。脚本可改字段为 `beat/size/camera/landmark/kf_prompt/motion_prompt`；`size=wide/medium/close/detail/pov`，`camera=static/pan/push/follow`，`landmark` 为目的地地标 ID 或 null。不写 `no/scene/duration_s`。
+不合法的组合返回 400 `illegal_transition`，原样告知用户，不用 PATCH 状态绕过。
 
-旧服务的通用 ShotPatch 允许更宽字段，不代表 Skill 获准改 worker 产物字段 `candidates/clip/model`。删镜和重排仅在脚本审核使用；服务会检查镜数、景别与地标规则。`order` 必须是全部当前镜号的排列，例中 5 个镜号只适用于恰好 5 镜的测试期。
+### 配乐与渲染
 
-`/continue` 仅用于三个审核态，分别推进 assets、video、compose。先检查全部必要镜头选择或审核完成，不依赖旧服务的宽松行为：
-
-- `kf_review`：至少一个需生视频镜为 `kf_selected`，key 属于 candidates；其余需生视频镜也完成有效选择，保留镜为 approved 且 clip 非空。所有镜已 approved 的异常 kf_review 状态不能经此接口推进，应交维护者核对，不能伪造一镜回到 kf_selected。
-- `clip_review`：所有镜为 approved 且 clip 非空。
-
-部署基线拒绝不完整推进：400 `keyframes_not_selected` 或 `clips_not_approved`。非法阶段返回 `illegal_transition`。
-
-## 返工与合成
-
-重生成（已有候选／片段的改做）：
-
-```http
-POST /api/episodes/<id>/shots/<no>/regen
-Content-Type: application/json
-
-{"row_version":7,"regen_stage":"video"}
-```
-
-`regen_stage=keyframe/video`，Skill 明确提交，不依赖服务推断。源镜状态为 `kf_ready/clip_ready/approved`；已 kf_selected 的源状态在核对版本中会被拒绝。视频返工需要有效的选定关键帧。新版将整期回到相应审核态并保留其他镜头；keyframe 返工支持从 done 或 clip_review 返回 kf_review，video 返工支持从 done 返回 clip_review。其它状态组合以服务校验为准，不伪造 rejected 或 failed 解锁。
-
-失败镜头手工重试（部署扩展）：
-
-```http
-POST /api/episodes/<id>/shots/<no>/retry
-Content-Type: application/json
-
-{"row_version":7,"regen_stage":"keyframe"}
-```
-
-要求镜为 failed；keyframe 要求期为 keyframing/kf_review，video 要求 clipping/clip_review 且有有效已选关键帧。服务创建新任务；不自动调用，不用于生成中任务，不在不支持的实例上用 `/regen` 替代。
-
-重新合成：`POST /api/episodes/<id>/recompose`，body `{"row_version":7}`。调研源码 `196fe48` 支持 done；部署扩展还支持合成 failed 且所有镜 approved、有 clip。仅入队 compose，不重跑图片或视频。不能用修改 status 的 PATCH 代替入队。
-
-无配乐（部署扩展）：用户选择后 `PATCH /api/episodes/<id>`：
-
-```json
-{"row_version":7,"patch":{"music":{"file":"missing.mp3","bpm":120,"license":"licensed","enabled":false}}}
-```
-
-music 是整体对象替换，示例假设原期已有这份合法配乐对象但文件不可用；实际保留读取到的完整 music，只改 enabled。成功后使用新版本提交 recompose；不支持持久化 enabled 的实例不得使用此扩展。
-
-调研源码 `196fe48` 的校验器要求非空 music.file，初始 `{file:"",bpm:0,license:""}` 的 PATCH 会被拒绝，即使 compose 支持 enabled=false。遇到这种空对象，须有已核对的目标版本校验支持才能保存无配乐选择；否则报告版本限制，交维护者处理。不能捏造文件名来通过校验。缺音乐与素材不足是不同失败，不能把关闭音乐当通用修复。
-
-上述写入成功均为 200 `{"ok":true,"row_version":8}`。
+`PATCH /api/episodes/<id>` `{"row_version":7,"patch":{"render":{…}}}`，只允许改 `render` 和 `music`，且仅在 `compose_ready` 或 `done`。`render.res/fps/ai_label` 不可改；`intro` 只能是 `null` 或 `intro/kelvoy_open.mp4`，`outro` 只能是 `null` 或 `outro/kelvoy_close.mp4`；`title` 过内容审核。`music` 要么是空对象 `{"file":"","bpm":0,"license":""}`，要么是曲库内一条完整记录。没有关闭配乐的开关，`music` 为空时服务按 tone 自动选曲。
 
 ## 文件与分享
 
 | 内容 | URL |
 | --- | --- |
 | 审片页面 | `/episodes/<id>` |
-| 期内图片／片段／成片 | `/api/episodes/<id>/files/<key>`，需该作品所属用户会话 |
-| 角色／地标参考图 | `/api/assets/<key>`，角色资产按归属保护 |
-| 成片文件约定 | key 为 `final/<episode_id>.mp4`，来自 DoneView 与 share 路由，不是 Episode 的新字段 |
+| 期内文件 | `GET /api/episodes/<id>/files/<key>`，需所属用户会话 |
+| 角色／地标参考图 | `/api/assets/<key>` |
+| 成片 | key 取 `episode.final.key`（形如 `final/<id>_v<n>.mp4`），只在 `done` 时可取，重新合成期间旧成片不可取 |
 
-文件 key 来自当前作品字段或核对过的成片约定。不要给相对 key 重复加 `projects/<id>`。成功是二进制文件响应，不是 `{ok:true}`；检查 HTTP 状态、内容类型与实际内容，200 HTML 登录页不能当视频。下载到用户指定的 Git 外目录；用 ffprobe 检查时长、尺寸、帧率和元数据，画面查看 AI 标识。
+`episode.final` 带 `version`、`duration_s`、`width`、`height`、`fps`、`size_bytes`、`completed_at`。别猜 key，也别给相对 key 重复加 `projects/<id>`。文件响应是二进制，检查 HTTP 状态、content-type 与内容；200 HTML 登录页不是视频。
 
-用户明确要求分享后：`POST /api/episodes/<id>/share`，body `{"row_version":7,"enabled":true}`，成功返回 `{"ok":true,"row_version":8,"slug":"…"}`。页面 `/s/<slug>`；公共文件 `/api/share/<slug>/final.mp4`；不需要登录。不要把受保护的下载链接描述为公开分享链接。
+分享：`POST /api/episodes/<id>/share` `{"row_version":7,"enabled":true}` → `{"ok":true,"row_version":8,"slug":"…"}`。公开页 `/s/<slug>`，公开成片 `/api/share/<slug>/final.mp4`。关闭分享后 slug 保留，再开启仍是同一个。受保护的下载链接不是公开分享链接。
 
 ## 错误与请求结果不明
 
 | 情况 | 应对 |
 | --- | --- |
-| 401 unauthorized／invalid_credentials | 暂停并引导登录，不创建账号或重置密码 |
-| 404 not_found | 可能是对象、归属或接口版本问题；核对契约，不泄露其他用户对象 |
-| 400 errors／invalid_body／script_rule_violation | 展示服务具体校验，不绕过规则 |
-| 409 version_conflict | 响应含 current_row_version；重新 GET，比较目标镜与阶段再决定 |
-| 409 persona_turnaround_required | 引导角色页；不能按版本冲突重试建期 |
-| 501 not implemented | 该执行版本不具备能力；说明限制 |
-| 5xx、超时、断网、非 JSON API 响应 | 记录动作与 ID，先读状态；不盲目重发写请求 |
+| 401 `unauthorized`／`invalid_credentials` | 暂停并引导登录，不创建账号或重置密码 |
+| 402 `insufficient_credits` | 见「积分」 |
+| 404 `not_found` | 对象缺失、不属于当前用户或接口不存在；不泄露他人对象 |
+| 400 `errors`／`invalid_body`／`invalid_row_version` | 请求形状有误，修正后再发 |
+| 400 `invalid_public_patch`／`illegal_transition`／`action_pending` | 当前阶段不允许，告诉用户，不绕过 |
+| 400 `script_rule_violation`／`content_blocked` | 展示 `violations`，让用户改 |
+| 409 `version_conflict` | 响应含 `current_row_version`；重新 GET，比较目标镜与阶段再决定 |
+| 5xx、超时、断网、非 JSON | 先读状态，不盲目重发写请求 |
 
-版本冲突例：`{"ok":false,"error":"version_conflict","current_row_version":9}`。不能只把 7 改成 9 就重放；镜序、候选和决定可能已变。
-
-建期成功响应丢失时用作品列表核对可能的新期；无法唯一确认就暂停。阶段改变或目标字段生效能支持“操作已执行”，但 GET 状态不变不足以证明队列未入队；必要时交维护者核对。读请求可重试，写操作不做隐式自动重试。
+版本冲突不能只把 7 改成 9 就重放，镜序、候选和用户的决定可能已变。写请求结果不明时：GET 作品，看预期变化（阶段改变、目标字段生效、`script_pending_task_id` 出现）是否已生效；状态不变不足以证明任务没入队，无法确认就暂停并交运维核对。建期没拿到 ID 时读作品列表，按创建时间、角色、目的地、模板、name 核对，多个匹配或仍不明时不再建期。读请求可重试，写请求不隐式重试。

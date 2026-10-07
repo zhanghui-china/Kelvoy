@@ -29,3 +29,13 @@
 真实验收依赖可访问实例、会话、已有素材与逐次人工审核；缺条件时交付静态／模拟结果并保留真实验收待办，不宣称端到端通过。未来有明确自动化失败证据时再评估辅助脚本或专用工具。
 
 发布前核对远端 main `3c34ceb` 已有 compose_ready、固定一秒剪辑等更新，首版契约明确限定为已核对旧部署 `c8ab053`，不能直接用于新版。发布通过远端 main 上的隔离分支整合，只提交 Skill 与文档；原本地业务修改和分叉历史不进入 PR。
+
+## 修订（2026-10-07）：契约跟随 main，删除旧部署兼容
+
+原决策里"首版契约限定已核对旧部署 `c8ab053`"不再成立。GX10 已切到 main `b19ee81`（见 `infra/dgx/gx10-8e22-main-deployment.md`），旧部署不再在线，继续在 Skill 里保留两套契约会让唯一可用的实例触发"遇新版先暂停"而无法使用。按 CLAUDE.md 原则 10，直接删除旧兼容。
+
+- **契约来源**：Skill 的 API 与流程描述以 GitHub main 为准，不再保留 `c8ab053`、`pacing_version`、`music.enabled`、单镜 `/retry`、`/recompose` 接受 failed 等旧部署内容。
+- **新增覆盖**：`compose_ready` 与固定一秒剪辑、积分预留与 402、期级 `/retry`、`/report-bad`、`/script/regenerate|optimize`、`/convert-cuts`、`video_source=references` 默认路径（无关键帧审核）、`episode.final` 成片元数据。积分仍由运维发放，Skill 不发放。
+- **证据不再随 Skill 发布**：原 API 参考里的证据等级表和提交号随旧契约一并删除。需要追溯时看对应 main 提交的 `apps/web/src/server/routes/` 与 `packages/engine/src/`，不在运行时文档里维护第二份版本史。
+- **版本探测**：`/api/health` 目前只返回 `{"status":"ok"}`。Skill 暂以 `GET /api/me` 响应是否含 `balance` 判断实例是否为 main 契约，不发写请求探测。给 health 或 me 增加明确的版本字段会改动对外 `/api/*` 契约，须另写 ADR，未决。
+- **不变**：Skill 仍只经公开 HTTP API 与会话执行，不直写 SQLite、不碰推理或 ComfyUI，三个审核点只能由用户决定；范围仍是已有角色、目的地、模板的单期生产。
