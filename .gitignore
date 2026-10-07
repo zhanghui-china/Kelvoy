@@ -18,6 +18,7 @@ __pycache__
 .codex-ppt-build/
 .chart-data-K8HPer/
 .chart-data-Mrb2c6/
+.gstack/
 projects/
 data/
 *.db
