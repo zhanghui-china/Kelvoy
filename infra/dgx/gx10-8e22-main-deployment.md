@@ -5,11 +5,21 @@ GX10 `gx10-8e22` 是用户指定的 Kelvoy 主要机器。地址为 `http://100.
 ## 当前发布
 
 - GitHub：`https://github.com/zhanghui-china/Kelvoy`，分支 `main`。
-- 提交：`b19ee8140eb5fbd6427690772872d529cd33c0ff`。
+- 提交：`a3f69884e397eeb1504823c86e02950de190e3af`（2026-10-07 自首次切换的 `b19ee8140eb5fbd6427690772872d529cd33c0ff` 增量更新，见下）。
 - 代码目录：`/home/huntun/kelvoy-releases/main-20261007`，部署工作区干净。
 - Web、Worker、Inference 使用原 systemd 用户服务，通过 `90-main-release.conf` drop-in 指向新发布目录。
 - 数据库保持 `/home/huntun/kelvoy/apps/web/data/kelvoy.db`，素材保持 `/home/huntun/kelvoy/apps/web/projects`。
 - 沿用原受保护配置文件及 Worker 的完整 ffmpeg 工具路径、中文字体配置；未变更其他项目服务。
+
+## 增量更新：a3f6988（2026-10-07）
+
+在同一发布目录 `git merge --ff-only` 到 `a3f6988`，只重启 `kelvoy-web`，未新建发布目录，未动 Worker 和 Inference。
+
+- 运行时代码变化仅 `GET /api/me` 增加 `api_contract`（常量 `API_CONTRACT`，当前 1）；其余为文档、skill 和 ADR 重编号。无依赖、数据库迁移或 unit 文件变化，因此没有 `bun install`，也没有备份数据库。
+- Worker 进程内存里仍是 `b19ee81` 的代码；它未使用新常量，两者行为一致，下次正常重启后与磁盘对齐。
+- 验证：三个服务 active；`/api/health` 200（本机和 Tailscale 均通过）；匿名 `/api/me` 401 且不含 `api_contract`；重启后一分钟内无 warning 级日志。已登录状态下 `api_contract` 的实际值未在线验证，仅有本地测试覆盖。
+- 回退：该目录 `git checkout --detach b19ee81`，再 `systemctl --user restart kelvoy-web`。此更新不涉及数据库，回退不丢数据。
+- 本地检查：五个 TS 包类型检查通过，Bun 679 项通过，pytest 64 项通过。
 
 ## 备份与回退
 
