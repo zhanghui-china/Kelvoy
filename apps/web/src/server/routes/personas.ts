@@ -2,7 +2,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { validateCreatePersonaRequest, validatePersonaPatchRequest } from "@kelvoy/engine";
 import type { Persona } from "@kelvoy/engine";
-import { appendPersonaRefs, getPersona, insertPersona, listPersonas, updatePersona } from "@kelvoy/store";
+import { appendPersonaRefs, deletePersona, getPersona, insertPersona, listPersonas, updatePersona } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 
@@ -45,6 +45,16 @@ personas.patch("/:id", async (c) => {
   const updated = await updatePersona(personaId, result.value);
   if (!updated.ok) return c.json({ ok: false, error: updated.error }, 404);
   return c.json({ ok: true, persona: updated.persona });
+});
+
+personas.delete("/:id", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body || !Number.isSafeInteger(body.version) || body.version < 1) {
+    return c.json({ ok: false, error: "invalid_version" }, 400);
+  }
+  const result = await deletePersona(c.req.param("id"), c.get("ownerId"), body.version);
+  if (!result.ok) return c.json(result, result.error === "version_conflict" ? 409 : 404);
+  return c.json(result);
 });
 
 // 参考图落盘路径，和 apps/web/src/server/routes/episodes.ts 的

@@ -42,9 +42,9 @@ function migrateLegacyCatalogVersions(database: Database): void {
     if (owner?.notnull) {
       database.exec(`create table personas_new (
         persona_id text primary key, owner_id text, version integer not null default 1,
-        doc text not null, updated_at text not null default (datetime('now'))
+        doc text not null, updated_at text not null default (datetime('now')), deleted_at text
       );
-      insert into personas_new select persona_id, owner_id, version, doc, updated_at from personas;
+      insert into personas_new select persona_id, owner_id, version, doc, updated_at, deleted_at from personas;
       drop table personas;
       alter table personas_new rename to personas;`);
     }

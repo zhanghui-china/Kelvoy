@@ -1,5 +1,5 @@
 import { join, relative, resolve, sep } from "node:path";
-import { getPersona, isPublishedDestinationAsset } from "@kelvoy/store";
+import { canReadPersonaAsset, isPublishedDestinationAsset } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 import { staysOnDiskPath } from "./file-path";
@@ -58,8 +58,7 @@ assets.get("/:path{.+}", async (c) => {
   // 拿它查归属。目的地是全局共享库（没有 owner_id），登录即可读。
   if (key.startsWith(PERSONA_PREFIX)) {
     const personaId = key.slice(PERSONA_PREFIX.length).split("/")[0];
-    const persona = personaId ? await getPersona(personaId) : null;
-    if (!persona || (persona.owner_id !== null && persona.owner_id !== c.get("ownerId"))) {
+    if (!personaId || !await canReadPersonaAsset(personaId, key, c.get("ownerId"))) {
       return c.json({ ok: false, error: "not_found" }, 404);
     }
   }

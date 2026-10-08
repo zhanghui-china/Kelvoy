@@ -9,6 +9,7 @@ import { getEpisode, insertEpisode, patchShot } from "./episodes";
 import { upsertDestination } from "./destinations";
 import { dequeueTask, enqueueTask } from "./tasks";
 import { createUser } from "./users";
+import { insertPersona, deletePersona } from "./personas";
 import { submitScriptAction } from "./script-actions";
 
 let ownerId = "";
@@ -17,6 +18,8 @@ beforeEach(async () => {
   const user = await createUser({ username: "owner", password_hash: "hash" });
   if (!user.ok) throw new Error("fixture user failed");
   ownerId = user.user.user_id;
+  await insertPersona({ persona_id: "p", owner_id: ownerId, version: 1, name: "测试角色",
+    desc: "", locked: [], default_outfit: "", refs: [], style: { lut: "", title_style: "" } });
 });
 afterEach(() => close());
 
@@ -351,4 +354,14 @@ test("direct reference shots can regenerate video without a keyframe, not images
   expect(submitShotRegeneration({ episode_id: done.episode_id, owner_id: ownerId,
     row_version: 1, shot_no: 1, stage: "video", report_bad: false }))
     .toEqual({ ok: true, row_version: 2, free: false });
+});
+
+test("creation rechecks persona after deletion before reserving credits or writing tasks", async () => {
+  grantCredits(ownerId, 2, "race-grant");
+  expect(await deletePersona("p", ownerId, 1)).toEqual({ ok: true });
+  expect(createEpisodeWithScriptTask(episode())).toEqual({ ok: false, error: "persona_not_found" });
+  expect(getCreditBalance(ownerId)).toEqual({ available: 2, reserved: 0 });
+  expect((await getEpisode("e_charge")).ok).toBe(false);
+  expect(await dequeueTask()).toBeNull();
+  expect(listCreditLedger(ownerId).map(entry => entry.kind)).toEqual(["grant"]);
 });

@@ -94,7 +94,7 @@ export function login(username: string, password: string) {
 }
 
 export function logout() {
-  return apiFetch<Record<string, never>>("/api/auth/logout", { method: "POST" });
+  return apiFetch<object>("/api/auth/logout", { method: "POST" });
 }
 
 export function getMe() {
@@ -124,7 +124,7 @@ export function updateMySettings(patch: UserSettings) {
 }
 
 export function changePassword(currentPassword: string, newPassword: string) {
-  return apiFetch<Record<string, never>>("/api/me/password", {
+  return apiFetch<object>("/api/me/password", {
     method: "POST",
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
@@ -140,6 +140,12 @@ export function createPersona(body: CreatePersonaRequest) {
   return apiFetch<{ persona: Persona }>("/api/personas", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export function deletePersona(personaId: string, version: number) {
+  return apiFetch<object>(`/api/personas/${encodeURIComponent(personaId)}`, {
+    method: "DELETE", body: JSON.stringify({ version }),
   });
 }
 
@@ -214,7 +220,7 @@ export function createTemplate(body: CreateTemplateBody) {
 }
 
 export function deleteTemplate(templateId: string) {
-  return apiFetch<Record<string, never>>(`/api/templates/${encodeURIComponent(templateId)}`, {
+  return apiFetch<object>(`/api/templates/${encodeURIComponent(templateId)}`, {
     method: "DELETE",
   });
 }

@@ -37,6 +37,7 @@ create table if not exists schema_migrations (
 );
 
 create table if not exists personas (
+  deleted_at text,
   persona_id text primary key,
   owner_id text,
   version integer not null default 1,
@@ -135,6 +136,7 @@ insert or ignore into credit_prices (kind, price) values
  * 无副作用（每次 open() 都会跑一遍）。
  */
 export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
+  { table: "personas", column: "deleted_at", ddl: "alter table personas add column deleted_at text" },
   { table: "tasks", column: "operation", ddl: "alter table tasks add column operation text" },
   { table: "tasks", column: "instruction", ddl: "alter table tasks add column instruction text" },
   { table: "tasks", column: "generation_id", ddl: "alter table tasks add column generation_id text" },

@@ -285,3 +285,50 @@ test("rejects non-image files", async () => {
   const body = (await res.json()) as { ok: boolean; error: string };
   expect(body.error).toBe("invalid_file_type");
 });
+
+test("delete requires an owned current version, is replayable and removes catalog and mutation access", async () => {
+  const owner = await login("delete_owner");
+  const other = await login("delete_other");
+  await insertPersona(fixture("c_delete", owner.ownerId));
+  await insertPersona({ ...fixture("c_official", owner.ownerId), owner_id: null });
+  const app = buildApp();
+  const remove = (id: string, version: unknown, cookie = owner.cookie) => app.request(`/api/personas/${id}`, {
+    method: "DELETE", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ version }),
+  });
+  expect((await app.request("/api/personas/c_delete", { method: "DELETE" })).status).toBe(401);
+  for (const version of [undefined, null, 0, -1, 1.5, "1"]) expect((await remove("c_delete", version)).status).toBe(400);
+  expect((await remove("c_delete", 1, other.cookie)).status).toBe(404);
+  expect((await remove("c_official", 1)).status).toBe(404);
+  expect((await remove("missing", 1)).status).toBe(404);
+  expect((await remove("c_delete", 2)).status).toBe(409);
+  expect((await remove("c_delete", 1)).status).toBe(200);
+  expect((await remove("c_delete", 1)).status).toBe(200);
+  expect(await getPersona("c_delete")).toBeNull();
+  const list = await (await app.request("/api/personas", { headers: { cookie: owner.cookie } })).json();
+  expect(list.personas.map((p: Persona) => p.persona_id)).toEqual(["c_official"]);
+  expect((await app.request("/api/personas/c_delete", { method: "PATCH", headers: { cookie: owner.cookie, "content-type": "application/json" }, body: JSON.stringify({ name: "revive" }) })).status).toBe(404);
+  const form = new FormData(); form.append("files", pngFile("new.png"));
+  expect((await app.request("/api/personas/c_delete/refs", { method: "POST", headers: { cookie: owner.cookie }, body: form })).status).toBe(404);
+});
+
+test("delete while upload is writing rejects append and removes newly written files", async () => {
+  const { deletePersona } = await import("@kelvoy/store");
+  const owner = await login("upload_race");
+  await insertPersona(fixture("c_race", owner.ownerId));
+  const originalWrite = Bun.write;
+  let deleted = false;
+  Bun.write = (async (...args: Parameters<typeof Bun.write>) => {
+    const result = await originalWrite(...args);
+    if (!deleted) {
+      deleted = true;
+      expect(await deletePersona("c_race", owner.ownerId, 1)).toEqual({ ok: true });
+    }
+    return result;
+  }) as typeof Bun.write;
+  try {
+    const form = new FormData(); form.append("files", pngFile("new.png"));
+    const res = await buildApp().request("/api/personas/c_race/refs", { method: "POST", headers: { cookie: owner.cookie }, body: form });
+    expect(res.status).toBe(404);
+    expect(await readdir(join(process.env.KELVOY_PROJECTS_ROOT!, "persona", "c_race"))).toEqual([]);
+  } finally { Bun.write = originalWrite; }
+});

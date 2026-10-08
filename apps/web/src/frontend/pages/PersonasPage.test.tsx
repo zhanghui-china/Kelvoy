@@ -15,6 +15,7 @@ test("official card is labeled and has no edit link", () => {
   const html = renderToStaticMarkup(<StaticRouter location="/personas"><PersonaCard persona={persona} /></StaticRouter>);
   expect(html).toContain("官方角色");
   expect(html).not.toContain("/edit");
+  expect(html).not.toContain("删除");
   expect(canEditPersona(persona)).toBe(false);
 });
 
@@ -22,5 +23,6 @@ test("private card retains its edit link and edit-page permission", () => {
   const privatePersona = { ...persona, persona_id: "c_private", owner_id: "u_owner" };
   const html = renderToStaticMarkup(<StaticRouter location="/personas"><PersonaCard persona={privatePersona} /></StaticRouter>);
   expect(html).toContain("/personas/c_private/edit");
+  expect(html).toContain("删除");
   expect(canEditPersona(privatePersona)).toBe(true);
 });

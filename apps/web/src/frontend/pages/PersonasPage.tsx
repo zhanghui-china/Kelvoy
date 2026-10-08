@@ -1,20 +1,32 @@
 import { filterPersonas, type PersonaSource } from "./resource-library";
 import "./ResourceLibrary.css";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Card, EmptyState, ErrorState, LoadingState, PageHeading, Status } from "../ui";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { Persona } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
 import { GuideTip } from "../GuideTip";
-import { listPersonas } from "../api/client";
+import { deletePersona, listPersonas } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
 import { canEditPersona } from "../persona-access";
+import { personaDeletion } from "./persona-deletion";
 
 // 跟 personas.ts 的 MIN_REFS 同值（M2-13, #41）——本地定义一份，跟
 // DestinationsPage.tsx 的 MIN_LANDMARK_REFS 一样，没有共享常量可 import。
 const MIN_REFS = 3;
 
-export function PersonaCard({ persona: p }: { persona: Persona }) {
+export function PersonaCard({ persona: p, onRefresh }: {
+  persona: Persona; onRefresh?: (message?: string) => void;
+}) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const remove = useMemo(() => personaDeletion({
+    name: p.name, confirm: message => window.confirm(message),
+    request: () => deletePersona(p.persona_id, p.version),
+    busy: setBusy, error: setError, refresh: message => onRefresh?.(message),
+    login: () => navigate("/login"),
+  }), [p.name, p.persona_id, p.version, onRefresh, navigate]);
   return (
     <Card className="k-persona-card">
       <div className="k-persona-refs">
@@ -57,9 +69,13 @@ export function PersonaCard({ persona: p }: { persona: Persona }) {
       <div className="k-library-use">
       <Link to={`/episodes/new?persona=${encodeURIComponent(p.persona_id)}`} className="k-btn k-btn-primary">使用角色</Link>
       {canEditPersona(p) && (
-        <Link to={`/personas/${p.persona_id}/edit`} className="k-btn k-btn-secondary">编辑</Link>
+        <>
+          <Link to={`/personas/${p.persona_id}/edit`} className="k-btn k-btn-secondary" aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>编辑</Link>
+          <button type="button" className="k-btn k-btn-secondary" disabled={busy} onClick={remove}>{busy ? "删除中…" : error ? "重试删除" : "删除"}</button>
+        </>
       )}
       </div>
+      {error && <p className="k-error" role="alert">{error}</p>}
     </Card>
   );
 }
@@ -67,6 +83,11 @@ export function PersonaCard({ persona: p }: { persona: Persona }) {
 export default function PersonasPage() {
   const [source, setSource] = useState<PersonaSource>("mine");
   const [attempt, setAttempt] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  const refresh = useCallback((message?: string) => {
+    setNotice(message ?? null);
+    setAttempt(value => value + 1);
+  }, []);
   const { loading, data, error } = useApiResource(listPersonas, [attempt]);
 
   if (loading) return <LoadingState />;
@@ -80,6 +101,7 @@ export default function PersonasPage() {
           新建角色
         </Link>
       </PageHeading>
+      {notice && <p role="status">{notice}</p>}
       <GuideTip section="personas">官方角色可直接用于新建一期。自己的角色建议用 3–7 张多视角参考图，锁定特征帮助跨期保持一致；编辑后版本号会更新。</GuideTip>
       <div className="k-library-source" role="group" aria-label="角色来源">
         {(["mine", "official"] as const).map(value => <button key={value} type="button" aria-pressed={source === value} className={`k-btn ${source === value ? "k-btn-primary" : "k-btn-secondary"}`} onClick={() => setSource(value)}>{value === "mine" ? "我的角色" : "官方角色"}</button>)}
@@ -90,7 +112,7 @@ export default function PersonasPage() {
         </EmptyState>
       ) : (
         <div className="k-persona-grid">
-          {personas.map((p) => <PersonaCard key={p.persona_id} persona={p} />)}
+          {personas.map((p) => <PersonaCard key={p.persona_id} persona={p} onRefresh={refresh} />)}
         </div>
       )}
     </div>

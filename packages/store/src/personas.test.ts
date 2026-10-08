@@ -92,6 +92,7 @@ test("opening an old database permits official personas and freezes referenced l
     old.query("insert into episodes (episode_id, owner_id, doc) values (?, ?, ?)").run("e_old", "u_1", JSON.stringify({ persona_id: "c_old", persona_version: 1 }));
     old.close();
     open(path);
+    expect(getDb().query<{ name: string }, []>("pragma table_info(personas)").all().some(column => column.name === "deleted_at")).toBe(true);
     const frozen = await getPersonaVersion("c_old", 1);
     expect(frozen?.version).toBe(1);
     expect(frozen?.name).toBe("小岛");
@@ -104,6 +105,13 @@ test("opening an old database permits official personas and freezes referenced l
     expect(await getPersonaVersion("c_old", 1)).toEqual(frozen);
     await insertPersona({ ...fixture("c_official", "u_1"), owner_id: null });
     expect((await getPersona("c_official"))?.owner_id).toBeNull();
+    const { deletePersona } = await import("./personas");
+    expect(await deletePersona("c_old", "u_1", 4)).toEqual({ ok: true });
+    close();
+    open(path);
+    expect(await getPersona("c_old")).toBeNull();
+    expect(await getPersonaVersion("c_old", 1)).toEqual(frozen);
+    expect(await deletePersona("c_old", "u_1", 4)).toEqual({ ok: true });
   } finally {
     close();
     rmSync(dir, { recursive: true, force: true });
@@ -118,4 +126,26 @@ test("official upsert owns versions, is idempotent, and refuses a private ID", a
   expect((await getPersonaVersion("c_official", 1))?.name).toBe("小岛");
   await insertPersona(fixture("c_private", "u_1"));
   await expect(upsertOfficialPersona({ ...raw, persona_id: "c_private" })).rejects.toThrow();
+});
+
+test("delete fences owner and version, preserves history and rejects later writes", async () => {
+  const { deletePersona, appendPersonaRefs, canReadPersonaAsset } = await import("./personas");
+  const original = fixture("c_delete", "u_1");
+  original.refs = ["persona/c_delete/front.png"];
+  await insertPersona(original);
+  await insertPersona({ ...fixture("c_official", "u_1"), owner_id: null });
+  expect(await deletePersona("c_delete", "u_2", 1)).toEqual({ ok: false, error: "not_found" });
+  expect(await deletePersona("c_official", "u_1", 1)).toEqual({ ok: false, error: "not_found" });
+  await updatePersona("c_delete", { name: "new" });
+  expect(await deletePersona("c_delete", "u_1", 1)).toEqual({ ok: false, error: "version_conflict" });
+  expect(await deletePersona("c_delete", "u_1", 2)).toEqual({ ok: true });
+  expect(await deletePersona("c_delete", "u_1", 2)).toEqual({ ok: true });
+  expect(await getPersona("c_delete")).toBeNull();
+  expect((await listPersonas("u_1")).map(p => p.persona_id)).toEqual(["c_official"]);
+  expect(await getPersonaVersion("c_delete", 1)).toEqual(original);
+  expect(await updatePersona("c_delete", { name: "revived" })).toEqual({ ok: false, error: "not_found" });
+  expect(appendPersonaRefs({ persona_id: "c_delete", owner_id: "u_1", refs: [], min: 0, max: 7 })).toEqual({ ok: false, error: "not_found" });
+  expect(await canReadPersonaAsset("c_delete", original.refs[0]!, "u_1")).toBe(true);
+  expect(await canReadPersonaAsset("c_delete", original.refs[0]!, "u_2")).toBe(false);
+  expect(await canReadPersonaAsset("c_delete", "persona/c_delete/untracked.png", "u_1")).toBe(false);
 });

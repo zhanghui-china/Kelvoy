@@ -13,7 +13,7 @@ interface PersonaRow {
 
 function readPersona(personaId: string): Persona | null {
   const row = getDb()
-    .query<PersonaRow, [string]>("select doc from personas where persona_id = ?")
+    .query<PersonaRow, [string]>("select doc from personas where persona_id = ? and deleted_at is null")
     .get(personaId);
   return row ? (JSON.parse(row.doc) as Persona) : null;
 }
@@ -42,7 +42,7 @@ export async function getPersona(personaId: string): Promise<Persona | null> {
 
 export async function listPersonas(ownerId: string): Promise<Persona[]> {
   const rows = getDb()
-    .query<PersonaRow, [string]>("select doc from personas where owner_id = ? or owner_id is null order by persona_id")
+    .query<PersonaRow, [string]>("select doc from personas where deleted_at is null and (owner_id = ? or owner_id is null) order by persona_id")
     .all(ownerId);
   return rows.map((row) => JSON.parse(row.doc) as Persona);
 }
@@ -119,4 +119,33 @@ export async function upsertOfficialPersona(input: Persona): Promise<{ persona: 
       .run(next.persona_id, next.version, doc);
     return { persona: next, changed: true };
   }).immediate();
+}
+
+/** Keep the catalog revision unchanged so exact delete retries stay idempotent. */
+export async function deletePersona(personaId: string, ownerId: string, version: number):
+  Promise<{ ok: true } | { ok: false; error: "not_found" | "version_conflict" }> {
+  const database = getDb();
+  return database.transaction(() => {
+    const row = database.query<{ owner_id: string | null; version: number }, [string]>(
+      "select owner_id, version from personas where persona_id = ?",
+    ).get(personaId);
+    if (!row || row.owner_id !== ownerId) return { ok: false, error: "not_found" } as const;
+    if (row.version !== version) return { ok: false, error: "version_conflict" } as const;
+    database.query("update personas set deleted_at = coalesce(deleted_at, datetime('now')) where persona_id = ?")
+      .run(personaId);
+    return { ok: true } as const;
+  }).immediate();
+}
+
+/** Historical references remain readable by their owner after catalog deletion. */
+export async function canReadPersonaAsset(personaId: string, key: string, ownerId: string): Promise<boolean> {
+  const database = getDb();
+  const row = database.query<{ owner_id: string | null }, [string]>(
+    "select owner_id from personas where persona_id = ?",
+  ).get(personaId);
+  if (!row || (row.owner_id !== null && row.owner_id !== ownerId)) return false;
+  return database.query<{ found: number }, [string, string]>(
+    `select 1 as found from persona_versions v, json_each(v.doc, '$.refs') r
+     where v.persona_id = ? and r.value = ? limit 1`,
+  ).get(personaId, key) !== null;
 }

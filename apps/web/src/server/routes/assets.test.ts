@@ -175,3 +175,21 @@ test("resolveAssetPath keeps a legitimate key under the projects root", () => {
   expect(path).not.toBeNull();
   expect(path?.endsWith(join("projects", "dest", "lingshan", "buddha_01.jpg"))).toBe(true);
 });
+
+test("deleted persona historical photos remain accessible only to the owner", async () => {
+  const { deletePersona, updatePersona } = await import("@kelvoy/store");
+  const owner = await login("history_owner");
+  const other = await login("history_other");
+  const persona = personaFixture("c_history", owner.ownerId);
+  await insertPersona(persona);
+  await writeAsset(persona.refs[0]!, "historical-photo");
+  await updatePersona(persona.persona_id, { refs: ["persona/c_history/new.png"] });
+  expect(await deletePersona(persona.persona_id, owner.ownerId, 2)).toEqual({ ok: true });
+  const app = buildApp();
+  const owned = await app.request(`/api/assets/${persona.refs[0]}`, { headers: { cookie: owner.cookie } });
+  expect(owned.status).toBe(200);
+  expect(await owned.text()).toBe("historical-photo");
+  expect((await app.request(`/api/assets/${persona.refs[0]}`, { headers: { cookie: other.cookie } })).status).toBe(404);
+  await writeAsset("persona/c_history/untracked.png", "private-untracked");
+  expect((await app.request("/api/assets/persona/c_history/untracked.png", { headers: { cookie: owner.cookie } })).status).toBe(404);
+});

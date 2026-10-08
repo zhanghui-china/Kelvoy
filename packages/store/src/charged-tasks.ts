@@ -44,8 +44,14 @@ export function prepareTaskShot(task: Task, rowVersion: number, status: ShotStat
 }
 
 export function createEpisodeWithScriptTask(episode: Episode):
-  { ok: true; task_id: string } | { ok: false; error: "insufficient_credits" | "not_found" } {
+  { ok: true; task_id: string } | { ok: false; error: "insufficient_credits" | "not_found" | "persona_not_found" } {
   return getDb().transaction(() => {
+    const persona = getDb().query<{ owner_id: string | null }, [string]>(
+      "select owner_id from personas where persona_id = ? and deleted_at is null",
+    ).get(episode.persona_id);
+    if (!persona || (persona.owner_id !== null && persona.owner_id !== episode.owner_id)) {
+      return { ok: false, error: "persona_not_found" } as const;
+    }
     const taskId = `tk_${crypto.randomUUID()}`;
     const scriptTaskId = `tk_script_${episode.episode_id}`;
     const reserved = reserveCredits({ action_id: scriptTaskId, user_id: episode.owner_id,
