@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, test, expect } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { rmSync } from "node:fs";
 import type { Episode } from "@kelvoy/engine";
 import { open, close, getDb } from "./db";
 import { insertEpisode, getEpisode } from "./episodes";
@@ -64,7 +67,9 @@ function fixtureEpisode(id: string, ownerId = "u_test"): Episode {
   };
 }
 
-beforeEach(()=>open(":memory:")); afterEach(()=>close());
+const temporaryDatabases: string[] = [];
+beforeEach(()=>open(":memory:"));
+afterEach(() => { close(); for (const path of temporaryDatabases.splice(0)) for (const suffix of ["", "-wal", "-shm"]) rmSync(path + suffix, { force: true }); });
 test("owner/version and held task checks share the edit transaction",async()=>{
  const ep=fixtureEpisode("ep");ep.status="script_review";await insertEpisode(ep);
  const loaded=await getEpisode("ep");if(!loaded.ok)throw Error("missing");
@@ -102,14 +107,14 @@ test("concurrent writes using one version have exactly one winner",async()=>{
  expect(results.filter(result=>result.ok)).toHaveLength(1);expect(results.filter(result=>!result.ok)).toHaveLength(1);
 });
 test("identity migration preserves minimal historical documents across reopen",()=>{
- const path=`/private/tmp/kelvoy-identity-${crypto.randomUUID()}.db`;
+ const path=join(tmpdir(),`kelvoy-identity-${crypto.randomUUID()}.db`);temporaryDatabases.push(path);
  const original={episode_id:"partial",owner_id:"u",persona_id:"missing",persona_version:1,destination_id:"missing",destination_version:1};
  const db=open(path);db.query("insert into episodes(episode_id,owner_id,doc) values(?,?,?)").run("partial","u",JSON.stringify(original));close();
  const reopened=open(path);const row=reopened.query<{doc:string},[]>("select doc from episodes where episode_id='partial'").get();expect(JSON.parse(row!.doc)).toEqual(original);close();
  const again=open(path);const repeat=again.query<{doc:string},[]>("select doc from episodes where episode_id='partial'").get();expect(JSON.parse(repeat!.doc)).toEqual(original);
 });
 test("migration freezes seven legacy shot/task identities and leaves all media keys unchanged",()=>{
- const path=`/private/tmp/kelvoy-identity-${crypto.randomUUID()}.db`;const db=open(path);const ep=fixtureEpisode("ep");
+ const path=join(tmpdir(),`kelvoy-identity-${crypto.randomUUID()}.db`);temporaryDatabases.push(path);const db=open(path);const ep=fixtureEpisode("ep");
  ep.shots=Array.from({length:7},(_,i)=>({...ep.shots[0],no:i+1,clip:`clip/${i+1}.mp4`,candidates:[`kf/${i+1}.png`]}));
  ep.removed_shots=[{...ep.shots[0],no:8,clip:"clip/historical.mp4"}];
  db.query("insert into episodes(episode_id,owner_id,doc) values(?,?,?)").run("ep","u",JSON.stringify(ep));
