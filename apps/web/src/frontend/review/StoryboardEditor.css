@@ -1,0 +1,8 @@
+.k-storyboard { margin: 20px 0; }
+.k-storyboard-list { display: grid; gap: 12px; margin: 16px 0; }
+.k-storyboard-card { overflow-wrap: anywhere; }
+.k-storyboard-card[draggable="true"] { cursor: grab; }
+.k-storyboard-card details { margin: 12px 0; }
+.k-storyboard-form { border: 1px dashed var(--k-border, #bbb); padding: 16px; margin: 12px 0; }
+.k-storyboard-form fieldset { min-width: 0; border: 0; padding: 0; margin: 0 0 12px; }
+.k-storyboard-form legend { font-weight: 600; margin-bottom: 8px; }

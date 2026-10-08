@@ -8,6 +8,7 @@ export interface EpisodeMutation {
   pending: boolean;
   error: string | null;
   clearError: () => void;
+  refresh?: () => void;
   /**
    * 跑一次写请求：自动带上当前 row_version，成功后立刻重新拉一次期数据，
    * 401 跳登录，409 提示"期已被更新，正在刷新"并重新拉取。返回原始结果，
@@ -68,5 +69,5 @@ export function useEpisodeMutation(episodeId: string, rowVersion: number, refres
   );
 
   const clearError = useCallback(() => setError(null), []);
-  return { pending, error, clearError, run };
+  return { pending, error, clearError, refresh, run };
 }

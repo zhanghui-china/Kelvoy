@@ -65,8 +65,10 @@ function KeyframeShot({
       if (!patched) return;
       if (!patched.ok) {
         setError(describeWriteError(patched));
-        return; // prompt 没写进去就不该重生成，否则用的还是旧 prompt
+        return; // Preserve the form when the save fails.
       }
+      setPromptOpen(false);
+      return; // Editing reopens script review; generation is an explicit next action.
     }
     const result = await mutation.run((rowVersion) =>
       regenShot(episode.episode_id, shot.no, rowVersion, "keyframe"),
@@ -136,7 +138,7 @@ function KeyframeShot({
           disabled={episode.status !== "kf_review"}
           onClick={() => setPromptOpen(!promptOpen)}
         >
-          {promptOpen ? "收起 prompt" : "改 prompt 并重生成"}
+          {promptOpen ? "收起 prompt" : "修改画面描述"}
         </button>
         <button
           type="button"
@@ -161,7 +163,7 @@ function KeyframeShot({
               disabled={mutation.pending || episode.status !== "kf_review" || !canRegen(shot)}
               onClick={() => regenerate(true)}
             >
-              保存 prompt 并重生成
+              保存修改，返回脚本审核
             </button>
           </div>
         </div>
@@ -217,7 +219,7 @@ export default function KeyframeReview({
           )}
         </div>
 
-        <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；全部生成完毕后可改 prompt 并重生成。</GuideTip>
+        <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；全部生成完毕后可修改画面描述，保存后在脚本审核继续。</GuideTip>
 
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />

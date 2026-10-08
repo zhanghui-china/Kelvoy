@@ -1,5 +1,6 @@
 import type { Episode, Task } from "@kelvoy/engine";
 import { getDb } from "./db";
+import { storyboardBusy } from "./storyboard";
 import { reserveCredits } from "./credits";
 
 export type ScriptActionResult =
@@ -25,7 +26,7 @@ export function submitScriptAction(input: {
     }
     const episode = JSON.parse(row.doc) as Episode;
     if (episode.status !== "script_review") return { ok: false, error: "illegal_transition" } as const;
-    if (episode.script_pending_task_id) return { ok: false, error: "action_pending" } as const;
+    if (episode.script_pending_task_id || storyboardBusy(input.episode_id)) return { ok: false, error: "action_pending" } as const;
     const taskId = `tk_${crypto.randomUUID()}`;
     const reserved = reserveCredits({ action_id: taskId, user_id: input.owner_id,
       episode_id: input.episode_id, task_id: taskId, kind: "script", units: 1 });

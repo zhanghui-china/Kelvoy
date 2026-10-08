@@ -95,6 +95,7 @@ const RETRY_TARGETS: GeneratingEpisodeStatus[] = [
  * re-deriving the event itself.
  */
 export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatus): boolean {
+  if (from === "script_review" && ["kf_review", "clipping", "clip_review", "compose_ready"].includes(to)) return true;
   const events: EpisodeEvent[] = [
     { type: "advance" },
     { type: "skip_keyframes" },
@@ -114,12 +115,12 @@ export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatu
   });
 }
 
-/** Review 1 (FR-02): the floor below which a script may not be cut. */
+/** Suggested minimum for AI scripts; manual scripts may be shorter. */
 export const MIN_SHOTS = 24;
 
 /**
  * Deletes a shot at review 1 — moves it from `shots` into `removed_shots`
- * rather than discarding it, and enforces the MIN_SHOTS floor (PRD v0.2 §4).
+ * rather than discarding it. Manual scripts may contain any number of shots.
  * Returns a new Episode; does not mutate the input.
  */
 export function removeShot(episode: Episode, shotNo: number): Episode {
@@ -129,11 +130,6 @@ export function removeShot(episode: Episode, shotNo: number): Episode {
   const shot = episode.shots.find((s) => s.no === shotNo);
   if (!shot) {
     throw new Error(`shot ${shotNo} not found in episode ${episode.episode_id}`);
-  }
-  if (episode.shots.length - 1 < MIN_SHOTS) {
-    throw new Error(
-      `cannot remove shot ${shotNo}: episode would drop below the ${MIN_SHOTS}-shot floor`,
-    );
   }
   return {
     ...episode,

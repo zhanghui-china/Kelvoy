@@ -1,5 +1,5 @@
 /** A stable seed per task and candidate makes retries reproducible. */
-export function generationSeed(generationId: string, shotNo: number, kind: "image" | "video"): number {
+export function generationSeed(generationId: string, shotNo: number | string, kind: "image" | "video"): number {
   const text = `${generationId}:${shotNo}:${kind}`;
   let hash = 2166136261;
   for (let i = 0; i < text.length; i++) {

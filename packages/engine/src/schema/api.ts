@@ -13,8 +13,10 @@ export interface Task {
   episode_id: string;
   stage: StageName;
   shot_no?: number;
+  shot_id?: string;
+  payload_json?: string;
   attempt: number;
-  operation?: "script_regenerate" | "script_optimize";
+  operation?: "script_regenerate" | "script_optimize" | "shot_suggest";
   instruction?: string;
   lease_token?: string;
   generation_id?: string;
@@ -151,6 +153,6 @@ export interface ChangePasswordRequest {
  * whenever an existing `/api/*` request or response shape changes in a way a
  * client written against the previous number would break on; purely additive
  * fields do not need a bump. 1 = credits + compose_ready + fixed_1s flow
- * (main b19ee81). Deliberately not on /api/health: that route is anonymous.
+ * (main b19ee81). 2 = stable storyboard editing and selective resume. Deliberately not on /api/health: that route is anonymous.
  */
-export const API_CONTRACT = 1;
+export const API_CONTRACT = 2;

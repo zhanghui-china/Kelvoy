@@ -17,7 +17,9 @@ test("script review exposes two columns, CSV export, and existing review actions
   expect(html).toMatch(/aria-pressed="false"[^>]*>故事板视图<\/button>/);
   expect(html).toContain("脚本助手");
   expect(html).toContain("继续 → 用人物与场景生成视频");
-  expect(html).toContain("下限 24 镜");
+  expect(html).toContain("镜头数量自由");
+  expect(html).toContain("在开头添加一镜");
+  expect(html).toContain("在末尾添加一镜");
 });
 
 test("pending script revision keeps actions disabled and preserves error notice", () => {

@@ -38,6 +38,8 @@ export default function DoneView({
   return (
     <section className="k-desk-main">
       <div className="k-card-title">成片 · {episode.render.title || episode.name}</div>
+      {(episode as Episode & { final_needs_recompose?: boolean }).final_needs_recompose &&
+        <p role="status">分镜已修改，当前为上一版成片；下载与分享保留上一版，重新合成后更新。</p>}
       <GuideTip section="deliver">先完整播放成片，再下载或开启分享链接。</GuideTip>
       <div className="k-delivery-preview">
         <video className="k-media k-desk-final" style={{ aspectRatio }} src={url} controls aria-label="成片" />

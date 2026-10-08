@@ -1,6 +1,6 @@
 # Kelvoy API 参考
 
-本文对应 `api_contract` **1**（GitHub main，GX10 部署于 `b19ee81`）。`GET /api/me` 返回 `api_contract`：不是 1（更大）或缺失（旧实例）都停止并告知用户，不要凭记忆继续。`/api/health` 匿名，没有版本字段。不用写请求去探测。
+本文对应 `api_contract` **2**（自由分镜与按稳定身份继续生成）。`GET /api/me` 返回 `api_contract`：不是 2（不同）或缺失（旧实例）都停止并告知用户，不要凭记忆继续。`/api/health` 匿名，没有版本字段。不用写请求去探测。
 
 ## 传输与会话
 
@@ -20,7 +20,7 @@ POST /api/auth/login
 | 请求 | 响应要点 |
 | --- | --- |
 | `GET /api/health` | `{"status":"ok"}`，只证明 Web 可达 |
-| `GET /api/me` | `{"ok":true,"user":{…},"balance":{"available":N,"reserved":N},"api_contract":1}`，验证会话、读积分余额、读契约版本 |
+| `GET /api/me` | `{"ok":true,"user":{…},"balance":{"available":N,"reserved":N},"api_contract":2}`，验证会话、读积分余额、读契约版本 |
 | `GET /api/me/credits` | `{"ok":true,"balance":{…},"ledger":[…]}`，流水 |
 | `GET /api/personas` `/destinations` `/templates` | `{"ok":true,"<复数名>":[…]}` |
 | `GET /api/episodes` | `{"ok":true,"episodes":[…]}`，用于续跑和建期结果核对 |
@@ -70,11 +70,11 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 | `kf_review` | `kf_selected`、`status`（仅 `kf_selected`）、`kf_prompt`、`motion_prompt` |
 | `keyframing` | `kf_selected`、`status` |
 | `clip_review` | `trim_start_s`、`status`（仅 `approved`，且镜为 `clip_ready`） |
-| 其他（含 `done`） | 不可改 |
+| 其他已生成脚本且队列空闲的阶段（含 `done`） | 使用稳定 ID 分镜接口编辑内容；保存后回 `script_review` |
 
 `size`=`wide/medium/close/detail/pov`；`camera`=`static/pan/push/follow`；`landmark` 为目的地地标 ID 或 `null`，必须存在于该期快照的地标里。`kf_selected` 必须属于该镜 `candidates`，选图时同时写 `"status":"kf_selected"`（镜为 `kf_ready`）；已是 `kf_selected` 换图只写 `kf_selected`。`fixed_1s` 下 `trim_start_s` 会被服务对齐到 1/30 秒。文本字段过内容审核，命中返回 400 `content_blocked`。
 
-**prompt 只能在 `script_review` 和 `kf_review` 改，`references` 模式只剩 `script_review`。** `clip_review`／`done` 阶段无法改 prompt，`/regen` 只会用已有 prompt 重做。
+队列空闲时，可在任何已生成脚本的阶段用稳定 ID 分镜接口修改 prompt；修改使相关素材失效并返回脚本审核。`/regen` 使用当前保存的 prompt。
 
 ### 脚本动作（仅 `script_review`）
 
@@ -82,10 +82,10 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 | --- | --- |
 | 整体重写脚本 | `POST /api/episodes/<id>/script/regenerate` `{"row_version":7}` |
 | 按意见优化脚本 | `POST /api/episodes/<id>/script/optimize` `{"row_version":7,"instruction":"…"}`，instruction 1–500 字 |
-| 删镜头 | `POST /api/episodes/<id>/shots/<no>/remove` `{"row_version":7}`，不能低于 24 镜 |
+| 删镜头 | `POST /api/episodes/<id>/shots/<no>/remove` `{"row_version":7}`，兼容镜号接口，允许清空 |
 | 重排 | `POST /api/episodes/<id>/shots/reorder` `{"row_version":7,"order":[…全部现有镜号…]}` |
 
-脚本动作返回 `{"ok":true,"row_version":8,"task_id":"…"}`，是异步任务。处理期间所有写操作返回 400 `action_pending`，只观察，完成后重新读作品。删镜和重排会重跑脚本规则，违规整单驳回：400 `script_rule_violation`，`violations` 带原因。规则：24–30 镜、同景别不连续超过 2 镜、至少 5 个地标镜、地标引用有效。
+脚本动作返回 `{"ok":true,"row_version":8,"task_id":"…"}`，是异步任务。处理期间所有写操作返回 400 `action_pending`，只观察，完成后重新读作品。删镜和重排是同步手工修改，不返回 task_id，不限制镜头数量。同景别连续和地标镜数量仅提示；地标引用仍必须有效。新编辑流程使用下文稳定 ID 接口，生成队列非空返回 409 `action_pending`。
 
 ### 继续
 
@@ -142,7 +142,7 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 
 ## 共享目的地与私有草稿
 
-目的地列表仍返回 `destinations`，包含官方和用户公开发布的共享资源。新增 `creator_id` 缺省／null 表示官方；用户 ID 表示创建者。这是兼容的新增能力，`api_contract` 保持 1。只有发布后的目的地可用于建期，旧期冻结的版本不随目录更新。公共图片和 `/api/assets/dest/...` 只接受已发布版本引用；未发布照片由创建者草稿接口读取。
+目的地列表仍返回 `destinations`，包含官方和用户公开发布的共享资源。新增 `creator_id` 缺省／null 表示官方；用户 ID 表示创建者。这是兼容的新增能力，当时 `api_contract` 为 1；当前分镜契约升级为 2。只有发布后的目的地可用于建期，旧期冻结的版本不随目录更新。公共图片和 `/api/assets/dest/...` 只接受已发布版本引用；未发布照片由创建者草稿接口读取。
 
 本生产技能仍只使用已发布的目录，不自动创建、上传或发布素材。缺目的地时，引导用户在 `/destinations` 的“创建目的地”“我的草稿”完善地标实景照片并发布，完成后重新读取目录。目的地草稿操作不扣积分，建期仍可能返回 402。维护者的完整新增接口说明见仓库 `docs/api/destination-drafts.md`。
 
@@ -151,4 +151,17 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 
 角色库新增本人角色删除，采用软删除；`GET /api/personas` 不再列出已删除角色，新建一期不能选择它们。官方角色仍只读。已有期按冻结的 `persona_version` 读取保留的历史版本与照片，仍可继续生产；不要因角色在当前列表缺失而重新建角色或换掉旧期引用。
 
-维护接口 `DELETE /api/personas/:id` 接受 `{version}`：本人当前版本删除成功，同版本重试幂等；非本人／官方／不存在 404，版本过期 409 `version_conflict`。本生产技能仍不管理素材或主动删除角色；需要调整角色时引导用户在 `/personas` 操作。新增接口兼容现有生产契约，`api_contract` 保持 1。
+维护接口 `DELETE /api/personas/:id` 接受 `{version}`：本人当前版本删除成功，同版本重试幂等；非本人／官方／不存在 404，版本过期 409 `version_conflict`。本生产技能仍不管理素材或主动删除角色；需要调整角色时引导用户在 `/personas` 操作。新增接口兼容现有生产契约，当时 `api_contract` 为 1；当前分镜契约升级为 2。
+
+
+## 自由分镜（契约 2）
+
+读取期详情的 shot_id、row_version、storyboard_busy 和 storyboard_prices。手工编辑免费；单镜 AI 请求消耗一次 script 积分，先向用户展示报价，结果待用户确认，不自动插入。
+
+- `POST /api/episodes/:id/storyboard`：`{row_version,after_shot_id:null或已有ID,shot:{scene,size,beat,caption?,camera,landmark,kf_prompt,motion_prompt}}`。
+- `PATCH /api/episodes/:id/storyboard/:shotId`：`{row_version,patch}`，仅创作字段。
+- `POST /api/episodes/:id/storyboard/:shotId/remove`：`{row_version}`。
+- `POST /api/episodes/:id/storyboard/reorder`：`{row_version,order:[全部shot_id]}`。
+- `POST /api/episodes/:id/storyboard/suggestions`：`{row_version,after_shot_id,description,fields:已填写字段对象}`；轮询 `GET /api/episodes/:id/storyboard/suggestions/:taskId` 得到 pending/processing/done/failed 和 suggestion。只填缺失字段，不覆盖已填值。
+
+任一 held/pending/processing 任务阻止结构及内容修改。409 后重新展示最新镜序让用户确认，不自动重放。保存后回脚本审核，未受影响素材不重生成；删镜历史文件保留。final_needs_recompose 为 true 时下载／分享对应上一版，不能把它说成已应用新分镜的成片。

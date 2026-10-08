@@ -1,4 +1,5 @@
 import type { Episode, StageName, Task } from "@kelvoy/engine";
+import { decodeEpisode } from "./episode-codec";
 import { getDb } from "./db";
 
 /**
@@ -13,8 +14,10 @@ interface TaskRow {
   episode_id: string;
   stage: StageName;
   shot_no: number | null;
+  shot_id: string | null;
+  payload_json: string | null;
   attempt: number;
-  operation: "script_regenerate" | "script_optimize" | null;
+  operation: "script_regenerate" | "script_optimize" | "shot_suggest" | null;
   instruction: string | null;
   generation_id: string | null;
   lease_token: string | null;
@@ -23,24 +26,25 @@ interface TaskRow {
 export const TASK_LEASE_SECONDS = 90;
 
 export type RetryableFailure = {
-  task_id: string; stage: StageName; shot_no: number | null; generation_id: string | null;
+  task_id: string; stage: StageName; shot_no: number | null; shot_id: string | null; generation_id: string | null;
 };
 
 /** The same eligibility rule powers the retry mutation and the detail summary. */
 export function findRetryableFailedTask(episode: Episode): RetryableFailure | null {
+  episode = { ...episode, shots: episode.shots.map((shot, i) => ({ ...shot, shot_id: shot.shot_id ?? `sh_${episode.episode_id}_active_${i}_${shot.no}` })) };
   const failures = getDb().query<RetryableFailure, [string]>(
-    `select failed.task_id, failed.stage, failed.shot_no, failed.generation_id
+    `select failed.task_id, failed.stage, failed.shot_no, failed.shot_id, failed.generation_id
      from tasks as failed where failed.episode_id = ?
        and failed.status = 'failed' and failed.operation is null
        and not exists (select 1 from tasks as active
          where active.episode_id = failed.episode_id and active.stage = failed.stage
-           and active.shot_no is failed.shot_no
+           and ((failed.shot_id is not null and active.shot_id = failed.shot_id) or (failed.shot_id is null and active.shot_no is failed.shot_no))
            and active.status in ('pending', 'processing', 'held'))
      order by failed.updated_at desc, failed.rowid desc`,
   ).all(episode.episode_id);
   return failures.find((item) => {
     if (item.stage === "keyframe" || item.stage === "video") {
-      const shot = episode.shots.find((candidate) => candidate.no === item.shot_no);
+      const shot = episode.shots.find((candidate) => item.shot_id ? candidate.shot_id === item.shot_id : candidate.no === item.shot_no);
       return !!shot && (shot.status === "failed" ||
         (episode.status === "failed" && shot.status ===
           (item.stage === "keyframe" ? "generating_kf" : "generating_clip")));
@@ -50,8 +54,9 @@ export function findRetryableFailedTask(episode: Episode): RetryableFailure | nu
 }
 
 export async function getLatestFailedTask(episode: Episode): Promise<Pick<RetryableFailure, "stage" | "shot_no"> | null> {
+  episode = { ...episode, shots: episode.shots.map((shot, i) => ({ ...shot, shot_id: shot.shot_id ?? `sh_${episode.episode_id}_active_${i}_${shot.no}` })) };
   const failure = findRetryableFailedTask(episode);
-  return failure ? { stage: failure.stage, shot_no: failure.shot_no } : null;
+  return failure ? { stage: failure.stage, shot_no: failure.shot_id ? episode.shots.find(s => s.shot_id === failure.shot_id)?.no ?? null : failure.shot_no } : null;
 }
 
 function toTask(row: TaskRow): Task {
@@ -62,6 +67,8 @@ function toTask(row: TaskRow): Task {
     attempt: row.attempt,
   };
   if (row.shot_no !== null) task.shot_no = row.shot_no;
+  if (row.shot_id) task.shot_id = row.shot_id;
+  if (row.payload_json) task.payload_json = row.payload_json;
   if (row.operation) task.operation = row.operation;
   if (row.instruction) task.instruction = row.instruction;
   if (row.generation_id) task.generation_id = row.generation_id;
@@ -74,18 +81,24 @@ export async function enqueueTask(input: {
   episode_id: string;
   stage: StageName;
   shot_no?: number;
-  operation?: "script_regenerate" | "script_optimize";
+  shot_id?: string;
+  payload_json?: string;
+  operation?: "script_regenerate" | "script_optimize" | "shot_suggest";
   instruction?: string;
   generation_id?: string;
 }): Promise<Task> {
   const taskId = input.task_id ?? `tk_${crypto.randomUUID()}`;
+  const episode = getDb().query<{doc:string},[string]>("select doc from episodes where episode_id = ?").get(input.episode_id);
+  const shotId = input.shot_id ?? (episode ? decodeEpisode(episode.doc).shots.find(s => s.no === input.shot_no)?.shot_id : undefined);
   getDb()
     .query(
-      "insert into tasks (task_id, episode_id, stage, shot_no, operation, instruction, generation_id, attempt, status) values (?, ?, ?, ?, ?, ?, ?, 1, 'pending')",
+      "insert into tasks (task_id, episode_id, stage, shot_no, shot_id, operation, instruction, generation_id, payload_json, attempt, status) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending')",
     )
-    .run(taskId, input.episode_id, input.stage, input.shot_no ?? null, input.operation ?? null, input.instruction ?? null, input.generation_id ?? null);
+    .run(taskId, input.episode_id, input.stage, input.shot_no ?? null, shotId ?? null, input.operation ?? null, input.instruction ?? null, input.generation_id ?? null, input.payload_json ?? null);
   return { task_id: taskId, episode_id: input.episode_id, stage: input.stage, attempt: 1,
     ...(input.shot_no !== undefined ? { shot_no: input.shot_no } : {}),
+    ...(shotId ? { shot_id: shotId } : {}),
+    ...(input.payload_json ? { payload_json: input.payload_json } : {}),
     ...(input.operation ? { operation: input.operation } : {}),
     ...(input.instruction ? { instruction: input.instruction } : {}),
     ...(input.generation_id ? { generation_id: input.generation_id } : {}) };
@@ -105,7 +118,7 @@ export async function dequeueTask(): Promise<Task | null> {
          where status = 'pending' or (status = 'processing' and (lease_until is null or lease_until <= unixepoch('now')))
          order by created_at asc limit 1
        )
-       returning task_id, episode_id, stage, shot_no, attempt, operation, instruction, generation_id, lease_token`,
+       returning task_id, episode_id, stage, shot_no, shot_id, attempt, operation, instruction, generation_id, lease_token, payload_json`,
     )
     .get(leaseUntil, leaseToken);
   return row ? toTask(row) : null;

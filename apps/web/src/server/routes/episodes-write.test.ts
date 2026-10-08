@@ -1,4 +1,4 @@
-import { dequeueTask, insertEpisode, insertPersona, patchEpisode, patchShot, upsertDestination } from "@kelvoy/store";
+import { completeTaskWithoutEpisode, enqueueTask, dequeueTask, insertEpisode, insertPersona, patchEpisode, patchShot, upsertDestination } from "@kelvoy/store";
 import { expect, test } from "bun:test";
 import type { Episode, Template } from "@kelvoy/engine";
 import { setupEpisodeRouteTests, buildApp, compliantShots, destinationFixture, fixture, login, personaFixture, shotFixture } from "./episode-test-fixtures";
@@ -55,6 +55,7 @@ test("a ready keyframe can be selected while other shots are still generating", 
     shotFixture(2, { status: "generating_kf", candidates: [] }),
   ];
   await insertEpisode(episode);
+  await enqueueTask({ episode_id: episode.episode_id, stage: "keyframe", shot_no: 2 });
   const app = buildApp();
   const headers = { cookie, "content-type": "application/json" };
   const selected = await app.request("/api/episodes/e_early_keyframe/shots/1", {
@@ -451,9 +452,10 @@ test("keyframe regen from clip review carries approved shots through to video", 
   const generationTask = await dequeueTask();
   expect(generationTask?.stage).toBe("keyframe");
 
-  // Simulate the worker's state hops, then make the review decision.
+  // Simulate the worker's state hops and retire its lease before advancing.
   expect((await patchShot("e_1", 1, 2, { status: "generating_kf" })).ok).toBe(true);
   expect((await patchShot("e_1", 1, 3, { status: "kf_ready", candidates: ["kf/new.png"] })).ok).toBe(true);
+  completeTaskWithoutEpisode(generationTask!);
   const selected = await app.request("/api/episodes/e_1/shots/1", {
     method: "PATCH", headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 4, patch: { status: "kf_selected", kf_selected: "kf/new.png" } }),

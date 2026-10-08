@@ -9,7 +9,7 @@ const share = new Hono();
 
 share.get("/:slug", async (c) => {
   const episode = await getEpisodeBySlug(c.req.param("slug"));
-  if (!episode || !episode.share.enabled || episode.status !== "done") {
+  if (!episode || !episode.share.enabled || (episode.status !== "done" && !episode.final)) {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 
@@ -17,9 +17,9 @@ share.get("/:slug", async (c) => {
     ok: true,
     episode: {
       episode_id: episode.episode_id,
-      status: episode.status,
-      scenes: episode.scenes,
-      shots: episode.shots,
+      status: "done",
+      scenes: episode.shared_storyboard?.scenes ?? episode.scenes,
+      shots: episode.shared_storyboard?.shots ?? episode.shots,
       music: episode.music,
       render: episode.render,
       final: episode.final ?? null,
@@ -31,7 +31,7 @@ share.get("/:slug", async (c) => {
 // 前端/这里都不 import engine 的运行时代码，两处手抄同一个字符串。
 share.get("/:slug/final.mp4", async (c) => {
   const episode = await getEpisodeBySlug(c.req.param("slug"));
-  if (!episode || !episode.share.enabled || episode.status !== "done") {
+  if (!episode || !episode.share.enabled || (episode.status !== "done" && !episode.final)) {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 

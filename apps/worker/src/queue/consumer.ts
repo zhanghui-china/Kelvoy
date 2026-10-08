@@ -24,6 +24,7 @@ import {
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders } from "../generation/local";
+import { handleStoryboardSuggestion } from "../generation/storyboard-suggestion";
 
 /**
  * Task queue consumer (ADR-0004): polls the local `tasks` table (no Redis,
@@ -94,6 +95,7 @@ export async function buildStageContext(stage: StageName, episode: Episode, task
   ]);
   const context: StageContext = {};
   if (task?.lease_token) context.execution_id = task.lease_token;
+  if (task?.shot_id) context.shot_id = task.shot_id;
   if (destination) context.destination = destination;
   if (persona) context.persona = persona;
   if (stage === "compose") context.compose = ffmpegComposeProvider;
@@ -121,8 +123,8 @@ async function prepareShot(task: Task, rowVersion: number, episode: Episode): Pr
 > {
   const target = generationStatus(task.stage);
   if (!target) return { kind: "ready", episode, row_version: rowVersion };
-  const shot = episode.shots.find((item) => item.no === task.shot_no);
-  if (!shot) throw new Error(`shot ${task.shot_no} not found`);
+  const shot = episode.shots.find((item) => task.shot_id ? item.shot_id === task.shot_id : item.no === task.shot_no);
+  if (!shot) return { kind: "skip" };
   if (shot.status === "approved" ||
       (task.stage === "keyframe" && shot.status === "kf_ready") ||
       (task.stage === "video" && shot.status === "clip_ready")) return { kind: "skip" };
@@ -143,6 +145,10 @@ async function prepareShot(task: Task, rowVersion: number, episode: Episode): Pr
 
 export async function handleTask(task: Task, overrides: Partial<StageContext> = {}): Promise<void> {
   if (overrides.signal?.aborted) return;
+  if (task.operation === "shot_suggest") {
+    await handleStoryboardSuggestion(task, overrides);
+    return;
+  }
   if (task.operation === "script_regenerate" || task.operation === "script_optimize") {
     await handleScriptActionTask(task, overrides);
     return;
@@ -174,7 +180,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
     const updated = await runStage(
       task.stage,
       current.episode,
-      task.shot_no,
+      task.shot_id ? current.episode.shots.find(shot => shot.shot_id === task.shot_id)?.no : task.shot_no,
       context,
     );
     if (overrides.signal?.aborted) return;
@@ -193,7 +199,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
     if (task.stage === "assets" && updated.status === "keyframing" &&
         !hasActiveStageTasks(task.episode_id, "keyframe")) {
       for (const shot of updated.shots.filter((item) => item.status === "draft")) {
-        await enqueueTask({ episode_id: task.episode_id, stage: "keyframe", shot_no: shot.no });
+        await enqueueTask({ episode_id: task.episode_id, stage: "keyframe", shot_no: shot.no, shot_id: shot.shot_id });
       }
     }
 

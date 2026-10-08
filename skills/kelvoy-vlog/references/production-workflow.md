@@ -4,7 +4,7 @@
 
 ## 需求与准备
 
-1. 确认服务地址和会话，`GET /api/me` 验证，并读余额与 `api_contract`。`api_contract` 不是 1 就停止并告知用户。
+1. 确认服务地址和会话，`GET /api/me` 验证，并读余额与 `api_contract`。`api_contract` 不是 2 就停止并告知用户。
 2. 读角色、目的地、模板。名称不是 ID，同名对象展示 ID 与必要描述让用户选。角色须有可用参考图；自定义角色不可用时引导到 `/personas/<persona_id>/edit`。目的地须有地标和实景参考，模板按用户要求选，未指定时展示与目的地类型对应的候选让用户选。
 3. 提交前简述角色、目的地、模板、风格、穿搭、`video_source`（默认 `references`）。只追问未确定项。
 4. 读 `estimate` 的 `credit_quote` 告诉用户预计总积分，与余额比较；不够就先说，不要建期。
@@ -31,11 +31,11 @@ draft → scripting → script_review → assets → (keyframing → kf_review �
 
 - 单镜措辞或参数：`PATCH` 改 `beat/caption/size/camera/landmark/kf_prompt/motion_prompt`。
 - 整体重写或按意见调整：`/script/regenerate`、`/script/optimize`（instruction 写用户原意）。提交后等任务完成再继续，期间不写其他操作。
-- 删镜（不低于 24 镜）、重排：重排提交全部现有镜号；删除或重排后重新读镜号。
+- 添加／删除／重排：使用 `/storyboard` 稳定 ID 接口；镜数自由，重排提交全部现有 shot_id，操作后重新读期。
 
-**这是最后一个能改 prompt 的节点**（`keyframe` 模式在 kf_review 还能改一次）。用户说"镜头动作太大"之类的修改意见，如果还在脚本审核，在这里改 `motion_prompt`。
+脚本生成后的各阶段空闲时都能修改分镜，任务有 held/pending/processing 时不可修改。修改画面使对应图像和视频失效；运动提示词只使对应视频失效；字幕／排序仅要求重新合成。已有有效镜头、已批准片段保留，继续只补缺失产物。
 
-展示服务返回的规则错误，用户明确通过后 `/continue`。
+展示服务返回的创作建议；只有字段／引用错误阻止继续。至少补齐一镜，用户明确通过后 `/continue`。
 
 ## 审核 2：关键帧（仅 `keyframe` 模式）
 

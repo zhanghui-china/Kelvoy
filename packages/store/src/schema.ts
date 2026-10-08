@@ -79,6 +79,10 @@ create table if not exists tasks (
   episode_id text not null,
   stage text not null,
   shot_no integer,
+  shot_id text,
+  payload_json text,
+  result_json text,
+  error text,
   attempt integer not null default 1,
   operation text,
   instruction text,
@@ -136,6 +140,7 @@ insert or ignore into credit_prices (kind, price) values
  * 无副作用（每次 open() 都会跑一遍）。
  */
 export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
+  ...["shot_id", "payload_json", "result_json", "error"].map(column => ({ table: "tasks", column, ddl: `alter table tasks add column ${column} text` })),
   { table: "personas", column: "deleted_at", ddl: "alter table personas add column deleted_at text" },
   { table: "tasks", column: "operation", ddl: "alter table tasks add column operation text" },
   { table: "tasks", column: "instruction", ddl: "alter table tasks add column instruction text" },

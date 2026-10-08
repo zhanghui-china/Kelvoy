@@ -186,7 +186,7 @@ export function getUsageSummary() {
 
 export function getEpisode(episodeId: string) {
   return apiFetch<{ episode: Episode; persona: Persona | null; destination: Destination | null;
-    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null }>(
+    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null; storyboard_busy?: boolean; storyboard_warnings?: string[]; storyboard_prices?: StoryboardPrices }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
   );
 }
@@ -354,4 +354,28 @@ export function episodeFileUrl(episodeId: string, key: string): string {
 /** projects 根下的共享参考图（dest/... 地标实景、persona/... 角色参考）。 */
 export function assetUrl(key: string): string {
   return `/api/assets/${key.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+
+export interface StoryboardPrices { script: number; image: number; video: number; compose: number }
+export type StoryboardDraft = Pick<import("@kelvoy/engine").Shot,
+  "scene" | "size" | "beat" | "camera" | "landmark" | "kf_prompt" | "motion_prompt"> & { caption?: string };
+function storyboardPath(id: string, suffix = "") { return episodePath(id, `/storyboard${suffix}`); }
+export function insertStoryboardShot(id: string, row_version: number, after_shot_id: string | null, shot: StoryboardDraft) {
+  return apiFetch<{ row_version: number; shot_id: string }>(storyboardPath(id), { method: "POST", body: JSON.stringify({ row_version, after_shot_id, shot }) });
+}
+export function patchStoryboardShot(id: string, shotId: string, row_version: number, patch: Partial<StoryboardDraft>) {
+  return apiFetch<{ row_version: number }>(storyboardPath(id, `/${encodeURIComponent(shotId)}`), { method: "PATCH", body: JSON.stringify({ row_version, patch }) });
+}
+export function removeStoryboardShot(id: string, shotId: string, row_version: number) {
+  return post(storyboardPath(id, `/${encodeURIComponent(shotId)}/remove`), { row_version });
+}
+export function reorderStoryboardShots(id: string, row_version: number, order: string[]) {
+  return post(storyboardPath(id, "/reorder"), { row_version, order });
+}
+export function requestStoryboardSuggestion(id: string, row_version: number, after_shot_id: string | null, description: string, fields: Partial<StoryboardDraft>) {
+  return apiFetch<{ row_version: number; task_id: string }>(storyboardPath(id, "/suggestions"), { method: "POST", body: JSON.stringify({ row_version, after_shot_id, description, fields }) });
+}
+export function getStoryboardSuggestion(id: string, taskId: string) {
+  return apiFetch<{ status: "pending" | "processing" | "done" | "failed"; suggestion?: Partial<StoryboardDraft>; error?: string }>(storyboardPath(id, `/suggestions/${encodeURIComponent(taskId)}`));
 }

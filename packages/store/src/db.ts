@@ -27,6 +27,7 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
   db.exec("create index if not exists idx_tasks_episode_status_updated on tasks(episode_id, status, updated_at)");
   db.exec("create index if not exists idx_tasks_episode_stage_shot_status on tasks(episode_id, stage, shot_no, status)");
   migrateLegacyCatalogVersions(db);
+  migrateShotIdentities(db);
   return db;
 }
 
@@ -107,4 +108,18 @@ export function getDb(): Database {
 export function close(): void {
   db?.close();
   db = null;
+}
+
+/** Keep existing media keys unchanged while freezing task references before renumbering. */
+function migrateShotIdentities(database: Database): void {
+  database.transaction(() => {
+    const rows = database.query<{episode_id: string; doc: string}, []>("select episode_id, doc from episodes").all();
+    for (const row of rows) {
+      const episode = JSON.parse(row.doc) as { shots?: { shot_id?: string; no: number }[]; removed_shots?: { shot_id?: string; no: number }[] };
+      if (Array.isArray(episode.shots)) episode.shots = episode.shots.map((shot,i) => ({...shot,shot_id:shot.shot_id ?? `sh_${row.episode_id}_active_${i}_${shot.no}`}));
+      if (Array.isArray(episode.removed_shots)) episode.removed_shots = episode.removed_shots.map((shot,i) => ({...shot,shot_id:shot.shot_id ?? `sh_${row.episode_id}_removed_${i}_${shot.no}`}));
+      if (JSON.stringify(episode) !== row.doc) database.query("update episodes set doc = ? where episode_id = ?").run(JSON.stringify(episode), row.episode_id);
+      for (const shot of [...(episode.shots ?? []), ...(episode.removed_shots ?? [])]) database.query("update tasks set shot_id = ? where episode_id = ? and shot_no = ? and shot_id is null").run(shot.shot_id!, row.episode_id, shot.no);
+    }
+  }).immediate();
 }

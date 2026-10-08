@@ -61,6 +61,7 @@ export interface ShotModelRef {
 }
 
 export interface Shot {
+  shot_id?: string; // Immutable identity; legacy rows are normalized on decode.
   no: number;
   scene: string; // Scene.id
   size: ShotSize;
@@ -144,6 +145,8 @@ export interface Episode {
   script_action_error?: string | null;
   failure_reason?: string | null;
   final?: FinalArtifact | null;
+  final_needs_recompose?: boolean;
+  shared_storyboard?: { shots: Shot[]; scenes: Scene[] };
   created_at: string; // ISO 8601
   estimated_credits: number;
   credits_used: number;
@@ -156,3 +159,6 @@ export interface Episode {
   music: EpisodeMusic;
   render: EpisodeRender;
 }
+
+export type ShotDraft = Pick<Shot, "scene" | "size" | "beat" | "caption" | "camera" | "landmark" | "kf_prompt" | "motion_prompt">;
+export type StoryboardPatch = Partial<ShotDraft>;

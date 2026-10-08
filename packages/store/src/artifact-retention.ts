@@ -19,7 +19,7 @@ export function getArtifactRetentionSnapshot(episodeId: string):
     const episode = JSON.parse(row.doc) as Partial<Episode>;
     const references = new Set<string>();
     for (const key of episode.grid_refs ?? []) references.add(key);
-    for (const shot of [...(episode.shots ?? []), ...(episode.removed_shots ?? [])]) {
+    for (const shot of [...(episode.shots ?? []), ...(episode.removed_shots ?? []), ...(episode.shared_storyboard?.shots ?? [])]) {
       for (const key of shot.candidates ?? []) references.add(key);
       if (shot.kf_selected) references.add(shot.kf_selected);
       if (shot.clip) references.add(shot.clip);

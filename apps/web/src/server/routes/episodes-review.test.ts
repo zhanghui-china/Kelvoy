@@ -131,7 +131,7 @@ test("POST /:id/shots/:no/remove deletes the shot and re-validates FR-02 on what
   expect(body.episode.removed_shots.map((s) => s.no)).toEqual([25]);
 });
 
-test("POST /:id/shots/:no/remove cannot change a finished film", async () => {
+test("POST /:id/shots/:no/remove reopens a finished film", async () => {
   const { cookie, ownerId } = await login("finished-cut");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_finished_cut", ownerId);
@@ -143,14 +143,15 @@ test("POST /:id/shots/:no/remove cannot change a finished film", async () => {
     method: "POST", headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 1 }),
   });
-  expect(res.status).toBe(400);
+  expect(res.status).toBe(200);
   const loaded = await buildApp().request("/api/episodes/e_finished_cut", { headers: { cookie } });
   const saved = await loaded.json() as { episode: Episode; row_version: number };
-  expect(saved.episode.shots).toHaveLength(25);
-  expect(saved.row_version).toBe(1);
+  expect(saved.episode.shots).toHaveLength(24);
+  expect(saved.episode.status).toBe("script_review");
+  expect(saved.row_version).toBe(2);
 });
 
-test("POST /:id/shots/:no/remove 400s when it would drop below the MIN_SHOTS floor", async () => {
+test("POST /:id/shots/:no/remove permits shorter manual scripts", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
@@ -165,13 +166,13 @@ test("POST /:id/shots/:no/remove 400s when it would drop below the MIN_SHOTS flo
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 1 }),
   });
-  expect(res.status).toBe(400);
+  expect(res.status).toBe(200);
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
-  expect(((await got.json()) as { episode: Episode }).episode.shots).toHaveLength(24); // untouched
+  expect(((await got.json()) as { episode: Episode }).episode.shots).toHaveLength(23);
 });
 
-test("POST /:id/shots/:no/remove 400s when the remainder fails FR-02 (landmark coverage)", async () => {
+test("POST /:id/shots/:no/remove permits coverage warnings", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
@@ -187,12 +188,11 @@ test("POST /:id/shots/:no/remove 400s when the remainder fails FR-02 (landmark c
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 1 }),
   });
-  expect(res.status).toBe(400);
-  const errBody = (await res.json()) as { error: string };
-  expect(errBody.error).toBe("script_rule_violation");
+  expect(res.status).toBe(200);
+
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
-  expect(((await got.json()) as { episode: Episode }).episode.shots).toHaveLength(25); // untouched
+  expect(((await got.json()) as { episode: Episode }).episode.shots).toHaveLength(24);
 });
 
 test("POST /:id/recompose moves done -> composing and enqueues a compose task", async () => {
@@ -314,7 +314,7 @@ test("PATCH /:id/shots/:no 400s with content_blocked when an edited prompt hits 
   expect(body.violations[0]?.field).toBe("kf_prompt");
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
-  expect(((await got.json()) as { episode: Episode }).episode.shots[0]?.kf_prompt).toBe(""); // untouched
+  expect(((await got.json()) as { episode: Episode }).episode.shots[0]?.kf_prompt).toBe(episode.shots[0]?.kf_prompt); // untouched
 });
 
 test("PATCH /:id/shots/:no 400s on a landmark id the destination doesn't have", async () => {
@@ -415,7 +415,7 @@ test("a delayed reorder cannot erase a script action by sending its newer row ve
   expect(saved.row_version).toBe(2);
 });
 
-test("POST /:id/shots/reorder 400s when the new order breaks FR-02 (size run)", async () => {
+test("POST /:id/shots/reorder permits size-run warnings", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
@@ -432,8 +432,8 @@ test("POST /:id/shots/reorder 400s when the new order breaks FR-02 (size run)", 
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 1, order: [1, 4, 7, ...rest] }),
   });
-  expect(res.status).toBe(400);
-  expect(((await res.json()) as { error: string }).error).toBe("script_rule_violation");
+  expect(res.status).toBe(200);
+
 
   const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
   const shots = ((await got.json()) as { episode: Episode }).episode.shots;
@@ -459,7 +459,7 @@ test("POST /:id/shots/reorder 400s on an order that isn't a permutation of the s
   expect(((await res.json()) as { error: string }).error).toBe("invalid_order");
 });
 
-test("POST /:id/shots/reorder 400s outside review 1", async () => {
+test("POST /:id/shots/reorder reopens review after generation", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
@@ -474,8 +474,8 @@ test("POST /:id/shots/reorder 400s outside review 1", async () => {
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ row_version: 1, order: episode.shots.map((s) => s.no).reverse() }),
   });
-  expect(res.status).toBe(400);
-  expect(((await res.json()) as { error: string }).error).toBe("invalid_order");
+  expect(res.status).toBe(200);
+
 });
 
 test("POST /:id/shots/reorder 409s on a stale row_version", async () => {

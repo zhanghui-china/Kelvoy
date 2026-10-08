@@ -1,7 +1,8 @@
-import type { Episode, StageName } from "@kelvoy/engine";
+import type { StageName } from "@kelvoy/engine";
 import { isLegalEpisodeStatusChange } from "@kelvoy/engine";
 import { getCreditBalance, getCreditPrice, reserveCredits } from "./credits";
 import { getDb } from "./db";
+import { decodeEpisode } from "./episode-codec";
 import { findRetryableFailedTask } from "./tasks";
 
 type RetryError = "not_found" | "version_conflict" | "illegal_transition" |
@@ -20,7 +21,7 @@ export function submitFailedTaskRetry(input: {
     if (!row) return { ok: false, error: "not_found" } as const;
     if (row.row_version !== input.row_version) return { ok: false,
       error: "version_conflict", current_row_version: row.row_version } as const;
-    const episode = JSON.parse(row.doc) as Episode;
+    const episode = decodeEpisode(row.doc);
     if (episode.mode === "grid") return { ok: false, error: "illegal_transition" } as const;
     const failed = findRetryableFailedTask(episode);
     if (!failed) return { ok: false, error: "no_failed_task" } as const;
@@ -37,19 +38,19 @@ export function submitFailedTaskRetry(input: {
       return { ok: false, error: "illegal_transition" } as const;
     }
     const stage = failed.stage === "brief" ? "script" : failed.stage;
-    const tasks: { id: string; stage: StageName; shot_no: number | null;
+    const tasks: { id: string; stage: StageName; shot_no: number | null; shot_id?: string | null;
       generation_id: string | null; held: boolean; units: number }[] = [];
     if (stage === "assets") {
       for (const shot of episode.shots.filter((item) => item.status === "draft")) {
         tasks.push({ id: `tk_${crypto.randomUUID()}`,
-          stage: episode.video_source === "references" ? "video" : "keyframe", shot_no: shot.no,
+          stage: episode.video_source === "references" ? "video" : "keyframe", shot_no: shot.no, shot_id: shot.shot_id,
           generation_id: null, held: true,
           units: episode.video_source === "references" ? 1 : episode.candidate_count ?? 2 });
       }
       tasks.push({ id: `tk_${crypto.randomUUID()}`, stage, shot_no: null,
         generation_id: null, held: false, units: 0 });
     } else {
-      tasks.push({ id: `tk_${crypto.randomUUID()}`, stage, shot_no: failed.shot_no,
+      tasks.push({ id: `tk_${crypto.randomUUID()}`, stage, shot_no: failed.shot_id ? episode.shots.find(s => s.shot_id === failed.shot_id)?.no ?? null : failed.shot_no, shot_id: failed.shot_id,
         generation_id: stage === "keyframe" || stage === "video"
           ? failed.generation_id ?? failed.task_id : null,
         held: false, units: stage === "keyframe" ? episode.candidate_count ?? 2 : 1 });
@@ -68,9 +69,9 @@ export function submitFailedTaskRetry(input: {
         if (!reserved.ok) throw new Error(`retry reservation failed: ${reserved.error}`);
       }
       getDb().query(`insert into tasks
-        (task_id, episode_id, stage, shot_no, generation_id, attempt, status)
-        values (?, ?, ?, ?, ?, 1, ?)`).run(task.id, input.episode_id, task.stage,
-          task.shot_no, task.generation_id, task.held ? "held" : "pending");
+        (task_id, episode_id, stage, shot_no, shot_id, generation_id, attempt, status)
+        values (?, ?, ?, ?, ?, ?, 1, ?)`).run(task.id, input.episode_id, task.stage,
+          task.shot_no, task.shot_id ?? null, task.generation_id, task.held ? "held" : "pending");
     }
     // Keep the failed row for history, but retire it in the same transaction
     // as the replacement. A later failure on this shot must not revive it.

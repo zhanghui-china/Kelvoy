@@ -170,10 +170,10 @@ describe("removeShot", () => {
     expect(episode.removed_shots.length).toBe(0);
   });
 
-  test("throws when removal would drop below the MIN_SHOTS floor", () => {
+  test("manual removal permits scripts below the suggested shot count", () => {
     const episode = makeEpisode(MIN_SHOTS);
     episode.status = "script_review";
-    expect(() => removeShot(episode, 1)).toThrow();
+    expect(removeShot(episode, 1).shots).toHaveLength(MIN_SHOTS - 1);
   });
 
   test("throws when the shot doesn't exist", () => {

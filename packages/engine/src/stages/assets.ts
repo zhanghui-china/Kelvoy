@@ -1,5 +1,5 @@
 import type { Episode } from "../schema";
-import { transitionEpisode } from "../state";
+import { planStoryboardGeneration } from "./generation-plan";
 import type { StageContext } from "./types";
 
 /** Validate the reference pack before any GPU work is queued. */
@@ -19,6 +19,6 @@ export async function runAssets(episode: Episode, _shotNo?: number, context?: St
       throw new Error(`第 ${shot.no} 镜地标参考图不足，不能生成`);
     }
   }
-  return { ...episode, status: transitionEpisode(episode.status,
-    { type: episode.video_source === "references" ? "skip_keyframes" : "advance" }) };
+  const plan = planStoryboardGeneration(episode);
+  return { ...episode, status: plan.keyframes.length ? "keyframing" : plan.videos.length ? "clipping" : plan.next_status };
 }

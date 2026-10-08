@@ -52,7 +52,7 @@ function buildPrompt(input: {
     .map((l) => `${l.id}（${l.name}${l.must_keep?.length ? "，须保真：" + l.must_keep.join("/") : ""}）`)
     .join("；");
 
-  return `你是旅行 vlog 分镜师。给下面这个目的地写一份 24-30 镜的分镜表，JSON 数组格式，不要任何 JSON 之外的文字。
+  return `你是旅行 vlog 分镜师。给下面这个目的地写一份 ${input.previousShots?.length || 28} 镜的分镜表，JSON 数组格式，不要任何 JSON 之外的文字。
 
 目的地：${input.destinationName}（类型：${input.destinationType}）
 动线：${input.route.join(" → ") || "无固定动线，自行安排"}
@@ -61,7 +61,7 @@ function buildPrompt(input: {
 季节：${input.season}　语气：${input.tone}
 画幅：${input.aspect}
 创作要求：${input.requirements || "无"}
-${input.previousShots ? `这是本期现有分镜，保留目的地与角色设定，重新创作一份符合硬规则的完整分镜：${JSON.stringify(input.previousShots.map((shot) => ({ no: shot.no, beat: shot.beat, caption: shot.caption, landmark: shot.landmark })))}` : ""}
+${input.previousShots ? `这是本期现有分镜，保留目的地与角色设定，保持当前镜数，重新创作完整分镜：${JSON.stringify(input.previousShots.map((shot) => ({ no: shot.no, beat: shot.beat, caption: shot.caption, landmark: shot.landmark })))}` : ""}
 ${input.instruction ? `本次优化指令：${input.instruction}` : ""}
 禁止出现：${input.banned.join("、") || "无"}
 
@@ -70,10 +70,10 @@ ${input.instruction ? `本次优化指令：${input.instruction}` : ""}
 ${skeleton.notes}
 
 硬规则：
-- 24-30 镜
+- ${input.previousShots?.length || 28} 镜（首次生成默认 28 镜，优化保留当前镜数）
 - 每镜一个动作 beat，不要塞多个动作
-- 景别（size）不能连续超过 2 镜相同，size 只能是 wide/medium/close/detail/pov 之一
-- 至少 5 镜的 landmark 字段非 null，且必须是上面给的 id
+- 建议景别（size）不要连续超过 2 镜相同，size 只能是 wide/medium/close/detail/pov 之一
+- 建议至少 5 镜的 landmark 字段非 null，且必须是上面给的 id
 - camera 只能是 static/pan/push/follow 之一；time 只能是 morning/noon/afternoon/evening/night 之一，按段落推进順序递进
 - 画面里不能出现可读文字、不能出现真人（vlog 角色除外，角色由后续阶段用参考图控制，这里的 kf_prompt 不用具体描述角色外貌）
 - 不得出现政治、色情、暴力、违法、歧视内容及他人商标
@@ -181,7 +181,7 @@ function checkShotsContent(shots: Shot[]) {
   return checkContent(inputs);
 }
 
-async function callChatCompletion(prompt: string): Promise<string> {
+export async function callChatCompletion(prompt: string, signal?: AbortSignal): Promise<string> {
   const apiKey = process.env.STEPFUN_API_KEY;
   if (!apiKey) throw new Error("缺少环境变量 STEPFUN_API_KEY");
   const baseUrl = process.env.STEPFUN_API_BASE ?? DEFAULT_BASE_URL;
@@ -189,6 +189,7 @@ async function callChatCompletion(prompt: string): Promise<string> {
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
@@ -231,7 +232,7 @@ export const stepfunScriptProvider: ScriptProvider = {
       const raw = parseRawShots(extractJsonArray(content));
       const { shots, scenes } = buildScenesAndShots(raw, brief.duration_s);
 
-      const ruleViolations = checkScriptRules(shots, destination);
+      const ruleViolations = checkScriptRules(shots, destination).filter(violation => !previousShots || violation.rule === "landmark_reference");
       contentViolations = checkShotsContent(shots);
       if (ruleViolations.length === 0 && contentViolations.length === 0) {
         return { shots, scenes };

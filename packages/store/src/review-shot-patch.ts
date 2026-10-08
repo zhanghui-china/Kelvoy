@@ -1,6 +1,7 @@
 import { type ContentViolation, type Destination, type ShotPatch,
-  checkContent, isLegalShotStatusChange, validatePatchShotRequest } from "@kelvoy/engine";
+  checkContent, editStoryboard, storyboardEditable, validStoryboardPatch, isLegalShotStatusChange, validatePatchShotRequest } from "@kelvoy/engine";
 import { getDb } from "./db";
+import { storyboardBusy } from "./storyboard";
 import { decodeEpisode } from "./episode-codec";
 
 export type ReviewShotPatchResult =
@@ -32,7 +33,9 @@ export function submitReviewShotPatch(input: {
     const shot = episode.shots[index]!;
     const keys = Object.keys(patch);
     const scriptFields = ["beat", "caption", "size", "camera", "landmark", "kf_prompt", "motion_prompt"];
-    const scriptEdit = episode.status === "script_review" && keys.every((key) => scriptFields.includes(key));
+    const scriptEdit = storyboardEditable(episode) && keys.every((key) => scriptFields.includes(key));
+    if (keys.some(key => scriptFields.includes(key)) && storyboardBusy(input.episode_id)) return { ok:false,error:"action_pending" } as const;
+    if (keys.some(key => scriptFields.includes(key)) && !scriptEdit) return {ok:false,error:"invalid_public_patch"} as const;
     const keyframeEdit = (episode.status === "kf_review" || episode.status === "keyframing") &&
       keys.every((key) => (episode.status === "keyframing"
         ? ["kf_selected", "status"] : ["kf_selected", "status", "kf_prompt", "motion_prompt"]).includes(key)) &&
@@ -68,6 +71,13 @@ export function submitReviewShotPatch(input: {
     }
     if (episode.cut_policy === "fixed_1s" && patch.trim_start_s !== undefined && patch.trim_start_s !== null) {
       patch.trim_start_s = Math.round(patch.trim_start_s * 30) / 30;
+    }
+    if (scriptEdit) {
+      if (!validStoryboardPatch(patch)) return {ok:false,error:"invalid_public_patch"} as const;
+      const updated = editStoryboard(episode, {type:"patch",shot_id:shot.shot_id!,patch});
+      if (updated === episode) return {ok:true,row_version:row.row_version} as const;
+      getDb().query("update episodes set doc = ?, row_version = row_version + 1, updated_at = datetime('now') where episode_id = ?").run(JSON.stringify(updated),input.episode_id);
+      return {ok:true,row_version:row.row_version+1} as const;
     }
     const shots = [...episode.shots];
     shots[index] = { ...shot, ...patch };

@@ -2,6 +2,7 @@ import { join, resolve, sep } from "node:path";
 import type { Episode, Template } from "@kelvoy/engine";
 import {
   checkContent,
+  checkScriptRules,
   estimateCost,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
@@ -11,6 +12,8 @@ import {
 } from "@kelvoy/engine";
 import {
   createEpisodeWithScriptTask,
+  storyboardBusy,
+  getCreditPrice,
   estimateCreditQuote,
   getDestination,
   getDestinationVersion,
@@ -32,6 +35,8 @@ import { requireOwner } from "../middleware/auth";
 import { loadOwnedEpisode, patchErrorResponse } from "./episode-common";
 import { staysOnDiskPath } from "./file-path";
 import review from "./episode-review";
+import storyboard from "./episode-storyboard";
+import suggestions from "./episode-storyboard-suggestions";
 
 // FR-01/FR-05: 建期/期列表/详情/存为模板/产物文件。审片台的写路由在
 // episode-review.ts，挂在同一个前缀下（见文件末尾的 episodes.route）。
@@ -198,7 +203,10 @@ episodes.get("/:id", async (c) => {
   return c.json({ ok: true, episode: result.episode, persona,
     destination: destinationRevision?.destination ?? null,
     destination_history_approximate: destinationRevision?.compatibility_approximation ?? false,
-    row_version: result.row_version, failed_task });
+    row_version: result.row_version, failed_task,
+    storyboard_busy: storyboardBusy(result.episode.episode_id),
+    storyboard_warnings: destinationRevision ? checkScriptRules(result.episode.shots, destinationRevision.destination).filter(v => v.rule !== "landmark_reference").map(v => v.message) : [],
+    storyboard_prices: { script: getCreditPrice("script"), image: getCreditPrice("image"), video: getCreditPrice("video"), compose: getCreditPrice("compose") } });
 });
 
 episodes.patch("/:id", async (c) => {
@@ -322,7 +330,7 @@ episodes.get("/:id/files/:path{.+}", async (c) => {
   const legacyGridDownload = result.episode.mode === "grid" && !result.episode.final &&
     requestedKey === `final/${episodeId}.mp4`;
   if (requestedKey.startsWith("final/") &&
-      !legacyGridDownload && (result.episode.status !== "done" ||
+      !legacyGridDownload && ((!result.episode.final && result.episode.status !== "done") ||
        requestedKey !== (result.episode.final?.key ?? `final/${episodeId}.mp4`))) {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
@@ -340,6 +348,8 @@ episodes.get("/:id/files/:path{.+}", async (c) => {
 
 // 审片台写路由（episode-review.ts）：URL 前缀和 owner 中间件都沿用这里的，
 // 挂在具体路由都注册完之后，不影响上面 "/estimate" 先于 "/:id" 的顺序。
+episodes.route("/", storyboard);
+episodes.route("/", suggestions);
 episodes.route("/", review);
 
 export default episodes;

@@ -1,16 +1,12 @@
-import type { Episode, EpisodeStatus, RegenStage } from "@kelvoy/engine";
+import type { EpisodeStatus, RegenStage } from "@kelvoy/engine";
 import {
   checkContent,
-  checkScriptRules,
-  removeShot,
-  reorderShots,
   reviewAdvanceError,
   transitionEpisode,
   validatePatchShotRequest,
 } from "@kelvoy/engine";
 import {
-  getDestinationVersion,
-  replaceEpisode,
+  updateStoryboard,
   submitReviewShotPatch,
   setShare,
   submitReviewAdvance,
@@ -139,25 +135,13 @@ review.post("/:id/shots/reorder", async (c) => {
     return c.json({ ok: false, error: "invalid_order" }, 400);
   }
 
-  let updated: Episode;
-  try {
-    updated = reorderShots(loaded.episode, order as number[]);
-  } catch {
-    return c.json({ ok: false, error: "invalid_order" }, 400);
-  }
+  const identities = order.map(no => loaded.episode.shots.find(shot => shot.no === no)?.shot_id);
+  if (identities.some(id => !id)) return c.json({ ok: false, error: "invalid_order" }, 400);
+  const result = await updateStoryboard({ episode_id: episodeId, owner_id: c.get("ownerId"),
+    row_version: rowVersion, edit: { type: "reorder", order: identities as string[] } });
+  if (!result.ok) return c.json(result, result.error === "version_conflict" ? 409 : result.error === "not_found" ? 404 : 400);
+  return c.json(result);
 
-  // 顺序一变 size_run（同景别不得连续 >2 镜）就可能违规，和删镜一样必须
-  // 重跑 FR-02，违规就整单驳回、一行都不写。
-  const destination = await getDestinationVersion(loaded.episode.destination_id, loaded.episode.destination_version);
-  if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
-  const violations = checkScriptRules(updated.shots, destination);
-  if (violations.length > 0) {
-    return c.json({ ok: false, error: "script_rule_violation", violations }, 400);
-  }
-
-  const result = await replaceEpisode(episodeId, rowVersion, updated);
-  if (!result.ok) return patchErrorResponse(c, result);
-  return c.json({ ok: true, row_version: result.row_version });
 });
 
 // 三个人工审核点各自的"继续"动作——下一个生成态用哪个 stage、是否要按镜
@@ -235,27 +219,11 @@ review.post("/:id/shots/:no/remove", async (c) => {
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
   if (rowVersion !== loaded.row_version) return c.json({ ok: false, error: "version_conflict",
     current_row_version: loaded.row_version }, 409);
-  if (loaded.episode.status !== "script_review") return c.json({ ok: false, error: "illegal_transition" }, 400);
+  const result = await updateStoryboard({ episode_id: episodeId, owner_id: c.get("ownerId"),
+    row_version: rowVersion, edit: { type: "remove", shot_id: shot.shot_id! } });
+  if (!result.ok) return c.json(result, result.error === "version_conflict" ? 409 : result.error === "not_found" ? 404 : 400);
+  return c.json(result);
 
-  let updated: Episode;
-  try {
-    updated = removeShot(loaded.episode, shotNo);
-  } catch {
-    return c.json({ ok: false, error: "below_min_shots" }, 400);
-  }
-
-  // FR-02 是固定产品规则（不是 M0 待测数字），删镜后一样要过——不重新校验
-  // 的话，删掉唯一的地标镜之类会静默产出一份不合规的分镜表。
-  const destination = await getDestinationVersion(loaded.episode.destination_id, loaded.episode.destination_version);
-  if (!destination) return c.json({ ok: false, error: "destination_not_found" }, 404);
-  const violations = checkScriptRules(updated.shots, destination);
-  if (violations.length > 0) {
-    return c.json({ ok: false, error: "script_rule_violation", violations }, 400);
-  }
-
-  const result = await replaceEpisode(episodeId, rowVersion, updated);
-  if (!result.ok) return patchErrorResponse(c, result);
-  return c.json({ ok: true, row_version: result.row_version });
 });
 
 review.post("/:id/recompose", async (c) => {

@@ -151,15 +151,16 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       input.signal?.throwIfAborted();
       safeId(input.episode_id);
       safeId(input.generation_id);
+      const identity = input.shot_id ? safeId(input.shot_id) : String(input.shot_no).padStart(2, "0");
       if (input.execution_id) safeId(input.execution_id);
       if (!Number.isInteger(input.candidate_no) || input.candidate_no < 0) throw new Error("invalid candidate index");
       const hashes = await Promise.all(input.refs.map(hashKey));
-      const key = `kf/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}_${input.candidate_no}.png`;
+      const key = `kf/${identity}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}_${input.candidate_no}.png`;
       const { signal: _signal, ...requestInput } = input;
       const { execution_id: _executionId, ...reusableInput } = requestInput;
-      const fingerprint = requestHash({ input: reusableInput, hashes });
+      const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes });
       const cached = await findCached(input.episode_id, key,
-        `${String(input.shot_no).padStart(2, "0")}_${input.generation_id}_`, fingerprint);
+        `${identity}_${input.generation_id}_`, fingerprint);
       if (cached) { input.signal?.throwIfAborted(); return cached; }
       const response = await requestOne(call, "/image/", localImageRequest(input), input.signal);
       const asset = { key, model: response.model, version: response.version,
@@ -177,18 +178,19 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       input.signal?.throwIfAborted();
       safeId(input.episode_id);
       safeId(input.generation_id);
+      const identity = input.shot_id ? safeId(input.shot_id) : String(input.shot_no).padStart(2, "0");
       if (input.execution_id) safeId(input.execution_id);
       const direct = input.refs !== undefined;
       if (direct && input.refs?.length !== 2) throw new Error("direct video needs two references");
       if (!direct && !input.keyframe?.startsWith("kf/")) throw new Error("invalid keyframe path");
       const refs = direct ? input.refs! : [`${input.episode_id}/${input.keyframe}`];
       const hashes = await Promise.all(refs.map(hashKey));
-      const key = `clip/${String(input.shot_no).padStart(2, "0")}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}.mp4`;
+      const key = `clip/${identity}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}.mp4`;
       const { signal: _signal, ...requestInput } = input;
       const { execution_id: _executionId, ...reusableInput } = requestInput;
-      const fingerprint = requestHash({ input: reusableInput, hashes });
+      const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes });
       const cached = await findCached(input.episode_id, key,
-        `${String(input.shot_no).padStart(2, "0")}_${input.generation_id}_`, fingerprint);
+        `${identity}_${input.generation_id}_`, fingerprint);
       if (cached) { input.signal?.throwIfAborted(); return cached; }
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, refs,

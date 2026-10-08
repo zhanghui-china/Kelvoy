@@ -32,7 +32,7 @@ function episode(): Episode {
     share: { enabled: false, slug: "" },
     brief: { season: "秋", aspect: "9:16", requirements: "", duration_s: 30,
       tone: "", outfit_override: null, banned: [] },
-    grid_refs: [], scenes: [], shots: [], removed_shots: [],
+    grid_refs: [], scenes: [{id:"s1",name:"景点",time:"morning",landmarks:[]}], shots: [], removed_shots: [],
     music: { file: "", bpm: 0, license: "" },
     render: { res: "1080x1920", fps: 30, title: "", intro: null, outro: null, ai_label: true },
   };
@@ -40,7 +40,9 @@ function episode(): Episode {
 
 function reviewShots(count = 24): Episode["shots"] {
   return Array.from({ length: count }, (_, index) => ({
-    no: index + 1, status: "draft", size: index % 2 ? "medium" : "wide",
+    no: index + 1, scene: "s1", beat: "游览", kf_prompt: "景区画面", motion_prompt: "缓慢走过",
+    camera: "static", candidates: [], kf_selected: null, clip: null, caption: "", duration_s: 1,
+    trim_start_s: null, regen_stage: null, bad_shot_reported: false, model: {}, status: "draft", size: index % 2 ? "medium" : "wide",
     landmark: index < 5 ? "l1" : null,
   })) as Episode["shots"];
 }
@@ -52,17 +54,17 @@ async function reviewDestination(): Promise<void> {
     route: [], food: [], transport: "", stay: "" });
 }
 
-test("review advance rejects an edited script that breaks structural rules", async () => {
+test("review advance accepts aesthetic warnings while keeping valid landmark references", async () => {
   await reviewDestination();
   const draft = { ...episode(), status: "script_review" as const, shots: reviewShots() };
   draft.shots[2] = { ...draft.shots[2]!, size: "medium" };
   await insertEpisode(draft);
   grantCredits(ownerId, 100, "review-grant");
   expect(submitReviewAdvance({ episode_id: draft.episode_id, owner_id: ownerId,
-    row_version: 1, next_status: "assets" })).toEqual({ ok: false, error: "script_rule_violation" });
+    row_version: 1, next_status: "assets" })).toEqual({ ok: true, row_version: 2 });
   expect((await getEpisode(draft.episode_id)).ok).toBe(true);
-  expect(await dequeueTask()).toBeNull();
-  expect(getCreditBalance(ownerId).reserved).toBe(0);
+  expect((await dequeueTask())?.stage).toBe("assets");
+  expect(getCreditBalance(ownerId).reserved).toBe(72);
 });
 
 test("review advance cannot bypass keyframe selection or clip approval through the store", async () => {
@@ -364,4 +366,33 @@ test("creation rechecks persona after deletion before reserving credits or writi
   expect((await getEpisode("e_charge")).ok).toBe(false);
   expect(await dequeueTask()).toBeNull();
   expect(listCreditLedger(ownerId).map(entry => entry.kind)).toEqual(["grant"]);
+});
+
+test('reopened storyboard only reserves new shot, preserves approved media and stable task identity', async () => {
+  await reviewDestination();
+  const draft = { ...episode(), status: 'script_review' as const, scenes: [{ id: 's1', name: '景点', time: 'morning' as const, landmarks: [] }],
+    shots: reviewShots(2) };
+  draft.shots[0] = { ...draft.shots[0]!, status: 'approved', clip: 'clip/old.mp4' };
+  await insertEpisode(draft);
+  grantCredits(ownerId, 3, 'one-new-image');
+  expect(submitReviewAdvance({ episode_id: draft.episode_id, owner_id: ownerId, row_version: 1, next_status: 'assets' }).ok).toBe(true);
+  const children = getDb().query<{shot_id: string; shot_no: number}, []>('select shot_id,shot_no from tasks where stage = \'keyframe\'').all();
+  expect(children).toHaveLength(1);
+  const stored = await getEpisode(draft.episode_id);
+  if (!stored.ok) throw Error('missing');
+  expect(children[0]?.shot_id).toBe(stored.episode.shots[1]?.shot_id!);
+  expect(stored.episode.shots[0]?.clip).toBe('clip/old.mp4');
+  expect(getCreditBalance(ownerId).reserved).toBe(3);
+});
+
+test('reordered approved storyboard can advance to composition setup without regeneration or charges', async () => {
+  await reviewDestination();
+  const draft = { ...episode(), status: 'script_review' as const, scenes: [{ id: 's1', name: '景点', time: 'morning' as const, landmarks: [] }],
+    shots: reviewShots(1).map(shot => ({ ...shot, status: 'approved' as const, clip: 'clip/old.mp4' })) };
+  await insertEpisode(draft);
+  expect(submitReviewAdvance({ episode_id: draft.episode_id, owner_id: ownerId, row_version: 1, next_status: 'assets' }).ok).toBe(true);
+  const stored = await getEpisode(draft.episode_id);
+  expect(stored.ok && stored.episode.status).toBe('compose_ready');
+  expect(await dequeueTask()).toBeNull();
+  expect(getCreditBalance(ownerId).reserved).toBe(0);
 });

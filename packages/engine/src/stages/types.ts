@@ -13,6 +13,7 @@ export interface StageContext {
   destination?: Destination;
   persona?: Persona;
   generation_id?: string;
+  shot_id?: string;
   /** Unique lease token for this execution; generation_id stays stable for seeds. */
   execution_id?: string;
   signal?: AbortSignal;
@@ -21,6 +22,7 @@ export interface StageContext {
     generate(input: {
       episode_id: string;
       shot_no: number;
+      shot_id?: string;
       candidate_no: number;
       aspect?: EpisodeAspect;
       prompt: string;
@@ -35,6 +37,7 @@ export interface StageContext {
     generate(input: {
       episode_id: string;
       shot_no: number;
+      shot_id?: string;
       keyframe?: string;
       refs?: string[];
       aspect?: EpisodeAspect;

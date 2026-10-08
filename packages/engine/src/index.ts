@@ -8,3 +8,5 @@ export { MUSIC_CATALOG } from "./providers/music-library";
 export * from "./state";
 export * from "./rules";
 export * from "./usage";
+
+export * from "./providers/storyboard-suggestion";
