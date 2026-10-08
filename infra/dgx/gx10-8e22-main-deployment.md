@@ -1,5 +1,7 @@
 # GX10 GitHub main 部署记录（2026-10-07）
 
+> 历史发布记录。2026-10-08 Web／Worker 已切换到共享目的地版本，当前发布见 [共享目的地上线记录](gx10-shared-destinations-deployment.md)。
+
 GX10 `gx10-8e22` 是用户指定的 Kelvoy 主要机器。地址为 `http://100.80.224.95:8888`，通过 Tailscale 访问。
 
 ## 当前发布
