@@ -120,3 +120,18 @@ test("retired keyframe failure cannot reactivate after later video failure", asy
   expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
     .get(oldKeyframe.task_id)?.status).toBe("retried");
 });
+
+test("assets retry after motion edit queues video for retained frame and preserves approved shots", async () => {
+  const base = episode();
+  await insertEpisode({ ...base, status: "failed", video_source: "keyframe", shots: [
+    { ...base.shots[0]!, shot_id: "motion", status: "kf_selected", candidates: ["kf/retained.png"], kf_selected: "kf/retained.png" },
+    { ...base.shots[0]!, shot_id: "retained", no: 2, status: "approved", clip: "clip/retained.mp4" },
+  ] });
+  await enqueueTask({ episode_id: "e_retry", stage: "assets" });
+  expect(failTaskWithCredits((await dequeueTask())!, false)).toBe(true);
+  grantCredits(ownerId, 10, "motion-assets-retry");
+  expect(submitFailedTaskRetry({ episode_id: "e_retry", owner_id: ownerId, row_version: 1 }).ok).toBe(true);
+  expect(getDb().query("select stage,shot_id from tasks where status='held'").all())
+    .toEqual([{ stage: "video", shot_id: "motion" }]);
+  expect(getCreditBalance(ownerId)).toEqual({ available: 0, reserved: 10 });
+});

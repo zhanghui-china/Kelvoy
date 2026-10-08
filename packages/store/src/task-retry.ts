@@ -1,5 +1,5 @@
 import type { StageName } from "@kelvoy/engine";
-import { isLegalEpisodeStatusChange } from "@kelvoy/engine";
+import { isLegalEpisodeStatusChange, planStoryboardGeneration } from "@kelvoy/engine";
 import { getCreditBalance, getCreditPrice, reserveCredits } from "./credits";
 import { getDb } from "./db";
 import { decodeEpisode } from "./episode-codec";
@@ -41,12 +41,13 @@ export function submitFailedTaskRetry(input: {
     const tasks: { id: string; stage: StageName; shot_no: number | null; shot_id?: string | null;
       generation_id: string | null; held: boolean; units: number }[] = [];
     if (stage === "assets") {
-      for (const shot of episode.shots.filter((item) => item.status === "draft")) {
-        tasks.push({ id: `tk_${crypto.randomUUID()}`,
-          stage: episode.video_source === "references" ? "video" : "keyframe", shot_no: shot.no, shot_id: shot.shot_id,
-          generation_id: null, held: true,
-          units: episode.video_source === "references" ? 1 : episode.candidate_count ?? 2 });
-      }
+      const plan = planStoryboardGeneration(episode);
+      for (const shot of plan.keyframes) tasks.push({ id: `tk_${crypto.randomUUID()}`,
+        stage: "keyframe", shot_no: shot.no, shot_id: shot.shot_id,
+        generation_id: null, held: true, units: episode.candidate_count ?? 2 });
+      for (const shot of plan.videos) tasks.push({ id: `tk_${crypto.randomUUID()}`,
+        stage: "video", shot_no: shot.no, shot_id: shot.shot_id,
+        generation_id: null, held: true, units: 1 });
       tasks.push({ id: `tk_${crypto.randomUUID()}`, stage, shot_no: null,
         generation_id: null, held: false, units: 0 });
     } else {
