@@ -1,28 +1,56 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { LibraryFilters } from "./LibraryFilters";
 import { filterDestinations, type LibraryType } from "./resource-library";
 import { AssetImage } from "../AssetImage";
 import { GuideTip } from "../GuideTip";
-import { Link } from "react-router-dom";
-import { listDestinations } from "../api/client";
+import { Link, useNavigate } from "react-router-dom";
+import { getMe, listDestinations } from "../api/client";
+import { createDestinationDraft, editDestination } from "../api/destination-drafts";
 import { MIN_LANDMARK_REFS } from "../destination-refs";
+import { canEditSharedDestination, destinationDraftError } from "../destination-draft-form";
 import { useApiResource } from "../hooks/useApiResource";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 
 export default function DestinationsPage() {
+  const navigate = useNavigate();
+  const user = useApiResource(getMe, []);
+  const lock = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState("");
+  async function create() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true); setFailure("");
+    const result = await createDestinationDraft();
+    lock.current = false; setBusy(false);
+    if (result.ok) navigate(`/destinations/drafts/${encodeURIComponent(result.draft.draft_id)}`);
+    else { if (result.error === "unauthorized") navigate("/login"); setFailure(destinationDraftError(result.error, result.message)); }
+  }
+  async function edit(id: string) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true); setFailure("");
+    const result = await editDestination(id);
+    lock.current = false; setBusy(false);
+    if (result.ok) navigate(`/destinations/drafts/${encodeURIComponent(result.draft.draft_id)}`);
+    else { if (result.error === "unauthorized") navigate("/login"); setFailure(destinationDraftError(result.error, result.message)); }
+  }
   const [query, setQuery] = useState("");
   const [type, setType] = useState<LibraryType>("all");
-  const { loading, data, error } = useApiResource(listDestinations, []);
+  const [reload, setReload] = useState(0);
+  const { loading, data, error } = useApiResource(listDestinations, [reload]);
 
   if (loading) return <p className="k-empty">加载中…</p>;
-  if (error) return <p className="k-error">加载失败：{error}</p>;
+  if (error) return <p className="k-error" role="alert">{destinationDraftError(error)} <button onClick={() => setReload(value => value + 1)}>重试</button></p>;
   const destinations = filterDestinations(data?.destinations ?? [], query, type);
 
   return (
     <div>
-      <div className="k-eyebrow">官方维护 · 实景为准</div>
+      <div className="k-eyebrow">官方与用户共享 · 实景为准</div>
       <h1>目的地库</h1>
-      <GuideTip section="destinations">目的地由平台维护，地标以实景参考图为准。选好地方后可在<Link to="/episodes/new">新建一期</Link>中使用。</GuideTip>
+      <GuideTip section="destinations">目的地包括官方资源与用户共享景区，地标以实景参考图为准。选好地方后可在<Link to="/episodes/new">新建一期</Link>中使用。</GuideTip>
+      <button className="k-btn k-btn-primary" disabled={busy} onClick={() => void create()}>创建目的地</button> <Link className="k-btn k-btn-secondary" to="/destinations/drafts">我的草稿</Link>
+      {failure && <p className="k-error" role="alert">{failure}</p>}
       <LibraryFilters label="目的地" query={query} type={type} onQuery={setQuery} onType={setType} count={destinations.length} />
       {destinations.length === 0 ? (
         <p className="k-empty">{query || type !== "all" ? "没有匹配的目的地，试试其他关键词或清除筛选。" : "还没有目的地。"}</p>
@@ -44,6 +72,8 @@ export default function DestinationsPage() {
               {(d.country_code || d.province) && <p className="k-card-meta">{[d.country_code, d.province, d.city].filter(Boolean).join(" · ")}</p>}
               {d.description && <p className="k-card-meta">{d.description}</p>}
               <Link to={`/episodes/new?destination=${encodeURIComponent(d.destination_id)}`} className="k-btn k-btn-secondary">用这个目的地新建一期 →</Link>
+              <span className="k-pill">{d.creator_id ? "用户共享" : "官方资源"}</span>
+              {canEditSharedDestination(d.creator_id, user.data?.user.user_id) && <button className="k-btn k-btn-secondary" disabled={busy} onClick={() => void edit(d.destination_id)}>{busy ? "处理中…" : "编辑我的目的地"}</button>}
               {d.route.length > 0 && <div className="k-card-meta">动线：{d.route.join(" → ")}</div>}
 
               <div className="k-landmark-grid">

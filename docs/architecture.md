@@ -47,3 +47,5 @@ flowchart LR
 | `infra` | 不需要本地容器编排；DGX 侦察记录见 `infra/dgx/README.md` |
 
 待定项见 PRD 第 11 节和各 ADR。
+
+目的地共享发布：engine 定义草稿内容与发布完整性校验；store 独占私有草稿与发布快照的 SQLite 事务；web 负责会话、上传与路径授权；worker 继续读取旧期冻结的目的地版本。协议见 [草稿 API](api/destination-drafts.md)。

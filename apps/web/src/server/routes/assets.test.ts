@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Persona } from "@kelvoy/engine";
-import { close, createSession, createUser, insertPersona, open } from "@kelvoy/store";
+import { close, createSession, createUser, insertPersona, open, upsertDestination } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Hono } from "hono";
 import assets, { resolveAssetPath } from "./assets";
@@ -62,6 +62,7 @@ test("requires login", async () => {
 
 test("serves a destination landmark reference image", async () => {
   const { cookie } = await login("dannei");
+  await upsertDestination({ destination_id: "lingshan", version: 1, name: "灵山", city: "无锡", type: "scenic_area", season_best: [], landmarks: [{ id: "l1", name: "大佛", best_time: "上午", refs: ["dest/lingshan/buddha_01.jpg"] }], route: [], food: [], transport: "", stay: "" });
   await writeAsset("dest/lingshan/buddha_01.jpg", "landmark-bytes");
 
   const app = buildApp();

@@ -17,5 +17,7 @@ test("workspace titles distinguish creation, detail and edit routes", () => {
   expect(workspaceTitle("/episodes/new")).toBe("新建一期");
   expect(workspaceTitle("/episodes/ep-42")).toBe("作品详情");
   expect(workspaceTitle("/personas/p1/edit/")).toBe("编辑角色");
+  expect(workspaceTitle("/destinations/drafts")).toBe("我的目的地草稿");
+  expect(workspaceTitle("/destinations/drafts/draft-1")).toBe("编辑目的地草稿");
   expect(workspaceTitle("/usage/")).toBe("积分与用量");
 });

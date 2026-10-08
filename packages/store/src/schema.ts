@@ -17,6 +17,12 @@ create table if not exists destinations (
   updated_at text not null default (datetime('now'))
 );
 
+create table if not exists destination_drafts (
+  draft_id text primary key, creator_id text not null, edit_version integer not null,
+  destination_id text, base_version integer, content text not null, published_version integer
+);
+create index if not exists idx_destination_drafts_creator on destination_drafts(creator_id);
+
 create table if not exists destination_versions (
   destination_id text not null,
   version integer not null,

@@ -122,7 +122,7 @@ export default function HelpPage() {
 
       <section className="k-help-resources" aria-label="创作资源说明">
         <article className="k-card" id="personas" tabIndex={-1}><h2>角色怎么选</h2><p>在<Link to="/personas">角色库</Link>切换到“官方角色”，点击“使用角色”即可带入新建一期；也可以直接在新建页选官方角色。想持续使用自己的原创角色，可在角色页新建并上传多个视角的参考图；它们有助于跨期保持形象一致。</p></article>
-        <article className="k-card" id="destinations" tabIndex={-1}><h2>目的地看什么</h2><p>在<Link to="/destinations">目的地库</Link>按名称搜索或按类型筛选，查看景区地标和实景参考；点击“用这个目的地新建一期”可带入选择。缺少足够参考图的地标会提示，生成前先核对地标与季节。</p></article>
+        <article className="k-card" id="destinations" tabIndex={-1}><h2>目的地看什么</h2><p>在<Link to="/destinations">目的地库</Link>按名称搜索或按类型筛选，查看景区地标和实景参考；点击“用这个目的地新建一期”可带入选择。缺少足够参考图的地标会提示，生成前先核对地标与季节。点击“创建目的地”可填写景区、城市、类型，按地标上传照片；草稿仅自己可见，可在“我的草稿”继续编辑。每个地标填写名称、最佳机位／时段、须保真特征并上传 3–10 张实景照片后即可发布，无需管理员审核。照片每张最多 10MB，支持 JPEG、PNG、WebP。发布后内容与照片公开共享，所有用户都可用于新建一期；创建、上传和发布不扣积分。自己的已发布目的地可从共享库创建私有编辑草稿，更新不会改变旧期冻结的目的地版本。</p></article>
         <article className="k-card" id="templates" tabIndex={-1}><h2>模板如何搭配</h2><p>新建一期会按目的地类型预选匹配的模板；高级设置可手动换。去<Link to="/templates">模板库</Link>搜索或按类型筛选，查看骨架、调色、片头片尾和标题样式；点击“使用模板”可带入新建一期。</p></article>
         <article className="k-card" id="settings" tabIndex={-1}><h2>出片默认值</h2><p>在<Link to="/settings">设置页</Link>保存默认语气。每镜 1–3 张候选图只用于传统关键帧方式；直出视频不生成候选图。提交前看实时预估积分。</p></article>
         <article className="k-card" id="credits" tabIndex={-1}><h2>积分与流水</h2><p>团队发放积分；可用余额可用于新任务，任务预留会先锁定积分，成功结算，失败退回。到<Link to="/usage">用量页</Link>看可用、预留余额及实际流水。</p></article>

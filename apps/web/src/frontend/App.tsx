@@ -1,5 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Layout from "./layout/Layout";
+import DestinationDraftsPage from "./pages/DestinationDraftsPage";
+import DestinationDraftEditPage from "./pages/DestinationDraftEditPage";
 import DestinationsPage from "./pages/DestinationsPage";
 import EpisodeDetailPage from "./pages/EpisodeDetailPage";
 import HomePage from "./pages/HomePage";
@@ -39,6 +41,8 @@ function App() {
           <Route path="/personas" element={<PersonasPage />} />
           <Route path="/personas/new" element={<PersonaEditPage />} />
           <Route path="/personas/:id/edit" element={<PersonaEditPage />} />
+          <Route path="/destinations/drafts" element={<DestinationDraftsPage />} />
+          <Route path="/destinations/drafts/:id" element={<DestinationDraftEditPage />} />
           <Route path="/destinations" element={<DestinationsPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/usage" element={<UsagePage />} />

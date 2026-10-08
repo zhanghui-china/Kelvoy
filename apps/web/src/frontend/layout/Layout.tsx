@@ -30,6 +30,8 @@ const NAV_GROUPS = [
 ];
 
 export function workspaceTitle(path: string): string {
+  if (/^\/destinations\/drafts\/?$/.test(path)) return "我的目的地草稿";
+  if (/^\/destinations\/drafts\/[^/]+\/?$/.test(path)) return "编辑目的地草稿";
   if (path === "/personas/new") return "新建角色";
   if (/^\/personas\/[^/]+\/edit\/?$/.test(path)) return "编辑角色";
   if (/^\/episodes\/(?!new\/?$)[^/]+\/?$/.test(path)) return "作品详情";

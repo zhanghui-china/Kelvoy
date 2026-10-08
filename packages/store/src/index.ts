@@ -13,3 +13,5 @@ export * from "./credits";
 export * from "./charged-tasks";
 export * from "./review-shot-patch";
 export * from "./artifact-retention";
+
+export * from "./destination-drafts";

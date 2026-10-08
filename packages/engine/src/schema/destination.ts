@@ -18,6 +18,8 @@ export interface Landmark {
 // Scenic-spot granularity: one destination = one scenic area; city is grouping only.
 export interface Destination {
   destination_id: string;
+  /** Missing/null identifies an official resource. */
+  creator_id?: string | null;
   version: number;
   name: string;
   city: string;

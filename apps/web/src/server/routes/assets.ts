@@ -1,5 +1,5 @@
 import { join, relative, resolve, sep } from "node:path";
-import { getPersona } from "@kelvoy/store";
+import { getPersona, isPublishedDestinationAsset } from "@kelvoy/store";
 import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 import { staysOnDiskPath } from "./file-path";
@@ -62,6 +62,10 @@ assets.get("/:path{.+}", async (c) => {
     if (!persona || (persona.owner_id !== null && persona.owner_id !== c.get("ownerId"))) {
       return c.json({ ok: false, error: "not_found" }, 404);
     }
+  }
+
+  if (key.startsWith(DESTINATION_PREFIX) && !await isPublishedDestinationAsset(key)) {
+    return c.json({ ok: false, error: "not_found" }, 404);
   }
 
   const file = Bun.file(filePath);

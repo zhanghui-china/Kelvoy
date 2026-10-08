@@ -5,3 +5,5 @@ export * from "./template";
 export * from "./user";
 export * from "./api";
 export * from "./validate";
+
+export * from "./destination-draft";
