@@ -2,7 +2,7 @@
 
 ## 当前主要部署（2026-10-08）
 
-GX10 `gx10-8e22` 为 Kelvoy 主要机器，服务地址 `http://100.80.224.95:8888`（Tailscale）。当前 Web／Worker 运行共享目的地提交 `a53d8cd`；通过独立功能分支的增量 bundle 上线，未 push GitHub。发布目录、数据库及素材备份、迁移、双账号验收与回退见 [共享目的地上线记录](gx10-shared-destinations-deployment.md)。上次 GitHub main 发布见 [历史主干部署记录](gx10-8e22-main-deployment.md)。
+GX10 `gx10-8e22` 为 Kelvoy 主要机器，服务地址 `http://100.80.224.95:8888`（Tailscale）。当前 Web／Worker 运行角色编辑／删除提交 `af9e261`；通过独立功能分支的增量 bundle 上线，未 push GitHub。发布目录、数据库及素材备份、迁移、双账号验收与回退见 [角色编辑／删除上线记录](gx10-persona-deletion-deployment.md)。此前功能见 [共享目的地上线记录](gx10-shared-destinations-deployment.md)。上次 GitHub main 发布见 [历史主干部署记录](gx10-8e22-main-deployment.md)。
 
 PRD v0.2 的"两台 DGX Spark"确认成立,但**不是两台对等独立的机器,性质也不一样**:一台(`gx10-8e22`)和 visionary、shanhai 共用,是长期基础设施;另一台(黑客松分配节点,见下方)是本次黑客松组委会发的**参赛资源,不是 Kelvoy 自己的基础设施**——Kelvoy 就是这次黑客松的参赛项目,用这台节点名正言顺,但它**比赛结束后会被组委会统一回收并清空磁盘,不提供任何备份**,不能当成长期生产环境规划。§9"一台宕机容量减半但不停服"这条要按这个不对等的情况重新想:一台要和别的项目抢 GPU,另一台干脆是有明确失效日期的临时资源——两台里没有一台是"稳定、长期、专属"的,这是需要另外记一条开放问题的事,不在这次改动范围内。
 

@@ -1,6 +1,8 @@
 # GX10 共享目的地上线记录（2026-10-08）
 
-GX10 `gx10-8e22` 当前 Web／Worker 已更新为共享目的地版本，入口：[目的地库](http://100.80.224.95:8888/destinations)。
+本次 GX10 `gx10-8e22` Web／Worker 更新为共享目的地版本，入口：[目的地库](http://100.80.224.95:8888/destinations)。
+
+后续版本见 [角色编辑／删除上线记录](gx10-persona-deletion-deployment.md)。
 
 ## 发布版本与范围
 
