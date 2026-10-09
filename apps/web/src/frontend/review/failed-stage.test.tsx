@@ -63,6 +63,13 @@ test("queued retry keeps progress visible without offering another retry", () =>
   expect(html).not.toContain("<button");
 });
 
+test("retry submission disables the action and describes the waiting state", () => {
+  const episode = { episode_id: "e_1", status: "kf_review", shots: [{ status: "failed" }] } as unknown as Episode;
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_1"><ProgressView
+    episode={episode} mutation={{ ...mutation, pending: true }} failedTask={{ stage: "keyframe", shot_no: 1 }} /></StaticRouter>);
+  expect(html).toContain('disabled="">正在提交重试…</button>');
+});
+
 test("direct reference progress has no keyframe stage", () => {
   const html = renderToStaticMarkup(<StageSteps status="clipping" videoSource="references" />);
   expect(html).not.toContain("关键帧");

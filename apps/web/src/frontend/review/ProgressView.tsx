@@ -1,4 +1,5 @@
 import type { Episode } from "@kelvoy/engine";
+import { useRef, useState } from "react";
 import { retryFailedTask } from "../api/client";
 import type { FailedTaskSummary } from "../api/client";
 import { GuideTip } from "../GuideTip";
@@ -17,8 +18,24 @@ export default function ProgressView({
   mutation: EpisodeMutation;
   failedTask?: FailedTaskSummary | null;
 }) {
+  const submitting = useRef(false);
+  // Hide the action immediately after success, until refreshed episode data
+  // supplies the authoritative failed-task summary (or a new failure).
+  const [queuedEpisode, setQueuedEpisode] = useState<Episode | null>(null);
+  const retryQueued = queuedEpisode === episode;
   const hasFailure = episode.status === "failed" || episode.shots.some((shot) => shot.status === "failed");
-  const canRetry = hasFailure && !!failedTask;
+  const canRetry = hasFailure && !!failedTask && !retryQueued;
+
+  async function retry() {
+    if (submitting.current || mutation.pending || retryQueued) return;
+    submitting.current = true;
+    try {
+      const result = await mutation.run((rowVersion) => retryFailedTask(episode.episode_id, rowVersion));
+      if (result?.ok) setQueuedEpisode(episode);
+    } finally {
+      submitting.current = false;
+    }
+  }
   const doneShots = episode.shots.filter((s) => s.status === "approved").length;
   const readyShots = episode.shots.filter(
     (s) => s.status === "kf_ready" || s.status === "kf_selected" || s.status === "clip_ready",
@@ -50,6 +67,8 @@ export default function ProgressView({
           <p className="k-error" role="alert">
             {episode.failure_reason ?? "生成失败。产物和已有的镜都还在，重试只会重跑失败的阶段。"}
           </p>
+        ) : retryQueued ? (
+          <p className="k-card-meta" role="status">失败任务已排队重试，等待后台处理。页面会自动刷新。</p>
         ) : hasFailure && episode.status === "failed" ? (
           <p className="k-error" role="alert">
             {episode.failure_reason ?? "生成失败。"} 未找到可重试的失败任务，请刷新页面确认最新状态。
@@ -71,11 +90,9 @@ export default function ProgressView({
             type="button"
             className="k-btn k-btn-primary"
             disabled={mutation.pending}
-            onClick={() =>
-              mutation.run((rowVersion) => retryFailedTask(episode.episode_id, rowVersion))
-            }
+            onClick={retry}
           >
-            重新执行失败任务
+            {mutation.pending ? "正在提交重试…" : "重新执行失败任务"}
           </button>
         </div>
       )}

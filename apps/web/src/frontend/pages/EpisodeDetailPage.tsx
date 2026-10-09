@@ -102,7 +102,8 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
         episode.status === "scripting" ||
         episode.status === "assets" ||
         episode.status === "failed") && <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
-      {(episode.status === "keyframing" || episode.status === "clipping") &&
+      {(episode.status === "keyframing" || episode.status === "kf_review" ||
+        episode.status === "clipping" || episode.status === "clip_review") &&
         episode.shots.some((shot) => shot.status === "failed") &&
         <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
 
