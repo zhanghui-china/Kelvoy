@@ -257,6 +257,8 @@
   background: var(--color-bg);
 }
 
+.k-desk-editor[hidden] { display: none; }
+
 .k-desk-editor-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

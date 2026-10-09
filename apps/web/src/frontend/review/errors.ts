@@ -14,6 +14,7 @@ const ERROR_LABELS: Record<string, string> = {
   invalid_body: "请求格式不对",
   invalid_instruction: "请填写 500 字以内的优化指令",
   storyboard_busy: "生成任务正在处理中，完成后可修改分镜",
+  invalid_public_patch: "请检查画面描述：不能为空，且最多 2000 字；当前阶段需允许修改",
   invalid_fields: "请填写画面动作、关键帧描述与运动描述，并检查字段长度",
   invalid_scene: "场景已变化，请重新选择",
   invalid_landmark: "请重新选择目的地里的地标",

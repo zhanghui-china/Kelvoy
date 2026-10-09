@@ -89,6 +89,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
           destination={destination}
           persona={persona}
           mutation={mutation}
+          busy={storyboardBusy}
         />
       )}
       {(episode.status === "clip_review" || episode.status === "clipping") && (

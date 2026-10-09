@@ -26,12 +26,14 @@ function KeyframeShot({
   isCurrent,
   hidden,
   registerShot,
+  busy,
 }: {
   episode: Episode;
   shot: Shot;
   destination: Destination | null;
   persona: Persona | null;
   mutation: EpisodeMutation;
+  busy: boolean;
   isCurrent: boolean;
   hidden: boolean;
   registerShot: (no: number, el: HTMLElement | null) => void;
@@ -39,6 +41,42 @@ function KeyframeShot({
   const [promptOpen, setPromptOpen] = useState(false);
   const [prompt, setPrompt] = useState(shot.kf_prompt);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const editLockReason = episode.status !== "kf_review" ? "当前不在关键帧审核，暂时不能修改画面描述。"
+    : episode.script_pending_task_id ? "脚本任务正在处理，请等待完成。"
+    : busy ? "生成任务正在处理中，完成后可修改画面描述。"
+    : mutation.pending || saving ? "操作正在提交，请稍候。" : null;
+
+  async function savePrompt() {
+    if (editLockReason || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    let submittedVersion: number | undefined;
+    try {
+      const result = await mutation.run((rowVersion) => {
+        submittedVersion = rowVersion;
+        return patchShot(episode.episode_id, shot.no, rowVersion, { kf_prompt: prompt });
+      });
+      if (!result) return;
+      if (!result.ok) {
+        setError(describeWriteError(result));
+        return;
+      }
+      setPromptOpen(false);
+      // Use the server's version to distinguish an actual edit from a no-op.
+      setNotice(result.row_version === submittedVersion
+        ? "已保存，内容未变" : "已保存，返回脚本审核后可继续生成");
+    } catch {
+      setError(describeWriteError({ ok: false, error: "network_error" }));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
 
   const landmark = destination?.landmarks.find((l) => l.id === shot.landmark) ?? null;
 
@@ -56,20 +94,8 @@ function KeyframeShot({
     if (result && !result.ok) setError(describeWriteError(result));
   }
 
-  async function regenerate(withPrompt: boolean) {
+  async function regenerate() {
     setError(null);
-    if (withPrompt) {
-      const patched = await mutation.run((rowVersion) =>
-        patchShot(episode.episode_id, shot.no, rowVersion, { kf_prompt: prompt }),
-      );
-      if (!patched) return;
-      if (!patched.ok) {
-        setError(describeWriteError(patched));
-        return; // Preserve the form when the save fails.
-      }
-      setPromptOpen(false);
-      return; // Editing reopens script review; generation is an explicit next action.
-    }
     const result = await mutation.run((rowVersion) =>
       regenShot(episode.episode_id, shot.no, rowVersion, "keyframe"),
     );
@@ -135,39 +161,47 @@ function KeyframeShot({
         <button
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
-          disabled={episode.status !== "kf_review"}
-          onClick={() => setPromptOpen(!promptOpen)}
+          disabled={editLockReason !== null}
+          onClick={() => {
+            if (!promptOpen) {
+              setPrompt(shot.kf_prompt);
+              setNotice(null);
+              setError(null);
+            }
+            setPromptOpen(!promptOpen);
+          }}
         >
-          {promptOpen ? "收起 prompt" : "修改画面描述"}
+          {promptOpen ? "收起画面描述" : "修改画面描述"}
         </button>
         <button
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
           disabled={mutation.pending || episode.status !== "kf_review" || !canRegen(shot)}
-          onClick={() => regenerate(false)}
+          onClick={regenerate}
         >
           直接重生成
         </button>
         {regenHint(shot) && <span className="k-card-meta">{regenHint(shot)}</span>}
       </div>
-      {promptOpen && (
-        <div className="k-desk-editor">
-          <label className="k-field">
-            关键帧 prompt
-            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-          </label>
-          <div className="k-desk-actions">
-            <button
-              type="button"
-              className="k-btn k-btn-primary k-btn-tiny"
-              disabled={mutation.pending || episode.status !== "kf_review" || !canRegen(shot)}
-              onClick={() => regenerate(true)}
-            >
-              保存修改，返回脚本审核
-            </button>
-          </div>
+      {editLockReason && <p className="k-card-meta" role="status">{editLockReason}</p>}
+      {notice && <p className="k-card-meta" role="status">{notice}</p>}
+      <div className="k-desk-editor" hidden={!promptOpen}>
+        <label className="k-field">
+          画面描述
+          <textarea value={prompt} disabled={editLockReason !== null} onChange={(e) => setPrompt(e.target.value)} />
+        </label>
+        <div className="k-desk-actions">
+          <button
+            type="button"
+            className="k-btn k-btn-primary k-btn-tiny"
+            disabled={editLockReason !== null}
+            onClick={savePrompt}
+          >
+            {saving ? "保存中…" : "保存画面描述"}
+          </button>
         </div>
-      )}
+        <p className="k-card-meta">内容未变时留在当前审核；修改后返回脚本审核，仅此镜素材需重新生成，其他镜头与旧成片保留。保存不会自动生成。</p>
+      </div>
     </article>
   );
 }
@@ -177,11 +211,13 @@ export default function KeyframeReview({
   destination,
   persona,
   mutation,
+  busy = false,
 }: {
   episode: Episode;
   destination: Destination | null;
   persona: Persona | null;
   mutation: EpisodeMutation;
+  busy?: boolean;
 }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -219,7 +255,7 @@ export default function KeyframeReview({
           )}
         </div>
 
-        <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；全部生成完毕后可修改画面描述，保存后在脚本审核继续。</GuideTip>
+        <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；任务空闲时可保存画面描述。内容未变时留在当前审核；修改后返回脚本审核，再明确选择生成。</GuideTip>
 
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />
@@ -250,6 +286,7 @@ export default function KeyframeReview({
             destination={destination}
             persona={persona}
             mutation={mutation}
+            busy={busy}
             isCurrent={activeNo === shot.no}
             hidden={!showAll && activeNo !== shot.no}
             registerShot={registerShot}
