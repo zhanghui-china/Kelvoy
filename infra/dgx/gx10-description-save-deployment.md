@@ -22,7 +22,17 @@ Web 已修复画面描述保存按钮错误依赖 `canRegen` 的问题。`failed
 
 ## 验证过程中的推理环境引用变更
 
-- 首次 GX10 Python 验证误将暂存目录 `.venv` 链接到现有 `/home/huntun/kelvoy/services/inference/.venv` 并执行 `uv run`。uv 更新了 editable 包路径引用；当前 `_editable_impl_kelvoy_inference.pth` 和 `direct_url.json` 指向本次新发布的 `services/inference`。尚未核实该次同步是否还影响其他包元数据。
+- 首次 GX10 Python 验证误将暂存目录 `.venv` 链接到现有 `/home/huntun/kelvoy/services/inference/.venv` 并执行 `uv run`。uv 更新了 editable 包路径引用；当前 `_editable_impl_kelvoy_inference.pth` 和 `direct_url.json` 指向本次新发布的 `services/inference`。后续只读核查确认同时新增 Pillow 12.3.0，其他已安装包版本与旧目录锁文件一致；此次更新不是仅路径元数据变化。
 - 只读逐文件核对确认：新目录推理 Python 源码与正在运行的 `main-20261007` 完全相同；Inference 未重启、仍为 active。新目录保留，不删除，以免环境引用悬空。
 - 后续验证使用独立环境副本、显式 PYTHONPATH 和 `uv run --no-sync`，已通过全部 Python 检查。
 - 自动审批拒绝对现有根推理环境执行恢复用的 `uv sync --frozen`，理由是可能修改运行服务使用的环境。已告知用户并请求授权核查及恢复；当前恢复待授权，不能把环境引用恢复标记为完成。
+
+
+### 用户授权只读核查结果（2026-10-09）
+
+- 用户授权核查，未授权恢复；本次核查未执行同步、安装、删除或服务重启。
+- 运行进程 PID 2546 的实际启动命令是 `main-20261007/services/inference/.venv/bin/python`，工作目录同属 `main-20261007`。该环境与旧工作目录及新发布目录的 `.venv` inode 各不相同，确认为独立环境。
+- 运行环境的 editable `.pth` 与 `direct_url.json` 仍指向 `main-20261007/services/inference`。新进程只读导入也定位到该目录；已安装包全部符合运行版本锁文件，没有锁文件外包，发布时段没有 dist-info 更新。推理服务自 2026-10-08 10:37:44 UTC 起运行，未在本次发布期间重启；Web／Inference health 均正常。
+- 受影响的是旧工作目录 `/home/huntun/kelvoy/services/inference/.venv`：editable 包引用被改为本次新发布目录，并新增 Pillow 12.3.0。两个对应 dist-info 目录修改时间均为 2026-10-09 01:12:44 UTC；没有已安装包版本偏离旧目录锁文件，锁文件间也没有包版本升级或降级。
+- 旧工作目录的推理源码、pyproject 和 uv.lock 与当前运行版本不同；新发布版本的源码、pyproject 和 uv.lock 与当前运行版本相同。因此不得将旧目录的 `uv sync --frozen` 当作恢复当前运行环境的方法。
+- 恢复仍未执行。应保持新发布目录存在，防止旧环境的引用悬空；若后续授权恢复，应先明确旧环境的目标用途和原包引用，再只处理该旧环境。
