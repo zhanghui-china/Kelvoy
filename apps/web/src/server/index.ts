@@ -10,10 +10,12 @@ import me from "./routes/me";
 import personas from "./routes/personas";
 import share from "./routes/share";
 import templates from "./routes/templates";
+import system from "./routes/system";
 
 const app = new Hono();
 
 app.route("/api/health", health);
+app.route("/api/system", system);
 app.route("/api/auth", auth);
 app.route("/api/me", me);
 app.route("/api/personas", personas);

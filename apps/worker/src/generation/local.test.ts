@@ -249,3 +249,35 @@ test("direct video sends person and scene references without a keyframe", async 
   expect(result.ref_hashes).toHaveLength(2);
   expect(await readFile(join(root, "e1", result.key), "utf8")).toBe("video");
 });
+
+test("task backend snapshot propagates override and prevents reuse across backend revisions", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-backend-cache-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "inference", "image"), { recursive: true });
+  const requests: { body: unknown; options: unknown }[] = [];
+  const call = async (_route: string, body: unknown, options: unknown): Promise<CallInferenceResult> => {
+    requests.push({ body, options });
+    await writeFile(join(root, "inference", "image", "result.png"), `image ${requests.length}`);
+    return { ok: true, response: { paths: ["inference/image/result.png"], model: "Qwen",
+      version: "1", seed: 42, seconds: 1 } };
+  };
+  const snapshot = { comfyui_base_url: "http://gpu-a:8188", config_version: 2,
+    inference_base_url: "http://inference-a:8100", inherited_comfyui_base_url: null };
+  const input = { episode_id: "e1", shot_no: 1, candidate_no: 0, prompt: "scene",
+    refs: [], seed: 42, generation_id: "generation-1" };
+  const provider = createLocalGenerationProviders(call, snapshot).keyframe;
+  snapshot.comfyui_base_url = "http://changed-after-task-start:8188";
+  const first = await provider.generate({ ...input, execution_id: "old" });
+  expect(requests[0]?.body).toMatchObject({ comfyui_base_url: "http://gpu-a:8188" });
+  expect(requests[0]?.options).toMatchObject({ baseUrl: "http://inference-a:8100" });
+  expect((await provider.generate({ ...input, execution_id: "retry" })).key).toBe(first.key);
+  const changed = createLocalGenerationProviders(call, { ...snapshot,
+    comfyui_base_url: null, config_version: 3 }).keyframe;
+  const second = await changed.generate({ ...input, execution_id: "new" });
+  expect(second.key).not.toBe(first.key);
+  expect(requests[1]?.body).toMatchObject({ comfyui_base_url: null });
+  expect(requests).toHaveLength(2);
+  await createLocalGenerationProviders(call, { ...snapshot, comfyui_base_url: null,
+    config_version: 3, inference_base_url: "http://inference-b:8100" }).keyframe.generate({ ...input, execution_id: "another" });
+  expect(requests).toHaveLength(3);
+});

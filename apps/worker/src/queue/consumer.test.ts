@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
 import {
   close,
+  saveSystemConfig,
   dequeueTask,
   enqueueTask,
   getEpisode,
@@ -468,4 +472,64 @@ test("a queued video task never regenerates an approved shot", async () => {
   const actual = await getEpisode(ep.episode_id);
   expect(actual.ok && actual.episode.shots[0]?.clip).toBe("clip/01_old.mp4");
   expect(await dequeueTask()).toBeNull();
+});
+
+
+test("persisted backend saves reach task HTTP requests and clearing restores inherited selection", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kelvoy-task-backend-"));
+  const originalFetch = globalThis.fetch;
+  const originalProjects = process.env.KELVOY_PROJECTS_ROOT;
+  const originalInference = process.env.INFERENCE_BASE_URL;
+  const requests: { address: string; body: { comfyui_base_url?: string | null; seed: number } }[] = [];
+  try {
+    process.env.KELVOY_PROJECTS_ROOT = root;
+    process.env.INFERENCE_BASE_URL = "http://task-inference:8100";
+    await mkdir(join(root, "p"), { recursive: true });
+    await mkdir(join(root, "inference", "image"), { recursive: true });
+    await writeFile(join(root, "p", "front.png"), "persona reference");
+    await insertPersona({ ...personaFixture("c_test"), refs: ["p/front.png"] });
+    await upsertDestination(destinationFixture("d_test"));
+    globalThis.fetch = (async (address, init) => {
+      const body = JSON.parse(String(init?.body));
+      requests.push({ address: String(address), body });
+      const key = `inference/image/result-${requests.length}.png`;
+      await writeFile(join(root, key), `candidate ${requests.length}`);
+      return Response.json({ paths: [key], model: "mock-Qwen", version: "1",
+        seed: body.seed, seconds: 0 });
+    }) as typeof fetch;
+    expect((await saveSystemConfig(1, { comfyui_base_url: "http://saved-gpu:8188",
+      bridge_base_url: null }, "operator")).ok).toBe(true);
+    for (const [id, expected] of [["e_saved_backend", "http://saved-gpu:8188"],
+      ["e_inherited_backend", null]] as const) {
+      const episode = fixtureEpisode(id);
+      episode.status = "keyframing";
+      episode.shots = [{ ...shotFixture(), landmark: "" }];
+      await insertEpisode(episode);
+      await enqueueTask({ episode_id: id, stage: "keyframe", shot_no: 1 });
+      const task = await dequeueTask();
+      expect(task).not.toBeNull();
+      await handleTask(task!);
+      const completed = await getEpisode(id);
+      expect(completed.ok && completed.episode.status).toBe("kf_review");
+      expect(completed.ok && completed.episode.shots[0]?.candidates).toHaveLength(2);
+      const emitted = requests.slice(-2);
+      expect(emitted).toHaveLength(2);
+      expect(emitted.map(item => item.body.comfyui_base_url)).toEqual([expected, expected]);
+      expect(emitted.map(item => item.address)).toEqual([
+        "http://task-inference:8100/image/", "http://task-inference:8100/image/",
+      ]);
+      if (expected !== null) {
+        expect((await saveSystemConfig(2, { comfyui_base_url: null,
+          bridge_base_url: null }, "operator")).ok).toBe(true);
+      }
+    }
+    expect(requests).toHaveLength(4);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalProjects === undefined) delete process.env.KELVOY_PROJECTS_ROOT;
+    else process.env.KELVOY_PROJECTS_ROOT = originalProjects;
+    if (originalInference === undefined) delete process.env.INFERENCE_BASE_URL;
+    else process.env.INFERENCE_BASE_URL = originalInference;
+    await rm(root, { recursive: true, force: true });
+  }
 });

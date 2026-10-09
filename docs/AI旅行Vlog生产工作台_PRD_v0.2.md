@@ -653,3 +653,13 @@ FR-14 增加“创建目的地”“我的草稿”：填写景区名称、城�
 `Episode.final_needs_recompose` 标记当前分镜已变化；`shared_storyboard` 保存上一版成片对应分镜和场景，上一版成片仍可下载和分享。新合成成功后清除该快照和标记，一起切换成片及分享内容。
 
 单镜 AI 建议复用 script 队列、LLM 与当前脚本积分单价，仅返回尚未填写字段，不直接写正式分镜。Task.operation 增加 shot_suggest，SQLite tasks 增加 payload_json/result_json/error；任务输入包含插入位置、描述和已填字段，结果保持创建者私有。成功结算一次脚本积分，失败释放预留积分，保存、删除和排序免费。
+
+## 2026-10-09：全站后端配置与系统检测
+
+设置页新增只读系统检测，所有登录用户可检测当前配置，查看 Web、Inference、ComfyUI、bridge 的状态、时间与耗时及简化原因。bridge 是伴随服务，Worker 无 HTTP 端口，本版不验证 Worker 存活，不提交生成／上传／取消／清队列任务，不消耗积分；静态通过不保证模型加载与出图。
+
+运维账号由 `KELVOY_OPERATOR_USER_IDS` 明确指定，空白名单无权限。仅运维可查看地址、队列及四套工作流节点／模型详情，测试未保存地址、保存全站配置或恢复继承。修改输入使测试结果过期，异步操作禁用重复点击，保存失败保留输入。
+
+SQLite 新增单例 `system_config`（id=1）：`version` 初始 1，`comfyui_base_url`／`bridge_base_url` 可空覆盖值，`updated_by`／`updated_at` 可空修改记录。该持久化模型由 store 管理，独立于个人 UserSettings、Episode 和生成领域数据。保存事务检查版本与全站 held/pending/processing 任务；冲突 409。Worker 每任务冻结覆盖值与版本，通过 InferenceRequest 可选 `comfyui_base_url` 传递，缓存纳入后端标识，清除覆盖恢复 Inference 部署环境。
+
+新增认证接口 GET/PATCH `/api/system/config`、POST `/api/system/test`，协议见 `docs/api/system.md`。HTTP(S) 地址禁止凭据／查询／片段与重定向，两端显式 origin 白名单；诊断请求最长 15 秒，单项最多 5 秒、无重试。保存前复查 ComfyUI 接口，缺节点／模型显示异常，但不阻止接口可达的后端保存。架构边界见 ADR-0010。

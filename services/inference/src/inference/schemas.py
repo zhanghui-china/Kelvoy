@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 
 class InferenceRequest(BaseModel):
+    comfyui_base_url: str | None = None
     prompt: str
     refs: list[str] = Field(default_factory=list)
     seed: int | None = None

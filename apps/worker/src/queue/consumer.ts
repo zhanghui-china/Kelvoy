@@ -17,13 +17,14 @@ import {
   getDestinationVersion,
   getEpisode,
   getPersonaVersion,
+  getSystemConfig,
   hasActiveStageTasks,
   prepareTaskShot,
   renewTaskLease,
   requeueTaskAfterCommitConflict,
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
-import { createLocalGenerationProviders } from "../generation/local";
+import { createLocalGenerationProviders, snapshotGenerationBackend, type GenerationBackend } from "../generation/local";
 import { handleStoryboardSuggestion } from "../generation/storyboard-suggestion";
 
 /**
@@ -88,7 +89,8 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
  * Script needs the destination; generation gets worker-owned HTTP/file
  * adapters; compose gets the worker-owned ffmpeg backend.
  */
-export async function buildStageContext(stage: StageName, episode: Episode, task?: Task): Promise<StageContext> {
+export async function buildStageContext(stage: StageName, episode: Episode, task?: Task, backend?: GenerationBackend): Promise<StageContext> {
+  const frozenBackend = backend ?? snapshotGenerationBackend(await getSystemConfig());
   const [destination, persona] = await Promise.all([
     getDestinationVersion(episode.destination_id, episode.destination_version),
     getPersonaVersion(episode.persona_id, episode.persona_version),
@@ -100,7 +102,7 @@ export async function buildStageContext(stage: StageName, episode: Episode, task
   if (persona) context.persona = persona;
   if (stage === "compose") context.compose = ffmpegComposeProvider;
   if ((stage === "keyframe" || stage === "video") && task) {
-    Object.assign(context, createLocalGenerationProviders(), {
+    Object.assign(context, createLocalGenerationProviders(undefined, frozenBackend), {
       generation_id: task.generation_id ?? task.task_id,
       attempt: task.attempt,
     });
@@ -145,6 +147,7 @@ async function prepareShot(task: Task, rowVersion: number, episode: Episode): Pr
 
 export async function handleTask(task: Task, overrides: Partial<StageContext> = {}): Promise<void> {
   if (overrides.signal?.aborted) return;
+  const backend = snapshotGenerationBackend(await getSystemConfig());
   if (task.operation === "shot_suggest") {
     await handleStoryboardSuggestion(task, overrides);
     return;
@@ -176,7 +179,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
     if (prepared.kind === "lease_lost") return;
     current = { ok: true, episode: prepared.episode, row_version: prepared.row_version };
     overrides.signal?.throwIfAborted();
-    const context = { ...await buildStageContext(task.stage, current.episode, task), ...overrides };
+    const context = { ...await buildStageContext(task.stage, current.episode, task, backend), ...overrides };
     const updated = await runStage(
       task.stage,
       current.episode,

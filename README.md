@@ -171,9 +171,14 @@ bun run packages/cli/src/index.ts grant-credits <用户名> <额度> <发放ID>
 export KELVOY_PROJECTS_ROOT=/data/kelvoy/projects          # 产物根目录（默认 projects）
 export KELVOY_FONT_FILE=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
 export KELVOY_COMFYUI_BASE_URL=http://127.0.0.1:8188       # ComfyUI
-export INFERENCE_BASE_URL=http://127.0.0.1:8100            # services/inference
+export INFERENCE_BASE_URL=http://127.0.0.1:8100            # Web 和 Worker 使用相同值
+export KELVOY_BACKEND_ALLOWED_ORIGINS=http://127.0.0.1:8188,http://127.0.0.1:5099 # Web 和 Inference 都需设置
+export KELVOY_BRIDGE_BASE_URL=http://127.0.0.1:5099
+export KELVOY_OPERATOR_USER_IDS=                          # 仅显式指定真实用户 ID 才有全站运维权限
 export STEPFUN_API_KEY=<你的密钥>                           # 脚本生成
 ```
+
+设置页提供只读系统检测与运维后端配置；空 origin 白名单会拒绝 ComfyUI 生成与后端检测。运维权限与个人设置独立，测试输入不会保存。详见 [系统接口](docs/api/system.md) 与 [部署步骤](infra/dgx/gx10-system-diagnostics-deployment.md)。
 
 ### 5. 启动服务
 

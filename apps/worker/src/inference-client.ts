@@ -42,7 +42,7 @@ function inferenceBaseUrl(): string {
 export async function callInference(
   path: string,
   body: InferenceRequest,
-  options: { timeoutMs?: number; signal?: AbortSignal } = {},
+  options: { timeoutMs?: number; signal?: AbortSignal; baseUrl?: string } = {},
 ): Promise<CallInferenceResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? TIMEOUT_MS);
@@ -51,8 +51,9 @@ export async function callInference(
   if (options.signal?.aborted) controller.abort();
 
   try {
-    const res = await fetch(`${inferenceBaseUrl()}${path}`, {
+    const res = await fetch(`${options.baseUrl ?? inferenceBaseUrl()}${path}`, {
       method: "POST",
+      redirect: "error",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: controller.signal,

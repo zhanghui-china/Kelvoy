@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     comfyui_base_url: str = Field(
         default="http://127.0.0.1:8188", validation_alias="KELVOY_COMFYUI_BASE_URL"
     )
+    bridge_base_url: str = Field(
+        default="http://127.0.0.1:5099", validation_alias="KELVOY_BRIDGE_BASE_URL"
+    )
+    backend_allowed_origins: str = Field(
+        default="", validation_alias="KELVOY_BACKEND_ALLOWED_ORIGINS"
+    )
     host: str = "127.0.0.1"
     # 8000 is taken by visionary-backend on the shared DGX (gx10-8e22) —
     # see infra/dgx/README.md. Don't move this back to 8000.

@@ -8,6 +8,7 @@
  */
 export interface InferenceRequest {
   prompt: string;
+  comfyui_base_url?: string | null;
   refs?: string[];
   seed?: number;
   size?: string;

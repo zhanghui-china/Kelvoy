@@ -8,10 +8,11 @@ import { changePassword, getMySettings, updateMySettings } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
 import { GuideTip } from "../GuideTip";
 import "./SettingsPage.css";
+import SystemDiagnostics from "./SystemDiagnostics";
 import { Button, ErrorState, Field, LoadingState } from "../ui";
 
 /*
- * M2-15（#43）设置页：只有两块——出片默认值、账号与安全。设计稿上的成员
+ * M2-15（#43）的出片默认值、账号与安全，加上全站只读系统检测。设计稿上的成员
  * 邀请 / 发票 / 自动预审 / 宽高比切换都不做（PRD §16、§1、附录 A），也不
  * 画成禁用态，issue "不做"那一节逐条写了理由。
  */
@@ -111,6 +112,7 @@ export default function SettingsPage() {
       <h1>设置</h1>
 
       <div className="k-settings-stack">
+        <SystemDiagnostics />
         <section className="k-card">
           <h2>出片默认值</h2>
           <p className="k-card-meta">新建一期时预填这几项，每一期都还能当场改。</p>

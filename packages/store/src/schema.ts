@@ -2,6 +2,16 @@
 // doc columns hold JSON as TEXT — bun:sqlite has no native JSON column
 // type, and PRD v0.2 §6 always treated these as "one jsonb row" anyway.
 export const SCHEMA = `
+create table if not exists system_config (
+  id integer primary key check (id = 1),
+  version integer not null default 1,
+  comfyui_base_url text,
+  bridge_base_url text,
+  updated_by text,
+  updated_at text
+);
+insert or ignore into system_config (id) values (1);
+
 create table if not exists episodes (
   episode_id text primary key,
   owner_id text not null,

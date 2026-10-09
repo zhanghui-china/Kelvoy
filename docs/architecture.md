@@ -49,3 +49,7 @@ flowchart LR
 待定项见 PRD 第 11 节和各 ADR。
 
 目的地共享发布：engine 定义草稿内容与发布完整性校验；store 独占私有草稿与发布快照的 SQLite 事务；web 负责会话、上传与路径授权；worker 继续读取旧期冻结的目的地版本。协议见 [草稿 API](api/destination-drafts.md)。
+
+### 全站系统配置与检测（ADR-0010）
+
+Web `/api/system/*` 认证与运维白名单 → `@kelvoy/store` 单例配置／版本／全站活跃任务事务锁；Web 使用与 Worker 相同的 `INFERENCE_BASE_URL` 调 Inference `/system/diagnostics`，由推理机器只读检查 ComfyUI 和 bridge。Worker 每任务读取冻结配置，生成请求传入 ComfyUI 覆盖，缓存纳入后端标识。普通账号不接收内部地址或静态依赖详情。bridge 不属于生成必需链路，系统检测不证明 Worker 存活或模型可实际出图。

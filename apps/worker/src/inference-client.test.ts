@@ -117,3 +117,26 @@ test("default HTTP deadline leaves 20 seconds after direct generation and cancel
     timer.mockRestore();
   }
 });
+
+test("inference redirects are rejected without sending a request to their target", async () => {
+  let targetCalls = 0;
+  handler = (req) => {
+    if (new URL(req.url).pathname === "/target") {
+      targetCalls++;
+      return Response.json({});
+    }
+    return Response.redirect(`http://127.0.0.1:${server!.port}/target`, 307);
+  };
+  const result = await callInference("/image/", { prompt: "test" });
+  expect(result.ok).toBe(false);
+  expect(!result.ok && result.error.type).toBe("network");
+  expect(targetCalls).toBe(0);
+});
+
+test("frozen inference address takes precedence over a changed deployment environment", async () => {
+  const frozen = process.env.INFERENCE_BASE_URL;
+  handler = () => Response.json({ paths: ["inference/image/result.png"], model: "qwen",
+    version: "1", seed: 1, seconds: 1 });
+  process.env.INFERENCE_BASE_URL = "http://127.0.0.1:1";
+  expect((await callInference("/image/", { prompt: "test" }, { baseUrl: frozen })).ok).toBe(true);
+});

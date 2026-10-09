@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Request
 
+from inference.backends import resolve_comfyui_url
 from inference.comfyui import ComfyUIError
 from inference.comfyui import generate as generate_comfyui
 from inference.config import Settings
@@ -24,7 +25,7 @@ async def generate(request: InferenceRequest, http_request: Request) -> Inferenc
             request.prompt,
             request.refs,
             settings.projects_root,
-            settings.comfyui_base_url,
+            resolve_comfyui_url(request.comfyui_base_url, settings),
             seed=request.seed,
             aspect="16:9" if request.size in ("16:9", "1376x768") else "9:16",
         ))

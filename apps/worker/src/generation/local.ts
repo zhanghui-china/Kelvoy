@@ -6,6 +6,18 @@ import { callInference } from "../inference-client";
 import { artifactPath, saveArtifact } from "../storage/artifacts";
 
 type InferenceCall = typeof callInference;
+export interface GenerationBackend {
+  comfyui_base_url: string | null;
+  config_version: number;
+  inference_base_url: string;
+  inherited_comfyui_base_url: string | null;
+}
+
+export function snapshotGenerationBackend(config: { version: number; comfyui_base_url: string | null }): GenerationBackend {
+  return { comfyui_base_url: config.comfyui_base_url, config_version: config.version,
+    inference_base_url: process.env.INFERENCE_BASE_URL ?? "http://127.0.0.1:8100",
+    inherited_comfyui_base_url: process.env.KELVOY_COMFYUI_BASE_URL ?? null };
+}
 type CachedAsset = { key: string; model: string; version: string;
   seed: number; seconds: number; ref_hashes: string[] };
 type CacheMetadata = CachedAsset & { request_hash: string; content_hash: string };
@@ -122,9 +134,11 @@ async function requestOne(
   route: "/image/" | "/video/",
   body: Parameters<InferenceCall>[1],
   signal?: AbortSignal,
+  backend?: GenerationBackend,
 ): Promise<{ source: string; model: string; version: string; seed: number; seconds: number }> {
   signal?.throwIfAborted();
-  const result = await call(route, body, { signal });
+  const result = await call(route, backend ? { ...body, comfyui_base_url: backend.comfyui_base_url } : body,
+    { signal, ...(backend ? { baseUrl: backend.inference_base_url } : {}) });
   signal?.throwIfAborted();
   if (!result.ok) throw new Error(`local ${route} inference failed: ${JSON.stringify(result.error)}`);
   const response = result.response;
@@ -145,7 +159,8 @@ async function requestOne(
 }
 
 /** The worker owns all HTTP and filesystem work; engine receives only results. */
-export function createLocalGenerationProviders(call: InferenceCall = callInference): Required<Pick<StageContext, "keyframe" | "video">> {
+export function createLocalGenerationProviders(call: InferenceCall = callInference, configuration?: GenerationBackend): Required<Pick<StageContext, "keyframe" | "video">> {
+  const backend = configuration ? { ...configuration } : undefined;
   return {
     keyframe: { async generate(input) {
       input.signal?.throwIfAborted();
@@ -158,11 +173,11 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const key = `kf/${identity}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}_${input.candidate_no}.png`;
       const { signal: _signal, ...requestInput } = input;
       const { execution_id: _executionId, ...reusableInput } = requestInput;
-      const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes });
+      const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes, backend });
       const cached = await findCached(input.episode_id, key,
         `${identity}_${input.generation_id}_`, fingerprint);
       if (cached) { input.signal?.throwIfAborted(); return cached; }
-      const response = await requestOne(call, "/image/", localImageRequest(input), input.signal);
+      const response = await requestOne(call, "/image/", localImageRequest(input), input.signal, backend);
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
@@ -188,14 +203,14 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const key = `clip/${identity}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}.mp4`;
       const { signal: _signal, ...requestInput } = input;
       const { execution_id: _executionId, ...reusableInput } = requestInput;
-      const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes });
+      const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes, backend });
       const cached = await findCached(input.episode_id, key,
         `${identity}_${input.generation_id}_`, fingerprint);
       if (cached) { input.signal?.throwIfAborted(); return cached; }
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, refs,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
-      }), input.signal);
+      }), input.signal, backend);
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
