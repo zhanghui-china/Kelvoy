@@ -16,7 +16,7 @@
 
 使用当前四套生成模板从本地构造静态期望，在远端内存中核对 object_info。没有写远端文件、改服务、创建临时登录会话、修改数据库、上传媒体或调用生成／取消／清队列接口。
 
-这是当前依赖的只读验收，新 `/api/system/*` 和 `/system/diagnostics` 尚未发布到 GX10。真实模型加载和出图没有验证。部署须先指定真实运维用户 ID 和双端 origin 白名单，流程见 `infra/dgx/gx10-system-diagnostics-deployment.md`。
+这是部署前的依赖只读验收；随后新 `/api/system/*` 和 `/system/diagnostics` 已在用户授权下发布到 GX10（功能提交 975a81e），线上接口、账号权限、候选不落库与版本冲突验收通过，详见部署记录。真实模型加载和出图没有验证。部署须先指定真实运维用户 ID 和双端 origin 白名单，流程见 `infra/dgx/gx10-system-diagnostics-deployment.md`。
 
 ## 自动化范围
 
