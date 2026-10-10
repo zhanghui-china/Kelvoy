@@ -2,6 +2,7 @@
 set -euo pipefail
 QWEN_ROOT=${QWEN_ROOT:-/home1/huntun/kelvoy-qwen-pe}
 test -f "$QWEN_ROOT/model/ARTIFACTS.json"
+python3 "$QWEN_ROOT/verify-qwen-pe-runtime.py"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export HF_HOME="$QWEN_ROOT/hf-cache"
 export VLLM_CACHE_ROOT="$QWEN_ROOT/vllm-cache"

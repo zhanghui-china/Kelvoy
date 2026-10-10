@@ -2,7 +2,7 @@
 import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { open, close, createUser, createSession, insertEpisode, grantCredits,
-  getCreditBalance, getEpisode, dequeueTask } from '../../packages/store/src/index';
+  getCreditBalance, getEpisode, dequeueTask, renewTaskLease } from '../../packages/store/src/index';
 import { runStage, type Destination, type Episode,
   type Persona, type Shot, type Task, type Template } from '../../packages/engine/src/index';
 import { createImagePromptWriter } from '../../apps/worker/src/generation/image-prompt-writer';
@@ -90,16 +90,29 @@ try {
   await request(path + '/continue', cookie, 'POST', { row_version: 1 });
   const reserved = getCreditBalance(owner).reserved; check(reserved > 0, 'image reservation');
   const overrides = { ...providers, imagePromptWriter: writer, persona: temporaryPersona, destination: temporaryDestination };
-  await handleTask(await take(), overrides); // assets only
-  await handleTask(await take(), overrides); // prompt published, simulated image failure
-  await handleTask(await take(), overrides); // same prompt on second lease; failure releases credits
+  async function handleTemporaryTask() {
+    const task = await take();
+    check(task.lease_token, 'temporary task has a lease');
+    const controller = new AbortController();
+    const heartbeat = setInterval(() => {
+      void renewTaskLease(task.task_id, task.lease_token!).then(active => {
+        if (!active) controller.abort(new Error('temporary task lease lost'));
+      }).catch(error => controller.abort(error));
+    }, 30_000);
+    try { await handleTask(task, { ...overrides, signal: controller.signal }); }
+    finally { clearInterval(heartbeat); }
+    controller.signal.throwIfAborted();
+  }
+  await handleTemporaryTask(); // assets only
+  await handleTemporaryTask(); // prompt published, simulated image failure
+  await handleTemporaryTask(); // same prompt on second lease; failure releases credits
   check(llmCalls === 1 && inferenceCalls === 2, 'retry reuses compiled prompt');
   check(getCreditBalance(owner).reserved === 0 && getCreditBalance(owner).available === 1000, 'terminal failure refunds image action including rewrite');
   let detail = await request(path, cookie);
   await request(path + '/retry', cookie, 'POST', { row_version: detail.row_version });
   check(getCreditBalance(owner).reserved === reserved, 'retry price unchanged');
   failInference = false;
-  await handleTask(await take(), overrides);
+  await handleTemporaryTask();
   detail = await request(path, cookie);
   const stored = detail.episode.shots[0] as Shot;
   check(llmCalls === 1 && inferenceCalls === 4, 'HTTP retry preserves rewrite cache');
