@@ -44,7 +44,18 @@ export interface Scene {
 }
 
 // Reproducibility record per modality (PRD v0.2 §6, §8). attempts counts local retries + overflow.
+export interface H3PromptProvenance {
+  skill_version: string;
+  writer_version: string;
+  model: string;
+  input_hash: string;
+  ref_hashes: string[];
+  mode: "I2VA" | "Ref2VA";
+  duration_s: number;
+}
+
 export interface ShotModelRecord {
+  h3_prompt?: H3PromptProvenance;
   provider: ProviderId;
   model: string;
   version: string;

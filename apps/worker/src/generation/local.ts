@@ -200,6 +200,10 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       if (!direct && !input.keyframe?.startsWith("kf/")) throw new Error("invalid keyframe path");
       const refs = direct ? input.refs! : [`${input.episode_id}/${input.keyframe}`];
       const hashes = await Promise.all(refs.map(hashKey));
+      if (input.expected_ref_hashes && (input.expected_ref_hashes.length !== hashes.length ||
+        hashes.some((hash, index) => hash !== input.expected_ref_hashes![index]))) {
+        throw new Error("video references changed after H3 prompt rewrite");
+      }
       const key = `clip/${identity}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}.mp4`;
       const { signal: _signal, ...requestInput } = input;
       const { execution_id: _executionId, ...reusableInput } = requestInput;

@@ -39,7 +39,7 @@ test.each(['keyframe', 'references'] as const)('completed storyboard insert/reor
   expect((await request('/continue',{row_version:snapshot.row_version})).status).toBe(200);
   let images=0,videos=0;
   const asset=(key:string,seed:number)=>({key,model:'mock',version:'1',seed,seconds:0,ref_hashes:[]});
-  const providers:Partial<StageContext>={keyframe:{generate:async input=>{images++;return asset(`kf/${input.shot_id}.png`,input.seed);}},video:{generate:async input=>{videos++;return asset(`clip/${input.shot_id}.mp4`,input.seed);}}};
+  const providers:Partial<StageContext>={h3PromptWriter:{write:async({context})=>({prompt:'mock H3 rewrite',provenance:{skill_version:'test',writer_version:'test',model:'mock',input_hash:'a'.repeat(64),ref_hashes:context.references.map(()=>'b'.repeat(64)),mode:context.mode,duration_s:context.duration_s}})},keyframe:{generate:async input=>{images++;return asset(`kf/${input.shot_id}.png`,input.seed);}},video:{generate:async input=>{videos++;return asset(`clip/${input.shot_id}.mp4`,input.seed);}}};
   const assets=await dequeueTask();expect(assets?.stage).toBe('assets');await handleTask(assets!);
   if (video_source === 'keyframe') {
     const image=await dequeueTask();expect(image?.shot_id).toBe(fresh);await handleTask(image!,providers);expect(await dequeueTask()).toBeNull();

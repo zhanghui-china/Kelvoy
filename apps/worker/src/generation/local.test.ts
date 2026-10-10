@@ -281,3 +281,16 @@ test("task backend snapshot propagates override and prevents reuse across backen
     config_version: 3, inference_base_url: "http://inference-b:8100" }).keyframe.generate({ ...input, execution_id: "another" });
   expect(requests).toHaveLength(3);
 });
+
+
+test("video rejects reference changes since the prompt rewrite before inference", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-h3-reference-change-"));
+  process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "e1/kf"), { recursive: true });
+  await writeFile(join(root, "e1/kf/a.png"), "changed frame");
+  let calls = 0;
+  const video = createLocalGenerationProviders(async () => { calls++; throw new Error("must not run"); }).video;
+  await expect(video.generate({ episode_id: "e1", shot_no: 1, generation_id: "g", keyframe: "kf/a.png",
+    expected_ref_hashes: ["a".repeat(64)], prompt: "official H3", duration_s: 4, seed: 1 })).rejects.toThrow("references changed");
+  expect(calls).toBe(0);
+});

@@ -54,3 +54,5 @@ export async function runStage(
   if (!isStageEntryStatus(name, episode.status)) throw new Error(`${name} 阶段状态不正确`);
   return stageRunners[name](episode, shotNo, context);
 }
+
+export type { H3PromptContext, H3PromptResult, H3PromptWriter } from "./h3-prompt";

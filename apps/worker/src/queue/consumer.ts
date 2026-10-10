@@ -25,6 +25,7 @@ import {
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders, snapshotGenerationBackend, type GenerationBackend } from "../generation/local";
+import { createH3PromptWriter } from "../generation/h3-prompt-writer";
 import { handleStoryboardSuggestion } from "../generation/storyboard-suggestion";
 
 /**
@@ -100,6 +101,7 @@ export async function buildStageContext(stage: StageName, episode: Episode, task
   if (task?.shot_id) context.shot_id = task.shot_id;
   if (destination) context.destination = destination;
   if (persona) context.persona = persona;
+  if (stage === "video") context.h3PromptWriter = createH3PromptWriter();
   if (stage === "compose") context.compose = ffmpegComposeProvider;
   if ((stage === "keyframe" || stage === "video") && task) {
     Object.assign(context, createLocalGenerationProviders(undefined, frozenBackend), {

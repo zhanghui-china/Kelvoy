@@ -451,3 +451,14 @@ describe("validateUserSettingsPatch", () => {
     if (!result.valid) expect(result.errors.some((e) => e.startsWith("default_mode:"))).toBe(true);
   });
 });
+
+
+test("video H3 provenance remains optional but validates new reproducibility records", () => {
+  const legacy = validShot();
+  expect(validateShot(legacy).valid).toBe(true);
+  const record = { ...legacy.model.image!, h3_prompt: { skill_version: "skill-sha", writer_version: "v1", model: "step", input_hash: "a".repeat(64), ref_hashes: ["b".repeat(64)], mode: "I2VA" as const, duration_s: 4 } };
+  expect(validateShot({ ...legacy, model: { video: record } }).valid).toBe(true);
+  for (const patch of [{ duration_s: 3 }, { mode: "T2VA" }, { input_hash: "bad" }, { ref_hashes: ["bad"] }, { model: "" }]) {
+    expect(validateShot({ ...legacy, model: { video: { ...record, h3_prompt: { ...record.h3_prompt, ...patch } } } }).valid).toBe(false);
+  }
+});

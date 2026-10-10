@@ -1,3 +1,4 @@
+import type { H3PromptWriter } from "@kelvoy/engine";
 import { beforeEach, afterEach, expect, test } from "bun:test";
 import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
 import { close, open, getDb, insertEpisode, insertPersona, upsertDestination,
@@ -6,6 +7,11 @@ import { handleTask } from "./consumer";
 
 beforeEach(() => open(":memory:"));
 afterEach(() => close());
+
+const mockH3PromptWriter: H3PromptWriter = { async write({ context }) { return {
+  prompt: "mock official H3 rewritten prompt", provenance: { skill_version: "test", writer_version: "test", model: "test",
+    input_hash: "a".repeat(64), ref_hashes: context.references.map(() => "b".repeat(64)), mode: context.mode, duration_s: context.duration_s },
+}; } };
 
 function fixtureEpisode(id: string): Episode {
   return {
@@ -110,6 +116,7 @@ test.each([
       return { key: `kf/retried_${input.candidate_no}.png`, model: "test", version: "1",
         seed: input.seed, seconds: 1, ref_hashes: [] };
     } },
+    h3PromptWriter: mockH3PromptWriter,
     video: { async generate(input) {
       calls.push(input.shot_no);
       return { key: "clip/retried.mp4", model: "test", version: "1",

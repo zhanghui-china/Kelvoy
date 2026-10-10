@@ -253,3 +253,7 @@ make lint         # ruff（Python 侧）
 首版契约核对范围是 2026-10-05 GX10 部署记录 `c8ab053` 及相关补丁。当前 main 已新增 `compose_ready`、固定一秒剪辑等能力，不能直接套用首版旧部署流程；使用前按 [API 与版本说明](skills/kelvoy-vlog/references/kelvoy-api.md) 确认目标实例。三个审核点仍需用户决定，素材建设、部署与平台发布不在首版范围。
 
 提供可访问服务地址并在浏览器登录，避免在聊天中发送密码。例如：“使用 kelvoy-vlog，用已有阿澄、黄山和名山登顶模板做一期安静的旅行 Vlog。”组织决策见 [ADR-0008](docs/decisions/0008-agent-production-skill.md)，检查结果与真实验收待办见 [验收记录](docs/superpowers/specs/2026-10-06-kelvoy-vlog-skill-validation.md)。
+
+### 官方 H3 提示词编写
+
+所有新视频生成先按固定官方 `h3-prompt-writing` 编写英文提示词，中文编辑原稿保留；新素材为 4–5 秒，成片每镜仍为 1 秒。提示词编写计入已有视频价格，手工保存不调用模型。官方原文、来源散列和许可位于 [skills/h3-prompt-writing](skills/h3-prompt-writing/UPSTREAM.json)，运行与缓存说明见 [Worker 手册](apps/worker/README.md#h3-提示词编写)，职责见 [ADR-0011](docs/decisions/0011-h3-prompt-writing.md)。

@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/MiniMax-AI/MiniMax-H3",
+  "commit": "d21241f0a4b3acbb34c97dae47fa417b7065e438",
+  "path": "skills/h3-prompt-writing",
+  "license_name": "MiniMax H3 Community License Agreement",
+  "license_source": "https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE",
+  "license_note": "Pinned GitHub tree has no LICENSE file; pinned README links to this model license. Official skill files are copied verbatim. LICENSE is preserved separately from that linked source.",
+  "sha256": {
+    "LICENSE": "59b99642b95ea21630e311198ddbfffbfe05aadba0c2f5d884cbdf4efcc90f44",
+    "SKILL.md": "a7000443588ca3f145e3b3fd8900f14e0325dc460bd811268fac89a9dc8e56d0",
+    "agents/openai.yaml": "7770c9d784b7251ab882ee29a738219a3f01811e57ba7fc7822fa83eb8438c1a",
+    "references/base-en.txt": "2cfebc096a6e08370f288d468d90b60f7f9bcb938f94bf090816e910e48e75fc",
+    "references/ref-en.txt": "1e574f356716ad55612247ffb7bbccbcdb484ad96599d63c7dca1af186b1fab7"
+  }
+}

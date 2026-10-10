@@ -62,6 +62,19 @@ function validateShotModelRecord(input: unknown, path: string, errors: string[])
     errors.push(`${path}: 不是对象`);
     return;
   }
+  if (input.h3_prompt !== undefined) {
+    const h3 = input.h3_prompt;
+    if (!isPlainObject(h3)) errors.push(`${path}.h3_prompt: 不是对象`);
+    else {
+      for (const key of ["skill_version", "writer_version", "model", "input_hash"]) {
+        if (!isNonEmptyString(h3[key])) errors.push(`${path}.h3_prompt.${key}: 缺失或为空`);
+      }
+      if (!isStringArray(h3.ref_hashes) || h3.ref_hashes.some(value => !/^[a-f0-9]{64}$/.test(value))) errors.push(`${path}.h3_prompt.ref_hashes: 无效哈希数组`);
+      if (h3.mode !== "I2VA" && h3.mode !== "Ref2VA") errors.push(`${path}.h3_prompt.mode: 无效模式`);
+      if (h3.duration_s !== 4 && h3.duration_s !== 5) errors.push(`${path}.h3_prompt.duration_s: 必须是 4 或 5`);
+      if (typeof h3.input_hash === "string" && !/^[a-f0-9]{64}$/.test(h3.input_hash)) errors.push(`${path}.h3_prompt.input_hash: 无效哈希`);
+    }
+  }
   if (!isNonEmptyString(input.provider)) errors.push(`${path}.provider: 缺失或为空`);
   if (!isNonEmptyString(input.model)) errors.push(`${path}.model: 缺失或为空`);
   if (!isNonEmptyString(input.version)) errors.push(`${path}.version: 缺失或为空`);

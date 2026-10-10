@@ -1,9 +1,15 @@
+import type { H3PromptWriter } from "@kelvoy/engine";
 import { expect, test } from "bun:test";
 import type { Destination, Episode, Persona, Shot } from "../schema";
 import { runAssets } from "./assets";
 import { runKeyframe } from "./keyframe";
 import { runVideo } from "./video";
 import type { StageContext } from "./types";
+
+const mockH3PromptWriter: H3PromptWriter = { async write({ context }) { return {
+  prompt: "mock official H3 rewritten prompt", provenance: { skill_version: "test", writer_version: "test", model: "test",
+    input_hash: "a".repeat(64), ref_hashes: context.references.map(() => "b".repeat(64)), mode: context.mode, duration_s: context.duration_s },
+}; } };
 
 function shot(overrides: Partial<Shot> = {}): Shot {
   return {
@@ -115,6 +121,7 @@ test("video uses selected keyframe and enters clip review", async () => {
   let inputSeen: unknown;
   const context: StageContext = {
     generation_id: "task-2", attempt: 1,
+    h3PromptWriter: mockH3PromptWriter,
     video: { async generate(input) {
       inputSeen = input;
       return { key: "clip/01_task-2.mp4", model: "MiniMax-H3", version: "hash2",
@@ -127,14 +134,18 @@ test("video uses selected keyframe and enters clip review", async () => {
   expect(next.status).toBe("clip_review");
   expect(next.shots[0]?.status).toBe("clip_ready");
   expect(next.shots[0]?.clip).toBe("clip/01_task-2.mp4");
+  expect(next.shots[0]?.model.video?.prompt).toBe((inputSeen as { prompt: string }).prompt);
+  expect(next.shots[0]?.motion_prompt).toBe("缓慢转身");
+  expect(next.shots[0]?.kf_prompt).toBe("角色站在灵山大佛前");
   expect((inputSeen as { keyframe: string; duration_s: number }).keyframe).toBe("kf/01_a.png");
-  expect((inputSeen as { duration_s: number }).duration_s).toBe(3);
+  expect((inputSeen as { duration_s: number }).duration_s).toBe(4);
 });
 
 test("direct video sends person and landmark images without a generated keyframe", async () => {
   let inputSeen: unknown;
   const context: StageContext = {
     persona, destination, generation_id: "task-direct", attempt: 1,
+    h3PromptWriter: mockH3PromptWriter,
     video: { async generate(input) {
       inputSeen = input;
       return { key: "clip/01_task-direct.mp4", model: "MiniMax-H3", version: "dual",
@@ -163,4 +174,31 @@ test("finishing one of several shots leaves the episode generating and preserves
   }), 1, context);
   expect(next.status).toBe("keyframing");
   expect(next.shots[1]).toEqual(second);
+});
+
+test("video requires prompt writer before inference", async () => {
+  await expect(runVideo(episode({ status: "clipping", shots: [shot({ status: "generating_clip", candidates: ["kf/a.png"], kf_selected: "kf/a.png" })] }), 1,
+    { generation_id: "g", video: { async generate() { throw new Error("should not run"); } } })).rejects.toThrow("H3");
+});
+
+
+test("video JSON rewrite context keeps source composition, actions and ordered roles", async () => {
+  for (const duration of [1.5, 4, 4.1, 10]) {
+    let seen: Parameters<H3PromptWriter["write"]>[0] | undefined;
+    const original = shot({ size: "detail", camera: "static", beat: "展示烧饼", kf_prompt: "仅手部与烧饼", motion_prompt: "手腕轻微旋转", status: "generating_clip", duration_s: duration });
+    const context: StageContext = {
+      generation_id: "g", persona, destination,
+      h3PromptWriter: { async write(input) { seen = input; return mockH3PromptWriter.write(input); } },
+      video: { async generate(input) {
+        expect(input.prompt).toBe("mock official H3 rewritten prompt");
+        expect(input.duration_s).toBe(duration > 4 ? 5 : 4);
+        return { key: "clip/a.mp4", model: "H3", version: "1", seed: input.seed, seconds: 1, ref_hashes: [] };
+      } },
+    };
+    const result = await runVideo(episode({ video_source: "references", status: "clipping", shots: [original] }), 1, context);
+    expect(seen!.context).toMatchObject({ mode: "Ref2VA", size: "detail", camera: "static", beat: original.beat, kf_prompt: original.kf_prompt, motion_prompt: original.motion_prompt });
+    expect(seen!.context.references).toEqual([{ key: "persona/front.png", role: "person", picture: 1 }, { key: "dest/a.jpg", role: "scene", picture: 2 }]);
+    expect(result.shots[0]!.motion_prompt).toBe(original.motion_prompt);
+    expect(result.shots[0]!.kf_prompt).toBe(original.kf_prompt);
+  }
 });

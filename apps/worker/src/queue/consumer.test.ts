@@ -1,3 +1,4 @@
+import type { H3PromptWriter } from "@kelvoy/engine";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,6 +26,11 @@ import {
 } from "@kelvoy/store";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { buildStageContext, consumeLoop, handleTask } from "./consumer";
+
+const mockH3PromptWriter: H3PromptWriter = { async write({ context }) { return {
+  prompt: "mock official H3 rewritten prompt", provenance: { skill_version: "test", writer_version: "test", model: "test",
+    input_hash: "a".repeat(64), ref_hashes: context.references.map(() => "b".repeat(64)), mode: context.mode, duration_s: context.duration_s },
+}; } };
 
 function fixtureEpisode(id: string): Episode {
   return {
@@ -295,7 +301,8 @@ test("assets, one keyframe shot and video reach both review gates", async () => 
   const clipping = await patchEpisode(ep.episode_id, selected.row_version, { status: "clipping" });
   if (!clipping.ok) throw new Error(clipping.error);
   await enqueueTask({ episode_id: ep.episode_id, stage: "video", shot_no: 1 });
-  await handleTask((await dequeueTask())!, { video: { async generate(input) {
+  await handleTask((await dequeueTask())!, { h3PromptWriter: mockH3PromptWriter,
+    video: { async generate(input) {
     expect(input.keyframe).toBe("kf/01_0.png");
     return { key: "clip/01_new.mp4", model: "MiniMax-H3", version: "v2",
       seed: input.seed, seconds: 65, ref_hashes: ["frame-hash"] };
@@ -450,7 +457,8 @@ test("direct reference episode reaches clip review without image task", async ()
   expect(ready.ok && ready.episode.status).toBe("clipping");
   expect(await dequeueTask()).toBeNull();
   await enqueueTask({ episode_id: ep.episode_id, stage: "video", shot_no: 1 });
-  await handleTask((await dequeueTask())!, { video: { async generate(input) {
+  await handleTask((await dequeueTask())!, { h3PromptWriter: mockH3PromptWriter,
+    video: { async generate(input) {
     expect(input.refs).toEqual(["p/front.png", "d/a.jpg"]);
     return { key: "clip/direct.mp4", model: "MiniMax-H3", version: "dual",
       seed: input.seed, seconds: 45, ref_hashes: ["person", "scene"] };
@@ -468,7 +476,8 @@ test("a queued video task never regenerates an approved shot", async () => {
   ep.shots[0]!.clip = "clip/01_old.mp4";
   await insertEpisode(ep);
   await enqueueTask({ episode_id: ep.episode_id, stage: "video", shot_no: 1 });
-  await handleTask((await dequeueTask())!, { video: { async generate() { throw new Error("should not run"); } } });
+  await handleTask((await dequeueTask())!, { h3PromptWriter: mockH3PromptWriter,
+    video: { async generate() { throw new Error("should not run"); } } });
   const actual = await getEpisode(ep.episode_id);
   expect(actual.ok && actual.episode.shots[0]?.clip).toBe("clip/01_old.mp4");
   expect(await dequeueTask()).toBeNull();
