@@ -52,5 +52,6 @@ app.get("*", serveStatic({ path: "dist/index.html" }));
 
 export default {
   port: process.env.PORT ?? 3000,
+  hostname: process.env.KELVOY_WEB_HOST ?? "0.0.0.0",
   fetch: app.fetch,
 };
