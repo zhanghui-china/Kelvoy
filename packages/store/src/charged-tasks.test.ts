@@ -3,6 +3,7 @@ import type { Episode } from "@kelvoy/engine";
 import { createEpisodeWithScriptTask, completeTaskWithEpisode, failTaskWithCredits,
   requeueTaskAfterCommitConflict,
   submitReviewAdvance, submitShotRegeneration } from "./charged-tasks";
+import { getShotFailures } from "./task-diagnostics";
 import { getCreditBalance, grantCredits, listCreditLedger, reserveCredits } from "./credits";
 import { close, getDb, open } from "./db";
 import { getEpisode, insertEpisode, patchShot } from "./episodes";
@@ -395,4 +396,46 @@ test('reordered approved storyboard can advance to composition setup without reg
   expect(stored.ok && stored.episode.status).toBe('compose_ready');
   expect(await dequeueTask()).toBeNull();
   expect(getCreditBalance(ownerId).reserved).toBe(0);
+});
+
+test("diagnostics survive retry, reject stale leases and clear after success", async () => {
+  await insertEpisode(episode());
+  const queued = await enqueueTask({ episode_id: "e_charge", stage: "brief" });
+  const first = (await dequeueTask())!;
+  const diagnostic = { stage: "wait", code: "backend_unavailable", message: "服务暂不可用",
+    elapsed_seconds: 2, budget_seconds: 900, cancellation: "not_needed" as const };
+  expect(failTaskWithCredits(first, true, diagnostic.message, diagnostic)).toBe(true);
+  const stored = () => getDb().query<{error:string|null},[string]>("select error from tasks where task_id = ?").get(queued.task_id)?.error;
+  expect(JSON.parse(stored()!)).toEqual(diagnostic);
+  const second = (await dequeueTask())!;
+  expect(failTaskWithCredits(first, false, "过期", { ...diagnostic, code: "stale" })).toBe(false);
+  expect(JSON.parse(stored()!).code).toBe("backend_unavailable");
+  expect(completeTaskWithEpisode(second, 1, episode()).ok).toBe(true);
+  expect(stored()).toBeNull();
+});
+
+test("diagnostic refund claim only appears after atomic terminal failure and exactly once", async () => {
+  const started = { ...episode(), status:"clipping" as const,
+    shots:[{no:5,shot_id:"stable",status:"generating_clip",clip:"clip/old.mp4"}],
+    final:{version:1,key:"final/old.mp4"} } as unknown as Episode;
+  await insertEpisode(started);
+  grantCredits(ownerId, 10, "diagnostic-grant");
+  const queued = await enqueueTask({episode_id:"e_charge",stage:"video",shot_no:5});
+  reserveCredits({action_id:queued.task_id,user_id:ownerId,episode_id:"e_charge",task_id:queued.task_id,kind:"video",units:1});
+  const task = (await dequeueTask())!;
+  const diagnostic = {stage:"wait",code:"generation_timeout",message:"视频生成超过 15 分钟，已停止",elapsed_seconds:900,budget_seconds:900,cancellation:"confirmed" as const};
+  getDb().exec("create trigger reject_diagnostic before update on tasks when new.status = 'failed' begin select raise(abort, 'injected failure'); end");
+  expect(() => failTaskWithCredits(task,false,diagnostic.message,diagnostic)).toThrow("injected failure");
+  expect(getDb().query<{error:string|null},[string]>("select error from tasks where task_id = ?").get(task.task_id)?.error).toBeNull();
+  expect(getCreditBalance(ownerId).reserved).toBe(10);
+  getDb().exec("drop trigger reject_diagnostic");
+  expect(failTaskWithCredits(task,false,diagnostic.message,diagnostic)).toBe(true);
+  expect(failTaskWithCredits(task,false,diagnostic.message,diagnostic)).toBe(false);
+  const loaded = await getEpisode("e_charge");
+  if (!loaded.ok) throw new Error("missing fixture");
+  expect(loaded.episode.shots[0]?.clip).toBe("clip/old.mp4");
+  expect(loaded.episode.final).toEqual(started.final);
+  expect(await getShotFailures({...loaded.episode,shots:loaded.episode.shots.map(shot=>({...shot,no:1}))})).toEqual([
+    {shot_id:"stable",code:"generation_timeout",message:diagnostic.message+"，积分已退回"}]);
+  expect(listCreditLedger(ownerId).filter(item=>item.kind==="released")).toHaveLength(1);
 });

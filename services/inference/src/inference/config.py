@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     backend_allowed_origins: str = Field(
         default="", validation_alias="KELVOY_BACKEND_ALLOWED_ORIGINS"
     )
+    video_timeout_seconds: int = Field(
+        default=900, ge=30, le=1800, validation_alias="KELVOY_VIDEO_TIMEOUT_SECONDS"
+    )
     host: str = "127.0.0.1"
     # 8000 is taken by visionary-backend on the shared DGX (gx10-8e22) —
     # see infra/dgx/README.md. Don't move this back to 8000.

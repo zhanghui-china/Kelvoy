@@ -1,3 +1,4 @@
+import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Destination, Episode, Persona } from "@kelvoy/engine";
@@ -44,16 +45,17 @@ export default function EpisodeDetailPage() {
   const episode: Episode = data.episode;
   return <>{error && <p className="k-error" role="alert">刷新失败：{error}。表单内容已保留，请稍后重试。</p>}<EpisodeDetailContent key={id} episode={episode} destination={data.destination} persona={data.persona}
     destinationHistoryApproximate={data.destination_history_approximate}
-    failedTask={data.failed_task} mutation={mutation} storyboardBusy={data.storyboard_busy}
+    shotFailures={data.shot_failures} failedTask={data.failed_task} mutation={mutation} storyboardBusy={data.storyboard_busy}
     storyboardWarnings={data.storyboard_warnings} storyboardPrices={data.storyboard_prices} /></>;
 }
 
-export function EpisodeDetailContent({ episode, destination, persona, destinationHistoryApproximate, failedTask, mutation, storyboardBusy, storyboardWarnings, storyboardPrices }: {
+export function EpisodeDetailContent({ episode, destination, persona, destinationHistoryApproximate, failedTask, shotFailures, mutation, storyboardBusy, storyboardWarnings, storyboardPrices }: {
   episode: Episode;
   destination: Destination | null;
   persona: Persona | null;
   destinationHistoryApproximate?: boolean;
   failedTask?: FailedTaskSummary | null;
+  shotFailures?: ShotFailureSummary[];
   mutation: EpisodeMutation;
   storyboardBusy?: boolean;
   storyboardWarnings?: string[];
@@ -124,7 +126,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
           <ScriptReview episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy} warnings={storyboardWarnings} prices={storyboardPrices} showEditor={false} />
         )}
         {(episode.status === "kf_review" || episode.status === "keyframing") && (
-          <KeyframeReview
+          <KeyframeReview shotFailures={shotFailures}
             episode={episode}
             destination={destination}
             persona={persona}
@@ -133,7 +135,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
           />
         )}
         {(episode.status === "clip_review" || episode.status === "clipping") && (
-          <ClipReview episode={episode} mutation={mutation} />
+          <ClipReview shotFailures={shotFailures} episode={episode} mutation={mutation} />
         )}
         {episode.status === "compose_ready" && <ComposeSetup episode={episode} mutation={mutation} />}
         {(episode.status === "done" || episode.status === "composing") && (
@@ -142,11 +144,11 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
         {(episode.status === "draft" ||
           episode.status === "scripting" ||
           episode.status === "assets" ||
-          episode.status === "failed") && <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
+          episode.status === "failed") && <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} />}
         {(episode.status === "keyframing" || episode.status === "kf_review" ||
           episode.status === "clipping" || episode.status === "clip_review") &&
           episode.shots.some((shot) => shot.status === "failed") &&
-          <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
+          <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} />}
 
         {episode.mode === "per_shot" && <details className="k-desk-main" open={episode.status === "script_review" ? true : undefined}>
           <summary>编辑分镜 · {episode.shots.length} 镜</summary>

@@ -24,6 +24,9 @@ import {
   renewTaskLease,
   requeueTaskAfterCommitConflict,
 } from "@kelvoy/store";
+import { observeH3Rewrite } from "../generation/diagnostics";
+import { GenerationError } from "../generation/errors";
+import { H3FormatError } from "../generation/h3-prompt-format";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders, snapshotGenerationBackend, type GenerationBackend } from "../generation/local";
 import { createH3PromptWriter } from "../generation/h3-prompt-writer";
@@ -106,7 +109,7 @@ export async function buildStageContext(stage: StageName, episode: Episode, task
   if (stage === "video") context.h3PromptWriter = createH3PromptWriter();
   if (stage === "compose") context.compose = ffmpegComposeProvider;
   if ((stage === "keyframe" || stage === "video") && task) {
-    Object.assign(context, createLocalGenerationProviders(undefined, frozenBackend), {
+    Object.assign(context, createLocalGenerationProviders(undefined, frozenBackend, { task_id: task.task_id, shot_id: task.shot_id, attempt: task.attempt }), {
       generation_id: task.generation_id ?? task.task_id,
       attempt: task.attempt,
     });
@@ -184,6 +187,9 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
     current = { ok: true, episode: prepared.episode, row_version: prepared.row_version };
     overrides.signal?.throwIfAborted();
     const context = { ...await buildStageContext(task.stage, current.episode, task, backend), ...overrides };
+    if (task.stage === "video" && context.h3PromptWriter) {
+      context.h3PromptWriter = observeH3Rewrite(context.h3PromptWriter, { task_id: task.task_id, shot_id: task.shot_id, attempt: task.attempt });
+    }
     const updated = await runStage(
       task.stage,
       current.episode,
@@ -217,8 +223,10 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       failTaskWithCredits(task, false, failureReason(err));
       return;
     }
-    const retry = task.attempt < MAX_LOCAL_ATTEMPTS;
-    failTaskWithCredits(task, retry, retry ? undefined : failureReason(err));
+    const retry = task.attempt < MAX_LOCAL_ATTEMPTS && !(err instanceof H3FormatError) &&
+      (!(err instanceof GenerationError) || err.retryable);
+    const diagnostic = err instanceof GenerationError ? err.diagnostic : undefined;
+    failTaskWithCredits(task, retry, diagnostic?.message ?? (retry ? undefined : failureReason(err)), diagnostic);
   }
 }
 

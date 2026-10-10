@@ -1,3 +1,5 @@
+import { ShotFailureNotice } from "./ShotFailure";
+import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
 import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
@@ -208,12 +210,14 @@ function KeyframeShot({
 
 export default function KeyframeReview({
   episode,
+  shotFailures,
   destination,
   persona,
   mutation,
   busy = false,
 }: {
   episode: Episode;
+  shotFailures?: ShotFailureSummary[];
   destination: Destination | null;
   persona: Persona | null;
   mutation: EpisodeMutation;
@@ -277,6 +281,7 @@ export default function KeyframeReview({
         )}
 
         <MutationError error={mutation.error} />
+        <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures} />
 
         {episode.shots.map((shot) => (
           <KeyframeShot

@@ -5,6 +5,8 @@ import { finalizeCredits, getCreditAction, getCreditBalance, getCreditPrice, res
 import { getDb } from "./db";
 import { decodeEpisode } from "./episode-codec";
 
+import type { TaskDiagnostic } from "./task-diagnostics";
+
 type LeaseRow = { status: string; lease_token: string | null; lease_until: number | null };
 
 function ownsLiveLease(row: LeaseRow | null, task: Task): boolean {
@@ -226,7 +228,7 @@ export function completeTaskWithEpisode(task: Task, rowVersion: number, updated:
       updated_at = datetime('now') where episode_id = ?`).run(JSON.stringify(withCredits), task.episode_id);
     // Uncharged tasks have no credit action; that is expected for brief/assets.
     finalizeCredits(task.task_id, "settled");
-    getDb().query(`update tasks set status = 'done', lease_token = null, lease_until = null,
+    getDb().query(`update tasks set status = 'done', error = null, lease_token = null, lease_until = null,
       updated_at = datetime('now') where task_id = ?`).run(task.task_id);
     if (task.stage === "brief" && committed.status === "scripting") {
       getDb().query(`insert or ignore into tasks (task_id, episode_id, stage, attempt, status)
@@ -250,7 +252,7 @@ export function completeTaskWithoutEpisode(task: Task): void {
     if (!ownsLiveLease(row, task)) return;
     // A stale/duplicate task made no new output, so its reservation is refunded.
     finalizeCredits(task.task_id, "released");
-    getDb().query(`update tasks set status = 'done', lease_token = null, lease_until = null,
+    getDb().query(`update tasks set status = 'done', error = null, lease_token = null, lease_until = null,
       updated_at = datetime('now') where task_id = ?`).run(task.task_id);
   }).immediate();
 }
@@ -265,12 +267,14 @@ export function requeueTaskAfterCommitConflict(task: Task): boolean {
   return result.changes === 1;
 }
 
-export function failTaskWithCredits(task: Task, requeue: boolean, failureReason?: string): boolean {
+export function failTaskWithCredits(task: Task, requeue: boolean, failureReason?: string, diagnostic?: TaskDiagnostic): boolean {
   return getDb().transaction(() => {
     const row = getDb().query<LeaseRow, [string]>(
       "select status, lease_token, lease_until from tasks where task_id = ?",
     ).get(task.task_id);
     if (!ownsLiveLease(row, task)) return false;
+    if (diagnostic) getDb().query("update tasks set error = ? where task_id = ?")
+      .run(JSON.stringify(diagnostic), task.task_id);
     if (requeue) {
       getDb().query(`update tasks set status = 'pending', attempt = attempt + 1,
         lease_token = null, lease_until = null, updated_at = datetime('now') where task_id = ?`)

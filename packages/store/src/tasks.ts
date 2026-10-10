@@ -143,7 +143,7 @@ export function hasActiveStageTasks(episodeId: string, stage: StageName): boolea
 
 export async function completeTask(taskId: string, leaseToken?: string): Promise<void> {
   getDb()
-    .query(`update tasks set status = 'done', lease_until = null, lease_token = null,
+    .query(`update tasks set status = 'done', error = null, lease_until = null, lease_token = null,
       updated_at = datetime('now') where task_id = ? and (? is null or lease_token = ?)`)
     .run(taskId, leaseToken ?? null, leaseToken ?? null);
 }

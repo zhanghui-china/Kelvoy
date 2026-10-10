@@ -8,12 +8,14 @@ import random
 import shutil
 import time
 import uuid
+from contextvars import ContextVar
 from copy import deepcopy
 from pathlib import Path
 
 import httpx
 from PIL import Image
 
+from inference.config import Settings
 from inference.schemas import InferenceResponse
 
 BRIDGE = Path(__file__).resolve().parents[4] / "comfyui-bridge"
@@ -24,17 +26,32 @@ TEMPLATES = {
     "video_reference": ("2_2_DualRef2Video_MinimaxH3_api.json", "40", "gifs", ".mp4"),
 }
 MAX_MEDIA_BYTES = 512 * 1024 * 1024
-# Keep generation + bounded cleanup below the Worker's 300 second HTTP deadline.
-# One measured dual-reference landscape clip took 256.2 s; load can still exceed this budget.
+# Cleanup must fit within the Worker's additional 60-second HTTP allowance.
 CANCEL_TIMEOUT_S = 10
-DIRECT_VIDEO_TIMEOUT_S = 270
 DEFAULT_TIMEOUT_S = 240
 logger = logging.getLogger(__name__)
+request_correlation: ContextVar[dict | None] = ContextVar("request_correlation", default=None)
+
+
+def log_phase(state: dict, started: float, code: str = "success") -> None:
+    logger.info(
+        "generation_phase %s",
+        json.dumps(
+            {
+                **(request_correlation.get() or {}),
+                "stage": state["stage"],
+                "code": code,
+                "elapsed_seconds": round(time.monotonic() - state.get("phase_started", started), 2),
+                "cancellation": state.get("cancellation", "not_needed"),
+            }
+        ),
+    )
 
 
 class ComfyUIError(Exception):
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str, detail: dict | None = None):
         self.status = status
+        self.detail = detail
         super().__init__(message)
 
 
@@ -52,6 +69,7 @@ def response_string(value: object, *, allow_empty: bool = False) -> str:
 
 async def validate_media(path: Path, kind: str) -> None:
     if kind == "image":
+
         def verify_image() -> None:
             with Image.open(path) as image:
                 if image.format != "PNG" or image.width <= 0 or image.height <= 0:
@@ -65,9 +83,20 @@ async def validate_media(path: Path, kind: str) -> None:
         return
 
     process = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-nostdin", "-v", "error", "-xerror", "-i", str(path),
-        "-map", "0:v:0", "-f", "null", "-",
-        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+        "ffmpeg",
+        "-nostdin",
+        "-v",
+        "error",
+        "-xerror",
+        "-i",
+        str(path),
+        "-map",
+        "0:v:0",
+        "-f",
+        "null",
+        "-",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
     )
     try:
         _, stderr = await process.communicate()
@@ -82,7 +111,7 @@ async def validate_media(path: Path, kind: str) -> None:
         raise ComfyUIError(502, "ComfyUI returned corrupt video media")
 
 
-async def cancel_prompt(client: httpx.AsyncClient, prompt_id: str) -> None:
+async def cancel_prompt(client: httpx.AsyncClient, prompt_id: str) -> str:
     try:
         async with asyncio.timeout(CANCEL_TIMEOUT_S):
             response = await client.post(f"/api/jobs/{prompt_id}/cancel")
@@ -90,8 +119,13 @@ async def cancel_prompt(client: httpx.AsyncClient, prompt_id: str) -> None:
             payload = response.json()
             if not isinstance(payload, dict) or payload.get("cancelled") is not True:
                 logger.warning("ComfyUI did not confirm cancellation for prompt %s", prompt_id)
+                return "unconfirmed"
+            return "confirmed"
     except (httpx.HTTPError, ValueError, TimeoutError) as error:
-        logger.warning("ComfyUI cancellation failed for prompt %s: %s", prompt_id, error)
+        logger.warning(
+            "ComfyUI cancellation failed for prompt %s: %s", prompt_id, type(error).__name__
+        )
+        return "failed"
 
 
 def resolve_reference(projects_root: Path, key: str) -> Path:
@@ -148,8 +182,12 @@ def build_video_workflow(
 
 
 def build_dual_ref_video_workflow(
-    template: dict, uploaded_refs: list[str], prompt: str, duration_s: int,
-    seed: int, aspect: str,
+    template: dict,
+    uploaded_refs: list[str],
+    prompt: str,
+    duration_s: int,
+    seed: int,
+    aspect: str,
 ) -> dict:
     if len(uploaded_refs) != 2:
         raise ValueError("direct video needs person and scene images")
@@ -180,7 +218,10 @@ async def _generate_once(
     duration_s: int = 5,
     client: httpx.AsyncClient | None = None,
     aspect: str = "9:16",
+    state: dict | None = None,
 ) -> InferenceResponse:
+    state = state if state is not None else {}
+    state["stage"] = "comfyui_submit"
     if kind not in ("image", "video", "video_reference"):
         raise ValueError("unsupported workflow")
     expected_counts = {"image": (1, 2), "video": (1,), "video_reference": (2,)}
@@ -229,14 +270,15 @@ async def _generate_once(
                 template, uploaded, prompt, duration_s, chosen_seed, aspect
             )
         else:
-            workflow = build_video_workflow(
-                template, uploaded[0], prompt, duration_s, chosen_seed
-            )
+            workflow = build_video_workflow(template, uploaded[0], prompt, duration_s, chosen_seed)
         response = await client.post(
             "/prompt", json={"prompt": workflow, "client_id": str(uuid.uuid4())}
         )
         response.raise_for_status()
         prompt_id = response_string(response_object(response.json()).get("prompt_id"))
+        log_phase(state, started)
+        state["stage"] = "comfyui_wait"
+        state["phase_started"] = time.monotonic()
         while True:
             response = await client.get(f"/history/{prompt_id}")
             response.raise_for_status()
@@ -290,7 +332,11 @@ async def _generate_once(
                                     output.write(chunk)
                             if size == 0:
                                 raise ComfyUIError(502, "ComfyUI returned an empty file")
+                        log_phase(state, started)
+                        state["stage"] = "media_validation"
+                        state["phase_started"] = time.monotonic()
                         await validate_media(temporary, media_kind)
+                        log_phase(state, started)
                         temporary.replace(target)
                     finally:
                         temporary.unlink(missing_ok=True)
@@ -306,11 +352,11 @@ async def _generate_once(
             await asyncio.sleep(2)
     except (ComfyUIError, asyncio.CancelledError):
         if prompt_id:
-            await cancel_prompt(client, prompt_id)
+            state["cancellation"] = await cancel_prompt(client, prompt_id)
         raise
     except httpx.HTTPError as exc:
         if prompt_id:
-            await cancel_prompt(client, prompt_id)
+            state["cancellation"] = await cancel_prompt(client, prompt_id)
         status = (
             502
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500
@@ -319,7 +365,7 @@ async def _generate_once(
         raise ComfyUIError(status, f"ComfyUI request failed: {exc}") from exc
     except (OSError, ValueError, KeyError, TypeError) as exc:
         if prompt_id:
-            await cancel_prompt(client, prompt_id)
+            state["cancellation"] = await cancel_prompt(client, prompt_id)
         raise ComfyUIError(502, f"Invalid ComfyUI response or media: {type(exc).__name__}") from exc
     finally:
         if own_client:
@@ -340,12 +386,45 @@ async def generate(
 ) -> InferenceResponse:
     """Enforce one generation deadline, followed by bounded targeted cancellation."""
     if timeout_s is None:
-        timeout_s = DIRECT_VIDEO_TIMEOUT_S if kind == "video_reference" else DEFAULT_TIMEOUT_S
+        timeout_s = Settings().video_timeout_seconds if kind != "image" else DEFAULT_TIMEOUT_S
+    started = time.monotonic()
+    state = {"stage": "comfyui_submit", "cancellation": "not_needed"}
     try:
         return await asyncio.wait_for(
-            _generate_once(kind, prompt, refs, projects_root, base_url, seed, duration_s,
-                           client, aspect),
+            _generate_once(
+                kind, prompt, refs, projects_root, base_url, seed, duration_s, client, aspect, state
+            ),
             timeout=timeout_s,
         )
     except TimeoutError as exc:
-        raise ComfyUIError(504, "ComfyUI generation timed out") from exc
+        log_phase(state, started, "generation_timeout")
+        detail = failure_detail(504, state, started, timeout_s)
+        raise ComfyUIError(504, "ComfyUI generation timed out", detail) from exc
+    except ComfyUIError as exc:
+        exc.detail = failure_detail(exc.status, state, started, timeout_s)
+        log_phase(state, started, exc.detail["code"])
+        raise
+    except asyncio.CancelledError:
+        log_phase(state, started, "cancelled")
+        raise
+
+
+def failure_detail(status: int, state: dict, started: float, budget: float) -> dict:
+    stage = state["stage"]
+    if status == 504:
+        stop = "已停止" if state["cancellation"] == "confirmed" else "已请求停止，停止结果未确认"
+        code, message = "generation_timeout", f"视频生成超过 {budget / 60:g} 分钟，{stop}。"
+    elif status == 503:
+        code, message = "backend_unavailable", "视频生成服务暂时不可用，请稍后重试。"
+    elif stage == "media_validation":
+        code, message = "media_validation_failed", "生成视频未通过媒体校验，请重试。"
+    else:
+        code, message = "model_execution_failed", "视频模型执行失败，请联系团队排查。"
+    return {
+        "stage": stage,
+        "code": code,
+        "message": message,
+        "elapsed_seconds": round(time.monotonic() - started, 2),
+        "budget_seconds": budget,
+        "cancellation": state["cancellation"],
+    }

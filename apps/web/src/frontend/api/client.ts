@@ -184,9 +184,11 @@ export function getUsageSummary() {
   return apiFetch<{ usage: UsageSummary }>("/api/episodes/usage");
 }
 
+export interface ShotFailureSummary { shot_id: string; code: string; message: string }
+
 export function getEpisode(episodeId: string) {
   return apiFetch<{ episode: Episode; persona: Persona | null; destination: Destination | null;
-    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null; storyboard_busy?: boolean; storyboard_warnings?: string[]; storyboard_prices?: StoryboardPrices }>(
+    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null; shot_failures?: ShotFailureSummary[]; storyboard_busy?: boolean; storyboard_warnings?: string[]; storyboard_prices?: StoryboardPrices }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
   );
 }

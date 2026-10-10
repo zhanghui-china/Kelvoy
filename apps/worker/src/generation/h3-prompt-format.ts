@@ -30,7 +30,7 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   // Negative production constraints are allowed; only described actions are checked below.
   const actions = removeNegativeConstraints(timeline);
   const output = removeNegativeConstraints(all);
-  const fail = (reason: string): never => { throw new Error(`H3 constraint: ${reason}`); };
+  const fail = (reason: string): never => { throw new H3FormatError(`H3 constraint: ${reason}`); };
   if (/[\u3400-\u9fff]/.test(all)) fail("rewrite must be English");
   if (/\b(?:I (?:see|observe)|I have (?:seen|viewed)|observed in|the (?:reference )?(?:image|picture|photo) shows)\b/i.test(all)) fail("must not claim image observation");
   if (value.non_diegetic_music !== "N/A") fail("background music must be N/A");

@@ -1,7 +1,7 @@
 import type { Episode } from "@kelvoy/engine";
 import { useRef, useState } from "react";
 import { retryFailedTask } from "../api/client";
-import type { FailedTaskSummary } from "../api/client";
+import type { FailedTaskSummary, ShotFailureSummary } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import type { GuideSectionId } from "../guide";
 import { EPISODE_STATUS_LABELS } from "../labels";
@@ -13,10 +13,12 @@ export default function ProgressView({
   episode,
   mutation,
   failedTask,
+  shotFailures,
 }: {
   episode: Episode;
   mutation: EpisodeMutation;
   failedTask?: FailedTaskSummary | null;
+  shotFailures?: ShotFailureSummary[];
 }) {
   const submitting = useRef(false);
   // Hide the action immediately after success, until refreshed episode data
@@ -36,6 +38,10 @@ export default function ProgressView({
       submitting.current = false;
     }
   }
+  const failedShot = failedTask?.shot_no != null ? episode.shots.find(shot => shot.no === failedTask.shot_no) : undefined;
+  const failureMessage = failedTask?.shot_no != null
+    ? shotFailures?.find(item => item.shot_id === failedShot?.shot_id)?.message ?? "历史任务未记录具体原因"
+    : episode.failure_reason;
   const doneShots = episode.shots.filter((s) => s.status === "approved").length;
   const readyShots = episode.shots.filter(
     (s) => s.status === "kf_ready" || s.status === "kf_selected" || s.status === "clip_ready",
@@ -65,13 +71,13 @@ export default function ProgressView({
         )}
         {canRetry ? (
           <p className="k-error" role="alert">
-            {episode.failure_reason ?? "生成失败。产物和已有的镜都还在，重试只会重跑失败的阶段。"}
+            {failureMessage ?? "生成失败。产物和已有的镜都还在，重试只会重跑失败的阶段。"}
           </p>
         ) : retryQueued ? (
           <p className="k-card-meta" role="status">失败任务已排队重试，等待后台处理。页面会自动刷新。</p>
         ) : hasFailure && episode.status === "failed" ? (
           <p className="k-error" role="alert">
-            {episode.failure_reason ?? "生成失败。"} 未找到可重试的失败任务，请刷新页面确认最新状态。
+            {failureMessage ?? "生成失败。"} 未找到可重试的失败任务，请刷新页面确认最新状态。
           </p>
         ) : hasFailure ? (
           <p className="k-card-meta" role="status">当前没有可重试的失败任务；可能已排队重试，等待后台处理。页面会自动刷新。</p>

@@ -77,3 +77,20 @@ test.each([
   });
   expect(reviewed.status).toBe(200);
 });
+
+test("shot failures use stable identity, hide active replacements and stay owner scoped", async () => {
+  const owner = await login("diagnostics-owner");
+  const visitor = await login("diagnostics-visitor");
+  await insertEpisode({ ...fixture("e_diagnostics", owner.ownerId), status: "clip_review",
+    shots: [shotFixture(5, { shot_id: "stable-shot", status: "failed" })] });
+  const task = await enqueueTask({ episode_id: "e_diagnostics", stage: "video", shot_no: 5 });
+  const diagnostic = { stage: "wait", code: "generation_timeout", message: "视频生成超过 15 分钟，已停止",
+    elapsed_seconds: 900, budget_seconds: 900, cancellation: "confirmed" as const };
+  expect(failTaskWithCredits((await dequeueTask())!, false, diagnostic.message, diagnostic)).toBe(true);
+  const app = buildApp();
+  const detail = async () => (await (await app.request("/api/episodes/e_diagnostics", {headers:{cookie:owner.cookie}})).json());
+  expect((await detail()).shot_failures).toEqual([{ shot_id: "stable-shot", code: "generation_timeout", message: diagnostic.message }]);
+  expect((await app.request("/api/episodes/e_diagnostics", {headers:{cookie:visitor.cookie}})).status).toBe(404);
+  await enqueueTask({episode_id:"e_diagnostics",stage:"video",shot_no:5,shot_id:"stable-shot",generation_id:task.task_id});
+  expect((await detail()).shot_failures).toEqual([]);
+});

@@ -112,3 +112,13 @@ test.each(["keyframe", "references"] as const)("completed %s episode marks every
   expect(html).not.toContain('aria-current="step"');
   expect((html.match(/已完成/g) ?? []).length).toBe(videoSource === "references" ? 5 : 6);
 });
+
+test("shot retry summary uses its own diagnosis rather than another shot's last error", () => {
+  const episode = { episode_id:"e_1", status:"clip_review", failure_reason:"其他镜超时",
+    shots:[{no:1,shot_id:"a",status:"failed"},{no:5,shot_id:"b",status:"failed"}] } as unknown as Episode;
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_1"><ProgressView episode={episode}
+    mutation={mutation} failedTask={{stage:"video",shot_no:1}}
+    shotFailures={[{shot_id:"a",code:"model_execution_failed",message:"模型执行失败"}]} /></StaticRouter>);
+  expect(html).toContain("模型执行失败");
+  expect(html).not.toContain("其他镜超时");
+});

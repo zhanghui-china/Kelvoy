@@ -27,8 +27,8 @@ uv run pytest
 
 DGX 的 `kelvoy-inference.service` 需要设置
 `Environment=KELVOY_PROJECTS_ROOT=/home/Developer/kelvoy/apps/web/projects`，
-并从仓库根目录保留 `comfyui-bridge` 工作流。图像和关键帧视频生成预算为 240 秒，双参考视频为 270 秒；
-定向取消清理另限 10 秒，调用方保留 300 秒 HTTP 超时，双参考路线仍有约 20 秒响应传输余量。
+并从仓库根目录保留 `comfyui-bridge` 工作流。图像生成预算保持 240 秒。两种视频路线统一使用 `KELVOY_VIDEO_TIMEOUT_SECONDS`，默认 900 秒，必须为 30–1800 的整数；Worker 和 Inference 必须设置相同值。
+定向取消清理另限 10 秒，Worker HTTP 总预算为视频预算加 60 秒，并关闭 Bun socket idle timeout。
 
 ComfyUI 媒体下载使用流式临时文件，单文件上限 512 MiB；超限会拒绝并尝试取消对应任务。发布前用 Pillow 校验完整 PNG、用 `ffmpeg` 解码视频流；损坏媒体会删除暂存文件并取消对应任务。推理服务和 Worker 所在主机均须将 `ffmpeg`、`ffprobe` 放在 PATH 上，CI 也安装同一运行依赖。这个本地上限不代替 DGX 的总磁盘水位与暂存回收。Worker 的无 ASS/drawtext 文字图层回退使用本项目 `uv sync` 创建的 `.venv/bin/python`，其中已锁定 Pillow；部署时还须提供中文字体。
 
@@ -36,7 +36,9 @@ ComfyUI 媒体下载使用流式临时文件，单文件上限 512 MiB；超限�
 
 成功响应包含 `paths`、`model`、工作流哈希 `version`、`seed` 和非负 `seconds`。Worker 先校验响应形状，再由生成适配层核对单个产物、种子和暂存目录，归档后记录参考图哈希。HTTP 成功但 JSON 不合法或字段类型错误统一为 `invalid_response`；连接失败、调用方取消、超时仍独立区分。ComfyUI 上传/历史/媒体元数据形状错误归一为 502，取得 prompt ID 后会尝试定向取消，取消失败记录日志而不覆盖原始错误。
 
-2026-09-27 的历史工作流测试直接访问 ComfyUI，四条 3 秒原始片段成功不等于生产 `/video/` 包装端点成功；其中双参考 16:9 用时 256.2 秒，超过旧 240 秒生成预算。本轮仅双参考路线改为 270 秒，并将取消清理限制为 10 秒；该值覆盖既有 256.2 秒样本，不能保证负载下成功。生成期限包含上传、排队、采样、下载和媒体校验；超时还要等待最多 10 秒的定向取消清理，HTTP 客户端总超时为 300 秒。真实端点单镜、排队取消、Worker 重启及两期完整成片仍需按共享 GPU 排期单独验收。详细证据与待办见 [PR07 适配审计](../../docs/audit/2026-09-27-pr07-inference-adapter.md)。
+2026-09-27 的双参考 16:9 样本用时 256.2 秒；后续真实作业仍超过旧 270 秒预算。生成期限包含上传、排队、采样、下载和媒体校验，超时取消仅作用于本次 prompt ID，不清空或中断共享 GPU 队列。超时不自动重跑；网络中断和暂时性服务错误最多尝试两次。参数、格式与内容审核失败不自动重试。
+
+视频错误 `detail` 包含 `stage`、`code`、安全 `message`、`elapsed_seconds`、`budget_seconds` 与 `cancellation`。Worker 兼容旧字符串错误，将诊断记录到既有 `tasks.error`，成功清除，失败结算与租约保护保持同一事务。内部关联头 `X-Kelvoy-Task-Id`、`X-Kelvoy-Shot-Id`、`X-Kelvoy-Attempt` 进入各阶段耗时日志；不记录完整提示词、参考图或密钥。历史证据见 [PR07 适配审计](../../docs/audit/2026-09-27-pr07-inference-adapter.md)。
 
 ## 只读系统检测与目标地址
 

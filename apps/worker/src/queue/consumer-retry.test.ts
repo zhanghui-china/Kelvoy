@@ -133,3 +133,22 @@ test.each([
   expect(ready.episode.credits_used).toBe(price);
   expect(await dequeueTask()).toBeNull();
 });
+
+test.each(["generation_timeout", "backend_unavailable"])("video %s records diagnostics with correct retry policy", async code => {
+  const { GenerationError } = await import("../generation/errors");
+  const ep: Episode = { ...fixtureEpisode("e_video_failure"), status: "clip_review", video_source: "references",
+    shots: [{ ...shotFixture(), status: "draft", shot_id: "sh_target" }] };
+  await insertEpisode(ep);
+  await insertPersona({ ...personaFixture("c_test"), refs: ["p/front.png"] });
+  await upsertDestination({ ...destinationFixture("d_test"), landmarks: [{ id: "l1", name: "地标", refs: ["d/a.jpg"], best_time: "上午" }] });
+  const task = await enqueueTask({ episode_id: ep.episode_id, stage: "video", shot_no: 1, shot_id: "sh_target" });
+  const diagnostic = { stage: "comfyui_wait", code, message: "安全错误提示。", elapsed_seconds: 900, budget_seconds: 900, cancellation: "confirmed" as const };
+  await handleTask((await dequeueTask())!, {
+    h3PromptWriter: mockH3PromptWriter,
+    video: { async generate() { throw new GenerationError(diagnostic, code === "backend_unavailable"); } },
+  });
+  const row = getDb().query<{ status: string; error: string; attempt: number }, [string]>("select status,error,attempt from tasks where task_id = ?").get(task.task_id)!;
+  expect(row.status).toBe(code === "generation_timeout" ? "failed" : "pending");
+  expect(JSON.parse(row.error)).toMatchObject(diagnostic);
+  expect(row.attempt).toBe(code === "generation_timeout" ? 1 : 2);
+});

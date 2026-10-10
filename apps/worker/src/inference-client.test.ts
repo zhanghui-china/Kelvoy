@@ -107,12 +107,12 @@ test("malformed JSON is a protocol failure rather than a connection failure", as
 });
 
 
-test("default HTTP deadline leaves 20 seconds after direct generation and cancellation", async () => {
+test("video HTTP deadline leaves 60 seconds after generation budget", async () => {
   handler = () => Response.json({ paths: ["inference/video/a.mp4"], model: "m", version: "v", seed: 1, seconds: 1 });
   const timer = spyOn(globalThis, "setTimeout");
   try {
     expect((await callInference("/video/", { prompt: "test" })).ok).toBe(true);
-    expect(timer).toHaveBeenCalledWith(expect.any(Function), 300_000);
+    expect(timer).toHaveBeenCalledWith(expect.any(Function), 960_000);
   } finally {
     timer.mockRestore();
   }
@@ -139,4 +139,35 @@ test("frozen inference address takes precedence over a changed deployment enviro
     version: "1", seed: 1, seconds: 1 });
   process.env.INFERENCE_BASE_URL = "http://127.0.0.1:1";
   expect((await callInference("/image/", { prompt: "test" }, { baseUrl: frozen })).ok).toBe(true);
+});
+
+ test("video disables Bun idle timeout and passes correlation headers", async () => {
+  const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ paths: ["video"], model: "m", version: "v", seed: 1, seconds: 1 }));
+  try {
+    await callInference("/video/", { prompt: "test" }, { correlation: { task_id: "tk_1", shot_id: "sh_1", attempt: 2 } });
+    const init = fetchSpy.mock.calls[0]![1] as RequestInit & { timeout?: number };
+    expect(init.timeout).toBe(0);
+    expect(new Headers(init.headers).get("X-Kelvoy-Task-Id")).toBe("tk_1");
+  } finally { fetchSpy.mockRestore(); }
+});
+
+test("preserves structured video failure detail", async () => {
+  const detail = { stage: "comfyui_wait", code: "generation_timeout", message: "视频生成超过 15 分钟，已停止。", elapsed_seconds: 900, budget_seconds: 900, cancellation: "confirmed" };
+  handler = () => Response.json({ detail }, { status: 504 });
+  const result = await callInference("/video/", { prompt: "scene" });
+  expect(!result.ok && result.error).toMatchObject({ detail });
+});
+
+test("rejects invalid video budgets before fetching and accepts endpoints", async () => {
+  const { videoTimeoutSeconds } = await import("./inference-client");
+  try {
+    for (const value of ["29", "1801", "abc", "30.5"]) {
+      process.env.KELVOY_VIDEO_TIMEOUT_SECONDS = value;
+      expect(() => videoTimeoutSeconds()).toThrow("KELVOY_VIDEO_TIMEOUT_SECONDS");
+    }
+    for (const value of ["30", "1800"]) {
+      process.env.KELVOY_VIDEO_TIMEOUT_SECONDS = value;
+      expect(videoTimeoutSeconds()).toBe(Number(value));
+    }
+  } finally { delete process.env.KELVOY_VIDEO_TIMEOUT_SECONDS; }
 });

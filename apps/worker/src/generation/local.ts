@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { link, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { localImageRequest, localVideoRequest, type StageContext } from "@kelvoy/engine";
+import { inferenceFailure } from "./errors";
 import { callInference } from "../inference-client";
 import { artifactPath, saveArtifact } from "../storage/artifacts";
 
@@ -135,12 +136,13 @@ async function requestOne(
   body: Parameters<InferenceCall>[1],
   signal?: AbortSignal,
   backend?: GenerationBackend,
+  correlation?: { task_id: string; shot_id?: string; attempt: number },
 ): Promise<{ source: string; model: string; version: string; seed: number; seconds: number }> {
   signal?.throwIfAborted();
   const result = await call(route, backend ? { ...body, comfyui_base_url: backend.comfyui_base_url } : body,
-    { signal, ...(backend ? { baseUrl: backend.inference_base_url } : {}) });
+    { signal, correlation, ...(backend ? { baseUrl: backend.inference_base_url } : {}) });
   signal?.throwIfAborted();
-  if (!result.ok) throw new Error(`local ${route} inference failed: ${JSON.stringify(result.error)}`);
+  if (!result.ok) throw inferenceFailure(result.error, route === "/video/");
   const response = result.response;
   const expectedPrefix = route === "/image/" ? "inference/image/" : "inference/video/";
   if (response.paths.length !== 1 || !response.paths[0]?.startsWith(expectedPrefix) ||
@@ -159,7 +161,7 @@ async function requestOne(
 }
 
 /** The worker owns all HTTP and filesystem work; engine receives only results. */
-export function createLocalGenerationProviders(call: InferenceCall = callInference, configuration?: GenerationBackend): Required<Pick<StageContext, "keyframe" | "video">> {
+export function createLocalGenerationProviders(call: InferenceCall = callInference, configuration?: GenerationBackend, correlation?: { task_id: string; shot_id?: string; attempt: number }): Required<Pick<StageContext, "keyframe" | "video">> {
   const backend = configuration ? { ...configuration } : undefined;
   return {
     keyframe: { async generate(input) {
@@ -177,7 +179,7 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const cached = await findCached(input.episode_id, key,
         `${identity}_${input.generation_id}_`, fingerprint);
       if (cached) { input.signal?.throwIfAborted(); return cached; }
-      const response = await requestOne(call, "/image/", localImageRequest(input), input.signal, backend);
+      const response = await requestOne(call, "/image/", localImageRequest(input), input.signal, backend, correlation);
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
@@ -214,7 +216,7 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, refs,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
-      }), input.signal, backend);
+      }), input.signal, backend, correlation);
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {

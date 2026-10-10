@@ -21,6 +21,7 @@ import {
   getEpisode,
   getUsageSummary,
   getLatestFailedTask,
+  getShotFailures,
   getPersona,
   getPersonaVersion,
   getTemplate,
@@ -203,7 +204,7 @@ episodes.get("/:id", async (c) => {
   return c.json({ ok: true, episode: result.episode, persona,
     destination: destinationRevision?.destination ?? null,
     destination_history_approximate: destinationRevision?.compatibility_approximation ?? false,
-    row_version: result.row_version, failed_task,
+    row_version: result.row_version, failed_task, shot_failures: await getShotFailures(result.episode),
     storyboard_busy: storyboardBusy(result.episode.episode_id),
     storyboard_warnings: [],
     storyboard_prices: { script: getCreditPrice("script"), image: getCreditPrice("image"), video: getCreditPrice("video"), compose: getCreditPrice("compose") } });
