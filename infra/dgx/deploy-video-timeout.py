@@ -13,6 +13,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tarfile
 import time
 import urllib.request
@@ -90,6 +91,17 @@ def database_snapshot(path):
         return {"schema_sha256": hashlib.sha256(repr(schema).encode()).hexdigest(), "tables": rows}
 
 
+def has_tasks(path, statuses):
+    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as database:
+        parameters = ",".join("?" for _ in statuses)
+        return (
+            database.execute(
+                f"select 1 from tasks where status in ({parameters}) limit 1", statuses
+            ).fetchone()
+            is not None
+        )
+
+
 def live_environment(service):
     pid = int(property_value(service, "MainPID"))
     if not pid:
@@ -153,25 +165,9 @@ def cutover(args):
             raise RuntimeError("Persistent path cannot be represented safely in systemd")
     if database.is_relative_to(release) or projects.is_relative_to(release):
         raise RuntimeError("Persistent data must be outside the new release")
-    if not queue_idle(args.comfy_url):
-        raise RuntimeError("GPU queue busy; no service changed")
-    # Stop receivers before the second queue check; never interrupt a GPU job.
-    systemctl("stop", "kelvoy-worker")
-    try:
-        if not queue_idle(args.comfy_url):
-            raise RuntimeError("GPU queue became busy")
-    except Exception:  # noqa: BLE001 - restore receiver state for every failed queue probe
-        if initial["kelvoy-worker"]:
-            systemctl("start", "kelvoy-worker")
-        raise RuntimeError("Queue check failed/busy; original Worker state restored") from None
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = Path.home() / "kelvoy-backups" / f"pre-video-timeout-{stamp}"
-    try:
-        backup.mkdir(parents=True, mode=0o700, exist_ok=False)
-    except Exception:
-        if initial["kelvoy-worker"]:
-            systemctl("start", "kelvoy-worker")
-        raise
+    backup.mkdir(parents=True, mode=0o700, exist_ok=False)
     report = {
         "release": str(release),
         "manifest": manifest,
@@ -186,7 +182,42 @@ def cutover(args):
     saved_config = {}
 
     def record():
-        (backup / "deployment.json").write_text(json.dumps(report, indent=2))
+        try:
+            (backup / "deployment.json").write_text(json.dumps(report, indent=2))
+        except Exception:  # noqa: BLE001 - reporting must never prevent service restoration
+            # A full disk or permission failure must never prevent service restoration.
+            try:
+                print(
+                    "Deployment report write failed; continuing service recovery", file=sys.stderr
+                )
+            except OSError:
+                pass
+
+    for service in SERVICES:
+        path = Path.home() / ".config/systemd/user" / f"{service}.service.d" / DROPIN
+        if path.exists():
+            raise RuntimeError("Video timeout drop-in already exists; do not overwrite it")
+    worker_stopped = False
+    try:
+        # Stop Web first: no new user task can race the admission/idle checks.
+        systemctl("stop", "kelvoy-web")
+        if initial["kelvoy-worker"]:
+            if has_tasks(database, ("pending", "processing")) or not queue_idle(args.comfy_url):
+                raise RuntimeError("Active Worker has tasks/GPU jobs; drain before cutover")
+            systemctl("stop", "kelvoy-worker")
+            worker_stopped = True
+        # An already-paused GX Worker may have stale processing/pending rows.
+        # Those rows remain unchanged and resume naturally after successful cutover.
+        if not queue_idle(args.comfy_url):
+            raise RuntimeError("GPU queue busy; no release switched")
+    except Exception:  # noqa: BLE001 - all admission failures must restore Web/receiver state
+        report["status"] = "admission_rejected"
+        record()
+        if worker_stopped and initial["kelvoy-worker"]:
+            systemctl("start", "kelvoy-worker")
+        if initial["kelvoy-web"]:
+            systemctl("start", "kelvoy-web")
+        raise RuntimeError("Admission failed; original service state restored") from None
 
     try:
         record()
@@ -242,13 +273,13 @@ def cutover(args):
             if path.exists():
                 raise RuntimeError("Video timeout drop-in already exists; do not overwrite it")
             path.parent.mkdir(parents=True, exist_ok=True)
+            created.append(path)
             path.write_text(
                 f'[Service]\nWorkingDirectory="{directory}"\nExecStart=\n'
                 f"ExecStart={executable}\nEnvironment=KELVOY_VIDEO_TIMEOUT_SECONDS=900\n"
                 f'Environment="KELVOY_DB_PATH={database}"\n'
                 f'Environment="KELVOY_PROJECTS_ROOT={projects}"\n'
             )
-            created.append(path)
         systemctl("daemon-reload")
         systemctl("start", "kelvoy-inference", "kelvoy-web")
         wait_healthy("kelvoy-inference", args.inference_url.rstrip("/") + "/health")
@@ -257,6 +288,8 @@ def cutover(args):
             effective = live_environment(service)
             if effective.get("KELVOY_VIDEO_TIMEOUT_SECONDS") != "900":
                 raise RuntimeError("Video timeout configuration not effective")
+            if effective.get("KELVOY_PROJECTS_ROOT") != str(projects):
+                raise RuntimeError("Persistent service projects path not effective")
             if service == "kelvoy-web" and (
                 effective.get("KELVOY_DB_PATH") != str(database)
                 or effective.get("KELVOY_PROJECTS_ROOT") != str(projects)
@@ -294,16 +327,27 @@ def cutover(args):
     except Exception as error:  # noqa: BLE001 - all cutover failures require rollback
         report.update(status="rollback_needed", error_type=type(error).__name__)
         record()
-        systemctl("stop", "kelvoy-worker")
-        if not queue_idle(args.comfy_url):
-            report["rollback"] = "GPU queue busy; keep Worker paused and require manual idle check"
+        # Freeze new user submissions before determining whether Worker can be stopped.
+        # Never signal a Worker that might own an in-flight GPU task, including the
+        # pending -> processing race. Drain first; no global interrupt is permitted.
+        systemctl("stop", "kelvoy-web")
+        try:
+            rollback_busy = not queue_idle(args.comfy_url) or (
+                service_active("kelvoy-worker") and has_tasks(database, ("pending", "processing"))
+            )
+        except Exception:  # noqa: BLE001 - uncertainty about live work means fail closed
+            rollback_busy = True
+        if rollback_busy:
+            report["status"] = "rollback_deferred"
+            report["rollback"] = (
+                "Worker/GPU work may be live; no cancellation; manual drain required"
+            )
             record()
-            raise RuntimeError(
-                "Rollback deferred until GPU queue idle; see protected report"
-            ) from None
+            raise RuntimeError("Rollback deferred; live Worker/GPU left untouched") from None
+        systemctl("stop", "kelvoy-worker")
         systemctl("stop", "kelvoy-web", "kelvoy-inference")
         for path in created:
-            path.unlink()
+            path.unlink(missing_ok=True)
         systemctl("daemon-reload")
         for service in SERVICES:
             if initial[service]:
