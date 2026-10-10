@@ -203,3 +203,30 @@ test("runCompose refuses to run without a ComposeProvider (engine never touches 
     "compose 阶段需要 ComposeProvider",
   );
 });
+
+for (const policy of ["fixed_1s", "beat_aligned"] as const) {
+  test(`${policy} carries captions in shot order without changing trims`, async () => {
+    const episode = episodeFixture({ cut_policy: policy, music: { file: "music/test.mp3", bpm: 120, license: "test" }, shots: [
+      shotFixture(7, { caption: "中文\n引号' : , {测试} \\ 路", trim_start_s: 0.5, duration_s: 2 }),
+      shotFixture(2, { caption: "  ", trim_start_s: 1, duration_s: 1 }),
+      shotFixture(9),
+    ] });
+    const plan = await buildComposePlan(episode, { persona: personaFixture() });
+    expect(plan.subtitles_enabled).toBe(true);
+    expect(plan.cuts.map(c => c.no)).toEqual([7, 2, 9]);
+    expect(plan.cuts.map(c => c.caption)).toEqual([episode.shots[0]!.caption, "  ", ""]);
+    expect(plan.cuts.map(c => c.trim_start_s)).toEqual([0.5, 1, 0]);
+    expect(plan.cuts.map(c => c.duration_s)).toEqual(policy === "fixed_1s" ? [1, 1, 1] : [2, 1, 1]);
+    for (const enabled of [true, false]) {
+      const explicit = await buildComposePlan({ ...episode, render: { ...episode.render, subtitles_enabled: enabled } }, { persona: personaFixture() });
+      expect(explicit.subtitles_enabled).toBe(enabled);
+    }
+  });
+}
+
+test("legacy subtitles survive an explicitly enabled compose", async () => {
+  const episode = episodeFixture({ shots: [shotFixture(1, { caption: "字幕" })] });
+  episode.render.subtitles_enabled = true;
+  const plan = await buildComposePlan(episode, { persona: personaFixture() });
+  expect(plan.cuts[0]?.caption).toBe("字幕");
+});

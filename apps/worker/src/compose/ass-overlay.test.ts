@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ComposePlan } from "@kelvoy/engine";
-import { buildAssOverlay } from "./ass-overlay";
+import { buildAssOverlay, textOverlayEvents } from "./ass-overlay";
 import { buildFfmpegArgs, type ComposeInputPaths } from "./ffmpeg-args";
 
 const plan = {
@@ -33,4 +33,21 @@ test("ffmpeg uses the ASS overlay once after concat when provided", () => {
   const graph = args[args.indexOf("-filter_complex") + 1]!;
   expect(graph).toContain("[vcat]ass=filename=/p/e/final/overlay.ass[vtext]");
   expect(graph).not.toContain("drawtext");
+});
+
+test("caption events follow reordered variable cuts, ignore blanks and stop before the outro", () => {
+  const reordered = { ...plan, title: "", ai_label: false, cuts: [
+    { ...plan.cuts[1]!, no: 7, trim_start_s: 2, duration_s: 1.5, caption: "中文\n第二行' : , {字符} \\ 路" },
+    { ...plan.cuts[0]!, no: 2, duration_s: 0.8, caption: " \n " },
+    { ...plan.cuts[1]!, no: 9, duration_s: 2, caption: "最后一镜" },
+  ] };
+  for (const intro of [0, 1.2]) {
+    const events = textOverlayEvents(reordered, intro, 1);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ start_s: intro, end_s: intro + 1.5 });
+    expect(events[1]!.start_s).toBeCloseTo(intro + 2.3);
+    expect(events[1]!.end_s).toBeCloseTo(intro + 4.3);
+    expect(buildAssOverlay(reordered, intro, 1)).toContain("中文\\N第二行");
+  }
+  expect(textOverlayEvents({ ...reordered, subtitles_enabled: false }, 1.2, 1)).toEqual([]);
 });

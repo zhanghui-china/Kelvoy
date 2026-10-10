@@ -8,6 +8,7 @@ import {
   MUSIC_CATALOG,
   validateCreateEpisodeRequest,
   validatePatchEpisodeRequest,
+  subtitlesEnabled,
 } from "@kelvoy/engine";
 import {
   createEpisodeWithScriptTask,
@@ -224,8 +225,8 @@ episodes.patch("/:id", async (c) => {
   const render = result.value.patch.render;
   if (render && (render.res !== loaded.episode.render.res || render.fps !== loaded.episode.render.fps ||
       render.ai_label !== loaded.episode.render.ai_label ||
-      ![null, "intro/kelvoy_open.mp4"].includes(render.intro) ||
-      ![null, "outro/kelvoy_close.mp4"].includes(render.outro))) {
+      ![null, "intro/kelvoy_open.mp4", loaded.episode.render.intro].includes(render.intro) ||
+      ![null, "outro/kelvoy_close.mp4", loaded.episode.render.outro].includes(render.outro))) {
     return c.json({ ok: false, error: "invalid_render_settings" }, 400);
   }
   if (render && checkContent([{ field: "title", text: render.title }]).length > 0) {
@@ -241,7 +242,9 @@ episodes.patch("/:id", async (c) => {
   const patchResult = await patchEpisode(
     loaded.episode.episode_id,
     result.value.row_version,
-    result.value.patch,
+    { ...result.value.patch,
+      ...(loaded.episode.final && render && subtitlesEnabled(render) !== subtitlesEnabled(loaded.episode.render)
+        ? { final_needs_recompose: true } : {}) },
   );
   if (!patchResult.ok) return patchErrorResponse(c, patchResult);
   return c.json({ ok: true, row_version: patchResult.row_version });

@@ -101,7 +101,7 @@ export default function ShotEditor({
         </label>
       </div>
       <label className="k-field">
-        成片字幕
+        成片字幕（保存后需合成／重新合成才会更新成片，空字幕不显示）
         <input value={caption} maxLength={120} onChange={(e) => setCaption(e.target.value)} />
       </label>
       <label className="k-field">

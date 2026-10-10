@@ -182,7 +182,7 @@ export const ffmpegComposeProvider: ComposeProvider = {
     signal?.throwIfAborted();
     await mkdir(dirname(paths.output), { recursive: true });
     const needsText = Boolean(plan.title) || plan.ai_label ||
-      (plan.subtitles_enabled && plan.cuts.some((cut) => Boolean(cut.caption)));
+      (plan.subtitles_enabled && plan.cuts.some((cut) => Boolean(cut.caption?.trim())));
     if (needsText && await supportsAssFilter()) {
       const overlayPath = `${paths.output}.ass`;
       const tempPath = `${overlayPath}.tmp-${crypto.randomUUID()}`;

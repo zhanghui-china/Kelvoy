@@ -104,6 +104,7 @@ export function planCuts(shots: Shot[], bpm: number): ShotCut[] {
       clip_key: shot.clip,
       trim_start_s: roundMs(Math.max(0, shot.trim_start_s ?? 0)),
       duration_s: alignToBeat(shot.duration_s, bpm),
+      caption: shot.caption ?? "",
     };
   });
 }

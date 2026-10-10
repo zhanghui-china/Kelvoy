@@ -161,3 +161,17 @@ test("buildFfmpegArgs rejects a paths/cuts length mismatch", () => {
     "对不上",
   );
 });
+
+test("drawtext escapes quotes at both option and filtergraph levels", () => {
+  const graph = filterGraph(buildFfmpegArgs(planFixture({ title: "", ai_label: false, subtitles_enabled: true,
+    cuts: [{ no: 1, clip_key: "clip/01.mp4", trim_start_s: 0.5, duration_s: 1, caption: "你好' : , {旅途} \\ 路\n第二行" }] }),
+    pathsFixture({ clips: ["/p/e/clip/1.mp4"] })));
+  expect(graph).toContain("你好" + "\\".repeat(3) + "'");
+  expect(graph).toContain("expansion=none");
+});
+test("whitespace captions need neither a font nor a text renderer", () => {
+  const args = buildFfmpegArgs(planFixture({ title: "", ai_label: false, subtitles_enabled: true,
+    cuts: [{ no: 1, clip_key: "clip/01.mp4", trim_start_s: 0, duration_s: 1, caption: "  \n " }] }),
+    pathsFixture({ clips: ["/p/e/clip/1.mp4"], font: null }));
+  expect(filterGraph(args)).not.toContain("drawtext");
+});

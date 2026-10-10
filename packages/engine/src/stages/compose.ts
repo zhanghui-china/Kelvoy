@@ -1,5 +1,6 @@
 import { musicLibraryProvider } from "../providers/music-library";
 import type { ComposePlan, ComposePlanMusic } from "../providers/types";
+import { subtitlesEnabled } from "../rules/subtitles";
 import { planCuts, planFixedCuts } from "../rules/beat";
 import type { Episode } from "../schema";
 import { transitionEpisode } from "../state";
@@ -89,7 +90,7 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
     },
     res: parseRes(episode.render.res),
     fps: episode.render.fps,
-    subtitles_enabled: episode.render.subtitles_enabled === true,
+    subtitles_enabled: subtitlesEnabled(episode.render),
     transitions_enabled: episode.cut_policy === "fixed_1s" && episode.render.transitions_enabled === true,
   };
 }

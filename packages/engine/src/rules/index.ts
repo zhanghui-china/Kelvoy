@@ -3,3 +3,4 @@ export * from "./script";
 export * from "./credits";
 export * from "./content";
 export * from "./review";
+export * from "./subtitles";

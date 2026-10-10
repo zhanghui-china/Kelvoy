@@ -48,8 +48,8 @@ test("alignToBeat falls back to clamping when bpm is unusable", () => {
 test("planCuts maps approved shots to beat-aligned cuts", () => {
   const cuts = planCuts([shotFixture(1), shotFixture(2, { trim_start_s: 0.4, duration_s: 1.6 })], 120);
   expect(cuts).toEqual([
-    { no: 1, clip_key: "clip/01.mp4", trim_start_s: 0, duration_s: 1 },
-    { no: 2, clip_key: "clip/02.mp4", trim_start_s: 0.4, duration_s: 1.5 },
+    { no: 1, clip_key: "clip/01.mp4", trim_start_s: 0, duration_s: 1, caption: "" },
+    { no: 2, clip_key: "clip/02.mp4", trim_start_s: 0.4, duration_s: 1.5, caption: "" },
   ]);
   expect(totalCutDurationS(cuts)).toBe(2.5);
 });

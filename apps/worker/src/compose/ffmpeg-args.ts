@@ -36,11 +36,11 @@ function roundMs(seconds: number): number {
 
 /**
  * ffmpeg 的两级转义（见 ffmpeg-filters(1) "Notes on filtergraph escaping"）：
- * 先转义滤镜参数级的 `:`，再转义 filtergraph 级的 `,` `;` `[` `]` `'` 和反斜杠。
+ * 先转义滤镜参数级的 `:` 与单引号，再转义 filtergraph 级的 `,` `;` `[` `]` `'` 和反斜杠。
  * 刻意不用单引号包裹——ffmpeg 的引号内不再处理反斜杠转义，混用容易出错。
  */
 function escapeFilterValue(value: string): string {
-  const optionLevel = value.replace(/\\/g, "\\\\").replace(/:/g, "\\:");
+  const optionLevel = value.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'");
   return optionLevel.replace(/[\\',;:[\]]/g, (char) => `\\${char}`);
 }
 
@@ -113,7 +113,7 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
     throw new Error(`片段路径数量（${paths.clips.length}）与切割表（${plan.cuts.length}）对不上`);
   }
   const needsText = plan.title !== "" || plan.ai_label ||
-    (plan.subtitles_enabled === true && plan.cuts.some((cut) => Boolean(cut.caption)));
+    (plan.subtitles_enabled === true && plan.cuts.some((cut) => Boolean(cut.caption?.trim())));
   if (needsText && !paths.font && !paths.overlay_ass && !paths.overlay_images?.length) {
     throw new Error(
       "合成需要 drawtext 渲染中文（标题 / AI 标识），请把环境变量 KELVOY_FONT_FILE 指向一个 CJK 字体文件",
@@ -147,7 +147,7 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
       args.push("-ss", String(cut.trim_start_s), "-t", String(cut.duration_s), "-i", paths.clips[i]!);
     }
     chain += lutChain;
-    if (plan.subtitles_enabled && cut.caption && !paths.overlay_ass && !paths.overlay_images?.length)
+    if (plan.subtitles_enabled && cut.caption?.trim() && !paths.overlay_ass && !paths.overlay_images?.length)
       chain += `,${captionDrawtext(plan, cut.caption, paths.font!)}`;
     if (plan.transitions_enabled && cut.frame_count !== undefined) {
       if (i > 0) chain += ",fade=t=in:s=0:n=2";

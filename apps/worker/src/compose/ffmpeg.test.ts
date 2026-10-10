@@ -196,3 +196,58 @@ test.skipIf(!HAS_FFMPEG || process.platform !== "darwin")("renders title, captio
   expect(await Bun.file(`${output}.overlay-0.png`).exists()).toBe(true);
   expect(await probeFrames(output)).toBeGreaterThan(90);
 });
+
+/** Count bright pixels in the caption area of an actual decoded frame. */
+async function captionPixels(path: string, at: number, width: number, height: number): Promise<number> {
+  const proc = Bun.spawn(["ffmpeg", "-v", "error", "-ss", String(at), "-i", path,
+    "-frames:v", "1", "-vf", `crop=${width}:${Math.floor(height * 0.4)}:0:${Math.floor(height * 0.6)}`,
+    "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"], { stdout: "pipe", stderr: "pipe" });
+  const [pixels, code, stderr] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited, new Response(proc.stderr).text()]);
+  if (code !== 0) throw Error(stderr);
+  expect(pixels.byteLength).toBeGreaterThan(0);
+  const bytes = new Uint8Array(pixels);
+  let bright = 0;
+  for (let i = 0; i < bytes.length; i += 3) {
+    if (bytes[i]! > 180 && bytes[i + 1]! > 180 && bytes[i + 2]! > 180) bright++;
+  }
+  return bright;
+}
+
+for (const fixed of [false, true]) {
+  for (const res of [{ w: 540, h: 960 }, { w: 960, h: 540 }]) {
+    for (const bookends of [false, true]) {
+      test.skipIf(!HAS_FFMPEG)(`caption pixels stay inside ${fixed ? "fixed" : "beat"} cuts at ${res.w}x${res.h}, bookends=${bookends}`, async () => {
+        const plan = planFixture();
+        plan.res = res;
+        plan.music = null;
+        plan.lut_key = null;
+        plan.intro_key = bookends ? "intro/test.mp4" : null;
+        plan.outro_key = bookends ? "intro/test.mp4" : null;
+        plan.cuts = [
+          { no: 7, clip_key: "clip/02.mp4", trim_start_s: 0.5, duration_s: fixed ? 1 : 1.5, caption: "山风\n你好' : , {旅途} \\ 路" },
+          { no: 2, clip_key: "clip/01.mp4", trim_start_s: 1, duration_s: 1, caption: "  \n " },
+          { no: 9, clip_key: "clip/02.mp4", trim_start_s: 0.5, duration_s: 1, caption: "第二句" },
+        ];
+        if (fixed) plan.cuts = plan.cuts.map(cut => ({ ...cut, trim_start_frame: cut.trim_start_s * 30, frame_count: 30 }));
+        plan.subtitles_enabled = true;
+        plan.output_key = "final/captions-on.mp4";
+        await ffmpegComposeProvider.compose({ plan });
+        const enabled = join(projectsRoot, "e_it", plan.output_key);
+        plan.subtitles_enabled = false;
+        plan.output_key = "final/captions-off.mp4";
+        await ffmpegComposeProvider.compose({ plan });
+        const disabled = join(projectsRoot, "e_it", plan.output_key);
+        const intro = bookends ? 1 : 0;
+        const firstEnd = intro + plan.cuts[0]!.duration_s;
+        const lastStart = firstEnd + 1;
+        for (const at of [intro + 0.2, firstEnd - 1 / 30, lastStart, lastStart + 0.5]) {
+          expect(await captionPixels(enabled, at, res.w, res.h)).toBeGreaterThan(20);
+          expect(await captionPixels(disabled, at, res.w, res.h)).toBe(0);
+        }
+        for (const at of [firstEnd, firstEnd + 0.5, ...(bookends ? [0.5, lastStart + 1, lastStart + 1.5] : [])]) {
+          expect(await captionPixels(enabled, at, res.w, res.h)).toBe(0);
+        }
+      });
+    }
+  }
+}
