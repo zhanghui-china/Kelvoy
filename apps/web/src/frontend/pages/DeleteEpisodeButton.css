@@ -1,0 +1,8 @@
+.k-delete-dialog { max-width: 32rem; width: calc(100% - 3rem); padding: 1.5rem; border: 1px solid #ddd; border-radius: 12px; color: inherit; }
+.k-delete-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.k-delete-dialog h2 { font-size: 1.2rem; margin-top: 0; overflow-wrap: anywhere; }
+.k-delete-dialog p { line-height: 1.7; }
+.k-delete-actions { display: flex; justify-content: flex-end; gap: .75rem; margin-top: 1.5rem; }
+.k-delete-confirm { background: #a62d32; color: #fff; }
+.k-delete-work { color: #a62d32; }
+.k-work-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }

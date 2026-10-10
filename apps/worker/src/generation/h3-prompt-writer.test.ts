@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { H3PromptContext } from "@kelvoy/engine";
 import { createH3PromptWriter } from "./h3-prompt-writer";
+import { close, deleteEpisode, insertEpisode, open } from "@kelvoy/store";
+import { deletionEpisodeFixture } from "../queue/deletion-test-fixture";
 let root: string;
 let oldRoot: string | undefined;
 beforeEach(async () => {
@@ -38,6 +40,18 @@ function sections(mode: H3PromptContext["mode"] = "Ref2VA", duration_s = 4): Rec
 }
 function response(value: unknown) { return Response.json({ choices: [{ message: { content: JSON.stringify(value) } }] }); }
 function writer(call: typeof fetch, options = {}) { return createH3PromptWriter({ fetch: call, apiKey: "test", ...options }); }
+
+test("deleted work cannot archive a late H3 rewrite result", async () => {
+  open(":memory:");
+  try {
+    await insertEpisode(deletionEpisodeFixture("e1", "u_owner"));
+    const fetcher = (async () => {
+      await deleteEpisode("e1", "u_owner");
+      return response(sections());
+    }) as unknown as typeof fetch;
+    await expect(writer(fetcher).write({ episode_id: "e1", context: context() })).rejects.toThrow("episode deleted");
+  } finally { close(); }
+});
 
 test("official Ref2VA sections preserve reference order and cache across writer instances", async () => {
   let calls = 0;

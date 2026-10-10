@@ -1,6 +1,7 @@
 import type { Episode, StageName, Task } from "@kelvoy/engine";
 import { decodeEpisode } from "./episode-codec";
 import { getDb } from "./db";
+import { hasEpisodeDeletion } from "./episode-deletion";
 
 /**
  * Task queue (ADR-0004): a `tasks` table replaces Redis. dequeueTask's
@@ -87,6 +88,7 @@ export async function enqueueTask(input: {
   instruction?: string;
   generation_id?: string;
 }): Promise<Task> {
+  if (hasEpisodeDeletion(input.episode_id)) throw new Error("episode deleted");
   const taskId = input.task_id ?? `tk_${crypto.randomUUID()}`;
   const episode = getDb().query<{doc:string},[string]>("select doc from episodes where episode_id = ?").get(input.episode_id);
   const shotId = input.shot_id ?? (episode ? decodeEpisode(episode.doc).shots.find(s => s.no === input.shot_no)?.shot_id : undefined);
@@ -107,30 +109,39 @@ export async function enqueueTask(input: {
 export async function dequeueTask(): Promise<Task | null> {
   const leaseUntil = Math.floor(Date.now() / 1000) + TASK_LEASE_SECONDS;
   const leaseToken = `lease_${crypto.randomUUID()}`;
-  const row = getDb()
-    .query<TaskRow, [number, string]>(
-      `update tasks
-       set status = 'processing',
-           attempt = attempt + case when status = 'processing' then 1 else 0 end,
-           lease_until = ?, lease_token = ?, updated_at = datetime('now')
-       where task_id = (
-         select task_id from tasks
-         where status = 'pending' or (status = 'processing' and (lease_until is null or lease_until <= unixepoch('now')))
-         order by created_at asc limit 1
-       )
-       returning task_id, episode_id, stage, shot_no, shot_id, attempt, operation, instruction, generation_id, lease_token, payload_json`,
-    )
-    .get(leaseUntil, leaseToken);
-  return row ? toTask(row) : null;
+  return getDb().transaction(() => {
+    const row = getDb()
+      .query<TaskRow, [number, string]>(
+        `update tasks
+         set status = 'processing',
+             attempt = attempt + case when status = 'processing' then 1 else 0 end,
+             lease_until = ?, lease_token = ?, updated_at = datetime('now')
+         where task_id = (
+           select task_id from tasks
+           where (status = 'pending' or (status = 'processing' and (lease_until is null or lease_until <= unixepoch('now'))))
+             and not exists (select 1 from episode_deletions d where d.episode_id = tasks.episode_id)
+           order by created_at asc limit 1
+         )
+         returning task_id, episode_id, stage, shot_no, shot_id, attempt, operation, instruction, generation_id, lease_token, payload_json`,
+      )
+      .get(leaseUntil, leaseToken);
+    if (row) getDb().query("insert into task_executions (task_id, lease_token, episode_id, lease_until) values (?, ?, ?, ?)")
+      .run(row.task_id, leaseToken, row.episode_id, leaseUntil);
+    return row ? toTask(row) : null;
+  }).immediate();
 }
 
 export async function renewTaskLease(taskId: string, leaseToken: string): Promise<boolean> {
-  const result = getDb().query(
-    `update tasks set lease_until = ?, updated_at = datetime('now')
-     where task_id = ? and lease_token = ? and status = 'processing'
-       and lease_until > unixepoch('now')`,
-  ).run(Math.floor(Date.now() / 1000) + TASK_LEASE_SECONDS, taskId, leaseToken);
-  return result.changes === 1;
+  return getDb().transaction(() => {
+    const result = getDb().query(
+      `update tasks set lease_until = ?, updated_at = datetime('now')
+       where task_id = ? and lease_token = ? and status = 'processing'
+         and lease_until > unixepoch('now')`,
+    ).run(Math.floor(Date.now() / 1000) + TASK_LEASE_SECONDS, taskId, leaseToken);
+    if (result.changes === 1) getDb().query("update task_executions set lease_until = ? where task_id = ? and lease_token = ?")
+      .run(Math.floor(Date.now() / 1000) + TASK_LEASE_SECONDS, taskId, leaseToken);
+    return result.changes === 1;
+  }).immediate();
 }
 
 export function hasActiveStageTasks(episodeId: string, stage: StageName): boolean {
@@ -144,7 +155,7 @@ export function hasActiveStageTasks(episodeId: string, stage: StageName): boolea
 export async function completeTask(taskId: string, leaseToken?: string): Promise<void> {
   getDb()
     .query(`update tasks set status = 'done', error = null, lease_until = null, lease_token = null,
-      updated_at = datetime('now') where task_id = ? and (? is null or lease_token = ?)`)
+      updated_at = datetime('now') where task_id = ? and status != 'cancelled' and not exists (select 1 from episode_deletions d where d.episode_id = tasks.episode_id) and (? is null or lease_token = ?)`)
     .run(taskId, leaseToken ?? null, leaseToken ?? null);
 }
 
@@ -160,13 +171,21 @@ export async function failTask(taskId: string, options: { requeue: boolean; leas
       .query(
         `update tasks set status = 'pending', attempt = attempt + 1, lease_until = null,
          lease_token = null, updated_at = datetime('now')
-         where task_id = ? and (? is null or lease_token = ?)`,
+         where task_id = ? and status != 'cancelled' and not exists (select 1 from episode_deletions d where d.episode_id = tasks.episode_id) and (? is null or lease_token = ?)`,
       )
       .run(taskId, options.leaseToken ?? null, options.leaseToken ?? null);
   } else {
     getDb()
       .query(`update tasks set status = 'failed', lease_until = null, lease_token = null,
-        updated_at = datetime('now') where task_id = ? and (? is null or lease_token = ?)`)
+        updated_at = datetime('now') where task_id = ? and status != 'cancelled' and not exists (select 1 from episode_deletions d where d.episode_id = tasks.episode_id) and (? is null or lease_token = ?)`)
       .run(taskId, options.leaseToken ?? null, options.leaseToken ?? null);
   }
+}
+
+/** Read-only cancellation fence; polling must not extend a cancelled execution. */
+export async function isTaskLeaseActive(taskId: string, leaseToken: string): Promise<boolean> {
+  return !!getDb().query(`select 1 from tasks where task_id = ? and lease_token = ?
+    and status = 'processing' and lease_until > unixepoch('now')
+    and not exists (select 1 from episode_deletions d where d.episode_id = tasks.episode_id)`)
+    .get(taskId, leaseToken);
 }

@@ -1,6 +1,6 @@
 import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import type { Destination, Episode, Persona } from "@kelvoy/engine";
 import { getEpisode } from "../api/client";
 import type { StoryboardPrices, FailedTaskSummary } from "../api/client";
@@ -22,6 +22,7 @@ import { useEpisodeMutation } from "../review/useEpisodeMutation";
 import { versionForEpisode } from "../review/episode-mutation-version";
 import type { EpisodeMutation } from "../review/useEpisodeMutation";
 import "../review/review.css";
+import DeleteEpisodeButton from "./DeleteEpisodeButton";
 
 /**
  * 审片台（M2-9/#31，FR-05）。这一页只负责取数据、3 秒轮询、按 status 分发
@@ -38,6 +39,7 @@ export default function EpisodeDetailPage() {
 
   const mutation = useEpisodeMutation(id ?? "", versionForEpisode(id, data), refresh);
 
+  if (error === "not_found") return <div><p role="status">作品已删除或不存在。</p><Link to="/works">返回作品列表</Link></div>;
   if (loading || (data && data.episode.episode_id !== id)) return <p className="k-empty">加载中…</p>;
   if (error && !data) return <p className="k-error">加载失败：{error}</p>;
   if (!data) return null;
@@ -96,6 +98,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
         </span>
         <span className="k-card-meta">预计完整创作：{episode.estimated_credits} 积分</span>
         <span className="k-card-meta">{episode.shots.length} 镜 · 活跃时按需自动刷新</span>
+        <DeleteEpisodeButton episodeId={episode.episode_id} name={episodeLabel(episode)} disabled={mutation.pending} />
       </div>
       {destinationHistoryApproximate && <p className="k-card-meta">
         此期使用旧数据创建：原始目的地版本已无法恢复，显示的是迁移时保存的近似资料。

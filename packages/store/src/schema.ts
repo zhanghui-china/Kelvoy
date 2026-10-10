@@ -20,6 +20,22 @@ create table if not exists episodes (
   updated_at text not null default (datetime('now'))
 );
 
+create table if not exists episode_deletions (
+  episode_id text primary key, owner_id text not null,
+  deleted_at text not null default (datetime('now')),
+  usage_json text not null,
+  cleanup_status text not null default 'pending',
+  cleanup_attempts integer not null default 0,
+  cleanup_revision integer not null default 0,
+  cleanup_retry_at integer not null default 0
+);
+create table if not exists task_executions (
+  task_id text not null, lease_token text not null, episode_id text not null,
+  lease_until integer not null, exited integer not null default 0,
+  primary key (task_id, lease_token)
+);
+create index if not exists idx_task_executions_episode on task_executions(episode_id, exited, lease_until);
+
 create table if not exists destinations (
   destination_id text primary key,
   version integer not null,
@@ -104,6 +120,13 @@ create table if not exists tasks (
   updated_at text not null default (datetime('now'))
 );
 
+create trigger if not exists prevent_deleted_episode_task_insert before insert on tasks
+when exists (select 1 from episode_deletions where episode_id = new.episode_id)
+begin select raise(abort, 'episode deleted'); end;
+create trigger if not exists prevent_deleted_episode_insert before insert on episodes
+when exists (select 1 from episode_deletions where episode_id = new.episode_id)
+begin select raise(abort, 'episode deleted'); end;
+
 create table if not exists credit_accounts (
   user_id text primary key,
   available integer not null default 0 check (available >= 0),
@@ -157,6 +180,8 @@ export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[]
   { table: "tasks", column: "generation_id", ddl: "alter table tasks add column generation_id text" },
   { table: "tasks", column: "lease_until", ddl: "alter table tasks add column lease_until integer" },
   { table: "tasks", column: "lease_token", ddl: "alter table tasks add column lease_token text" },
+  { table: "episode_deletions", column: "cleanup_last_error", ddl: "alter table episode_deletions add column cleanup_last_error text" },
+  { table: "episode_deletions", column: "cleanup_revision", ddl: "alter table episode_deletions add column cleanup_revision integer not null default 0" },
   {
     table: "users",
     column: "settings",

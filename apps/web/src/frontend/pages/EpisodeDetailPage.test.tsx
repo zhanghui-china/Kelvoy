@@ -23,6 +23,7 @@ test.each([
       failedTask={{ stage, shot_no: 1 }} mutation={mutation} />
   </StaticRouter>);
   expect(html).toContain(review);
+  expect(html).toContain("删除作品</button>");
   expect(html).toContain(`失败阶段：${label} · 第 1 镜`);
   expect(html.match(/>重新执行失败任务<\/button>/g)).toHaveLength(1);
   expect(html).toContain("已通过 7 镜");

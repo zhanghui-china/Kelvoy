@@ -52,6 +52,7 @@ export function useEpisodeMutation(episodeId: string, rowVersion: number, refres
           return null;
         }
         setError(describeWriteError(result));
+        if (result.error === "not_found") refresh();
         if (result.error === "version_conflict") {
           if (typeof result.current_row_version === "number") {
             versionRef.current = updateMutationVersion(versionRef.current, episodeId, result.current_row_version);

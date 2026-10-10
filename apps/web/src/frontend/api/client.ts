@@ -193,6 +193,12 @@ export function getEpisode(episodeId: string) {
   );
 }
 
+export function deleteEpisode(episodeId: string) {
+  return apiFetch<{ cleanup_status: "pending" | "done"; refunded_credits: number }>(
+    `/api/episodes/${encodeURIComponent(episodeId)}`, { method: "DELETE" },
+  );
+}
+
 /** FR-12 分享页看到的字段——服务端只挑这几个，见 share.ts，不含账号信息。 */
 export type SharedEpisode = Pick<Episode, "episode_id" | "status" | "scenes" | "shots" | "music" | "render" | "final">;
 

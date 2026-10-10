@@ -12,6 +12,7 @@ import {
 } from "@kelvoy/engine";
 import {
   createEpisodeWithScriptTask,
+  deleteEpisode,
   storyboardBusy,
   getCreditPrice,
   estimateCreditQuote,
@@ -44,6 +45,11 @@ import suggestions from "./episode-storyboard-suggestions";
 const episodes = new Hono();
 
 episodes.use("*", requireOwner);
+
+episodes.delete("/:id", async (c) => {
+  const result = await deleteEpisode(c.req.param("id"), c.get("ownerId"));
+  return result.ok ? c.json(result) : c.json(result, 404);
+});
 
 episodes.get("/", async (c) => {
   return c.json({ ok: true, episodes: await listEpisodes(c.get("ownerId")) });

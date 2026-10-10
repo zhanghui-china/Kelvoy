@@ -7,6 +7,7 @@ import { videoTimeoutSeconds } from "./inference-client";
 import { consumeLoop } from "./queue/consumer";
 import { installShutdownHandlers } from "./queue/shutdown";
 import { cleanupIncompleteEpisodeMedia, cleanupStaleEpisodeTemps, cleanupStaleInferenceMedia } from "./storage/cleanup";
+import { cleanupDeletedEpisodes } from "./storage/episode-deletion";
 
 videoTimeoutSeconds();
 
@@ -22,10 +23,21 @@ const sweep = () => {
   });
 };
 sweep();
+let deletionSweepActive = false;
+const sweepDeletions = async () => {
+  if (deletionSweepActive) return;
+  deletionSweepActive = true;
+  try { await cleanupDeletedEpisodes(); }
+  catch { console.warn("could not scan pending episode deletions"); }
+  finally { deletionSweepActive = false; }
+};
+void sweepDeletions();
+const deletionSweepTimer = setInterval(() => { void sweepDeletions(); }, 60_000);
 const controller = new AbortController();
 const uninstall = installShutdownHandlers(controller);
 const sweepTimer = setInterval(sweep, 60 * 60 * 1000);
 void consumeLoop(controller.signal).finally(() => {
   clearInterval(sweepTimer);
+  clearInterval(deletionSweepTimer);
   uninstall();
 });

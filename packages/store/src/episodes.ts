@@ -9,6 +9,7 @@ import {
 } from "@kelvoy/engine";
 import { getDb } from "./db";
 import { decodeEpisode } from "./episode-codec";
+import { hasEpisodeDeletion, type DeletedEpisodeUsage } from "./episode-deletion";
 
 /**
  * Episode storage (ADR-0004): the one place that owns SQLite access for
@@ -40,6 +41,7 @@ function readRow(episodeId: string): EpisodeRow | null {
 }
 
 export async function insertEpisode(episode: Episode): Promise<void> {
+  if (hasEpisodeDeletion(episode.episode_id)) throw new Error("episode deleted");
   getDb()
     .query(
       "insert into episodes (episode_id, owner_id, row_version, doc) values (?, ?, 1, ?)",
@@ -65,6 +67,7 @@ export async function listEpisodes(ownerId: string): Promise<Episode[]> {
 /** Account usage projection: only aggregate costs and table fields leave the server. */
 export async function getUsageSummary(ownerId: string): Promise<{
   periods: { episode_id: string; destination_name: string; persona_name: string;
+    name?: string; deleted?: boolean;
     created_at: string; shot_count: number; credits_used: number; cost_usd: number }[];
   providers: ProviderTally[];
   totals: { episodes: number; credits_used: number; cost_usd: number };
@@ -108,6 +111,20 @@ export async function getUsageSummary(ownerId: string): Promise<{
       created_at: row.created_at, shot_count: shots.length,
       credits_used: row.credits_used ?? 0, cost_usd };
   });
+  const deleted = getDb().query<{ usage_json: string }, [string]>("select usage_json from episode_deletions where owner_id = ?").all(ownerId);
+  for (const row of deleted) {
+    const { providers: history, ...period } = JSON.parse(row.usage_json) as DeletedEpisodeUsage;
+    periods.push(period);
+    credits += period.credits_used;
+    cost += period.cost_usd;
+    for (const item of history) {
+      const key = `${item.provider}/${item.model}`;
+      const current = providers.get(key) ?? { provider: item.provider, model: item.model, shots: 0, attempts: 0, costUsd: 0 };
+      current.shots += item.shots; current.attempts += item.attempts; current.costUsd += item.costUsd;
+      providers.set(key, current);
+    }
+  }
+  periods.sort((a,b) => b.created_at.localeCompare(a.created_at) || b.episode_id.localeCompare(a.episode_id));
   return { periods, providers: [...providers.values()].sort((a, b) => b.costUsd - a.costUsd),
     totals: { episodes: periods.length, credits_used: credits, cost_usd: cost } };
 }

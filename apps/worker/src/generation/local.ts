@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { localImageRequest, localVideoRequest, type StageContext } from "@kelvoy/engine";
 import { inferenceFailure } from "./errors";
 import { callInference } from "../inference-client";
-import { artifactPath, saveArtifact } from "../storage/artifacts";
+import { artifactPath, assertEpisodePublicationAllowed, saveArtifact } from "../storage/artifacts";
 
 type InferenceCall = typeof callInference;
 export interface GenerationBackend {
@@ -62,28 +62,32 @@ async function findCached(episodeId: string, key: string, prefix: string,
 }
 
 async function saveCached(episodeId: string, key: string, source: string,
-  hash: string, asset: CachedAsset): Promise<void> {
-  await saveArtifact(episodeId, key, source);
+  hash: string, asset: CachedAsset, signal?: AbortSignal): Promise<void> {
+  await saveArtifact(episodeId, key, source, signal);
   const path = `${artifactPath(episodeId, key)}.meta.json`;
   const temporary = `${path}.tmp-${crypto.randomUUID()}`;
   try {
     const content_hash = createHash("sha256").update(await readFile(artifactPath(episodeId, key))).digest("hex");
+    assertEpisodePublicationAllowed(episodeId, signal);
     await writeFile(temporary, JSON.stringify({ ...asset, request_hash: hash, content_hash }));
+    assertEpisodePublicationAllowed(episodeId, signal);
     await link(temporary, path);
+    assertEpisodePublicationAllowed(episodeId, signal);
   } finally {
     await rm(temporary, { force: true });
   }
 }
 
 async function publishCached(episodeId: string, source: string, hash: string,
-  asset: CachedAsset): Promise<CachedAsset> {
+  asset: CachedAsset, signal?: AbortSignal): Promise<CachedAsset> {
   const extension = asset.key.endsWith(".png") ? ".png" : ".mp4";
   for (let attempt = 0; attempt < 3; attempt++) {
     const key = attempt === 0 ? asset.key
       : `${asset.key.slice(0, -extension.length)}_retry_${crypto.randomUUID()}${extension}`;
     const candidate = { ...asset, key };
     try {
-      await saveCached(episodeId, key, source, hash, candidate);
+      assertEpisodePublicationAllowed(episodeId, signal);
+      await saveCached(episodeId, key, source, hash, candidate, signal);
       return candidate;
     } catch (error) {
       // A prior process may have published media but died before metadata, or
@@ -178,13 +182,13 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes, backend });
       const cached = await findCached(input.episode_id, key,
         `${identity}_${input.generation_id}_`, fingerprint);
-      if (cached) { input.signal?.throwIfAborted(); return cached; }
+      if (cached) { assertEpisodePublicationAllowed(input.episode_id, input.signal); return cached; }
       const response = await requestOne(call, "/image/", localImageRequest(input), input.signal, backend, correlation);
       const asset = { key, model: response.model, version: response.version,
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
         input.signal?.throwIfAborted();
-        const published = await publishCached(input.episode_id, response.source, fingerprint, asset);
+        const published = await publishCached(input.episode_id, response.source, fingerprint, asset, input.signal);
         input.signal?.throwIfAborted();
         return published;
       } finally {
@@ -212,7 +216,7 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       const fingerprint = requestHash({ input: input.shot_id ? { ...reusableInput, shot_no: undefined } : reusableInput, hashes, backend });
       const cached = await findCached(input.episode_id, key,
         `${identity}_${input.generation_id}_`, fingerprint);
-      if (cached) { input.signal?.throwIfAborted(); return cached; }
+      if (cached) { assertEpisodePublicationAllowed(input.episode_id, input.signal); return cached; }
       const response = await requestOne(call, "/video/", localVideoRequest({
         prompt: input.prompt, refs,
         duration_s: input.duration_s, seed: input.seed, aspect: input.aspect,
@@ -221,7 +225,7 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
         seed: response.seed, seconds: response.seconds, ref_hashes: hashes };
       try {
         input.signal?.throwIfAborted();
-        const published = await publishCached(input.episode_id, response.source, fingerprint, asset);
+        const published = await publishCached(input.episode_id, response.source, fingerprint, asset, input.signal);
         input.signal?.throwIfAborted();
         return published;
       } finally {

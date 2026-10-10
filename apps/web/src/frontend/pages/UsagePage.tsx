@@ -67,13 +67,13 @@ export default function UsagePage() {
               {periods.map((period) => (
                 <tr
                   key={period.episode_id}
-                  className="k-usage-table-row"
-                  onClick={() => navigate(`/episodes/${period.episode_id}`)}
+                  className={period.deleted ? undefined : "k-usage-table-row"}
+                  onClick={period.deleted ? undefined : () => navigate(`/episodes/${period.episode_id}`)}
                 >
                   <td>
-                    <Link to={`/episodes/${period.episode_id}`} onClick={(e) => e.stopPropagation()}>
+                    {period.deleted ? <span>{period.name ?? `${period.destination_name}（已删除）`}</span> : <Link to={`/episodes/${period.episode_id}`} onClick={(e) => e.stopPropagation()}>
                       {period.destination_name}
-                    </Link>
+                    </Link>}
                   </td>
                   <td>{period.persona_name}</td>
                   <td>{formatDate(period.created_at)}</td>

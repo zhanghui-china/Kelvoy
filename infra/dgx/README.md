@@ -1,3 +1,5 @@
+2026-10-10 作品永久删除已按先 spark、后 GX10 发布至 `delete-20261010-v2`：支持生成中取消、预留积分退款、链接立即失效和持久化素材清理。双节点备份、迁移、独立测试作品验收及回退见 [作品删除部署记录](episode-deletion-deployment-20261010.md)。
+
 2026-10-10 长镜主干 `cffada2` 已推送并部署到 GX10 与 spark-c327，Web／Worker／Inference 使用同一源码包。新作品默认长镜，旧策略保留；验证、备份、队列接续及回退见 [长镜双节点部署记录](long-shots-deployment-20261010.md)。
 
 # infra/dgx/

@@ -31,6 +31,7 @@ import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders, snapshotGenerationBackend, type GenerationBackend } from "../generation/local";
 import { createH3PromptWriter } from "../generation/h3-prompt-writer";
 import { handleStoryboardSuggestion } from "../generation/storyboard-suggestion";
+import { executeLeasedTask } from "./execution";
 
 /**
  * Task queue consumer (ADR-0004): polls the local `tasks` table (no Redis,
@@ -69,23 +70,7 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
       await Bun.sleep(POLL_INTERVAL_MS);
       continue;
     }
-    const execution = new AbortController();
-    const onShutdown = () => execution.abort();
-    signal?.addEventListener("abort", onShutdown, { once: true });
-    if (signal?.aborted) execution.abort();
-    const heartbeat = task.lease_token
-      ? setInterval(() => {
-        void renewTaskLease(task.task_id, task.lease_token!).then((active) => {
-          if (!active) execution.abort();
-        }).catch(() => execution.abort());
-      }, 30_000)
-      : null;
-    try {
-      await handleTask(task, { signal: execution.signal });
-    } finally {
-      if (heartbeat) clearInterval(heartbeat);
-      signal?.removeEventListener("abort", onShutdown);
-    }
+    await executeLeasedTask(task, executionSignal => handleTask(task, { signal: executionSignal }), signal);
   }
 }
 

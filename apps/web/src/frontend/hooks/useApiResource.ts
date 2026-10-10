@@ -71,7 +71,8 @@ export function usePolledApiResource<T>(
           navigate("/login");
           return;
         }
-        setState((prev) => ({ loading: false, data: prev.data, error: result.error ?? "unknown_error" }));
+        if (result.error === "not_found") active = false;
+        setState((prev) => ({ loading: false, data: result.error === "not_found" ? null : prev.data, error: result.error ?? "unknown_error" }));
         return;
       }
       active = shouldPoll(result);
@@ -81,17 +82,21 @@ export function usePolledApiResource<T>(
     const pollWhenVisible = () => {
       if (!document.hidden && active) poll.trigger();
     };
+    // Even completed works must revalidate when another tab may have deleted them.
+    const revalidate = () => { if (!document.hidden) poll.trigger(); };
 
     setState({ loading: true, data: null, error: null });
     tickRef.current = poll.trigger;
     poll.trigger();
     const id = setInterval(pollWhenVisible, POLL_INTERVAL_MS);
-    document.addEventListener("visibilitychange", pollWhenVisible);
+    document.addEventListener("visibilitychange", revalidate);
+    window.addEventListener("focus", revalidate);
     return () => {
       cancelled = true;
       poll.stop();
       clearInterval(id);
-      document.removeEventListener("visibilitychange", pollWhenVisible);
+      document.removeEventListener("visibilitychange", revalidate);
+      window.removeEventListener("focus", revalidate);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);

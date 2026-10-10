@@ -1,6 +1,16 @@
 import { mkdir, copyFile, link, rm } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { hasEpisodeDeletion, requestEpisodeDeletionCleanup } from "@kelvoy/store";
+
+/** Persistent fence also protects resumed writers whose in-memory abort was lost. */
+export function assertEpisodePublicationAllowed(episodeId: string, signal?: AbortSignal): void {
+  if (hasEpisodeDeletion(episodeId)) {
+    requestEpisodeDeletionCleanup(episodeId);
+    throw new Error("episode deleted");
+  }
+  signal?.throwIfAborted();
+}
 
 /**
  * Local artifact storage (ADR-0004): no object storage/SDK, just files on
@@ -20,16 +30,22 @@ export async function saveArtifact(
   episodeId: string,
   relativeKey: string,
   sourcePath: string,
+  signal?: AbortSignal,
 ): Promise<string> {
+  assertEpisodePublicationAllowed(episodeId, signal);
   await mkdir(projectsRoot(), { recursive: true });
+  assertEpisodePublicationAllowed(episodeId, signal);
   const destPath = artifactPath(episodeId, relativeKey);
   await mkdir(dirname(destPath), { recursive: true });
+  assertEpisodePublicationAllowed(episodeId, signal);
   // mkdir can follow an existing symlink. Recheck the concrete parent before writing.
   artifactPath(episodeId, relativeKey);
   const tempPath = `${destPath}.tmp-${crypto.randomUUID()}`;
   try {
     await copyFile(sourcePath, tempPath);
+    assertEpisodePublicationAllowed(episodeId, signal);
     await link(tempPath, destPath);
+    assertEpisodePublicationAllowed(episodeId, signal);
   } finally {
     await rm(tempPath, { force: true });
   }

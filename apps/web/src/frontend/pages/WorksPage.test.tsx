@@ -16,6 +16,8 @@ test("works lists every episode in newest first order with its own status and li
   expect(html).toContain("失败");
   expect(html).toContain("已完成");
   expect(html).toContain('href="/help"');
+  expect(html).toContain('aria-label="删除作品 新期"');
+  expect(html).toContain('aria-label="删除作品 旧期"');
 });
 
 test("works filters use real status and catalog metadata without guessing missing regions", () => {

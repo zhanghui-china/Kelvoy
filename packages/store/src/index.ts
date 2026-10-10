@@ -23,3 +23,5 @@ export * from "./storyboard-suggestions";
 export * from "./system-config";
 
 export * from "./task-diagnostics";
+
+export * from "./episode-deletion";

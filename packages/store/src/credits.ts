@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { hasEpisodeDeletion } from "./episode-deletion";
 
 export type CreditKind = "script" | "image" | "video" | "compose";
 export type CreditBalance = { available: number; reserved: number };
@@ -90,6 +91,7 @@ export function reserveCredits(input: {
   { ok: false; error: "not_found" | "invalid_units" | "insufficient_credits" | "idempotency_conflict" } {
   if (!Number.isSafeInteger(input.units) || input.units <= 0) return { ok: false, error: "invalid_units" };
   return getDb().transaction(() => {
+    if (input.episode_id && hasEpisodeDeletion(input.episode_id)) return { ok: false, error: "not_found" } as const;
     const user = getDb().query<{ user_id: string }, [string]>("select user_id from users where user_id = ?")
       .get(input.user_id);
     if (!user) return { ok: false, error: "not_found" } as const;
@@ -127,6 +129,7 @@ export function finalizeCredits(actionId: string, outcome: "settled" | "released
       return action.status === outcome ? { ok: true, repeated: true } as const
         : { ok: false, error: "already_finalized" } as const;
     }
+    if (outcome === "settled" && action.episode_id && hasEpisodeDeletion(action.episode_id)) return { ok: false, error: "already_finalized" } as const;
     const refund = outcome === "released" ? action.price : 0;
     getDb().query("update credit_accounts set available = available + ?, reserved = reserved - ? where user_id = ?")
       .run(refund, action.price, action.user_id);

@@ -2,7 +2,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { ComposePlan, ComposeProvider } from "@kelvoy/engine";
 import { CompositionConstraintError } from "@kelvoy/engine";
-import { artifactPath, sharedAssetPath } from "../storage/artifacts";
+import { artifactPath, assertEpisodePublicationAllowed, sharedAssetPath } from "../storage/artifacts";
 import { buildFfmpegArgs, type ComposeInputPaths } from "./ffmpeg-args";
 import { buildAssOverlay, textOverlayEvents } from "./ass-overlay";
 
@@ -103,19 +103,19 @@ async function probeOutput(path: string, signal?: AbortSignal): Promise<{
     fps, size_bytes: size };
 }
 
-async function ffmpegVersionLine(): Promise<string> {
-  const { code, stdout } = await runCommand(["ffmpeg", "-version"]);
+async function ffmpegVersionLine(signal?: AbortSignal): Promise<string> {
+  const { code, stdout } = await runCommand(["ffmpeg", "-version"], signal);
   if (code !== 0) return "ffmpeg";
   return stdout.split("\n")[0]?.trim() ?? "ffmpeg";
 }
 
-async function supportsAssFilter(): Promise<boolean> {
-  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"]);
+async function supportsAssFilter(signal?: AbortSignal): Promise<boolean> {
+  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"], signal);
   return code === 0 && /^\s*[.A-Z|]+\s+ass\s+/m.test(stdout);
 }
 
-async function supportsDrawtextFilter(): Promise<boolean> {
-  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"]);
+async function supportsDrawtextFilter(signal?: AbortSignal): Promise<boolean> {
+  const { code, stdout } = await runCommand(["ffmpeg", "-hide_banner", "-filters"], signal);
   return code === 0 && /^\s*[.A-Z|]+\s+drawtext\s+/m.test(stdout);
 }
 
@@ -141,13 +141,13 @@ async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths,
   paths.overlay_images = overlayImages;
 }
 
-async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
+async function resolvePaths(plan: ComposePlan, signal?: AbortSignal): Promise<ComposeInputPaths> {
   const clips = await Promise.all(
     plan.cuts.map((cut) => requireFile(artifactPath(plan.episode_id, cut.clip_key), `第 ${cut.no} 镜的片段`)),
   );
   for (const [index, cut] of plan.cuts.entries()) {
     if (cut.frame_count === undefined) continue;
-    const duration = await probeVideoDurationS(clips[index]!);
+    const duration = await probeVideoDurationS(clips[index]!, signal);
     if (cut.trim_start_s + cut.duration_s > duration + 1e-6) {
       throw new CompositionConstraintError(`第 ${cut.no} 镜选段超出片段尾部：需要 ${cut.trim_start_s + cut.duration_s} 秒，实际 ${duration} 秒`);
     }
@@ -171,8 +171,8 @@ async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
     lut,
     output: artifactPath(plan.episode_id, plan.output_key),
     font,
-    intro_duration_s: intro !== null ? await probeDurationS(intro) : 0,
-    outro_duration_s: outro !== null ? await probeDurationS(outro) : 0,
+    intro_duration_s: intro !== null ? await probeDurationS(intro, signal) : 0,
+    outro_duration_s: outro !== null ? await probeDurationS(outro, signal) : 0,
   };
 }
 
@@ -194,15 +194,16 @@ export const ffmpegComposeProvider: ComposeProvider = {
       intro_duration_s: introDuration, outro_duration_s: outroDuration };
   },
   async compose({ plan, signal }) {
-    signal?.throwIfAborted();
-    const paths = await resolvePaths(plan);
-    signal?.throwIfAborted();
+    assertEpisodePublicationAllowed(plan.episode_id, signal);
+    const paths = await resolvePaths(plan, signal);
+    assertEpisodePublicationAllowed(plan.episode_id, signal);
     if (plan.intro_frame_count !== undefined) paths.intro_duration_s = plan.intro_frame_count / plan.fps;
     if (plan.outro_frame_count !== undefined) paths.outro_duration_s = plan.outro_frame_count / plan.fps;
     await mkdir(dirname(paths.output), { recursive: true });
+    assertEpisodePublicationAllowed(plan.episode_id, signal);
     const needsText = Boolean(plan.title) || plan.ai_label ||
       (plan.subtitles_enabled && plan.cuts.some((cut) => Boolean(cut.caption?.trim())));
-    if (needsText && await supportsAssFilter()) {
+    if (needsText && await supportsAssFilter(signal)) {
       const overlayPath = `${paths.output}.ass`;
       const tempPath = `${overlayPath}.tmp-${crypto.randomUUID()}`;
       try {
@@ -212,7 +213,7 @@ export const ffmpegComposeProvider: ComposeProvider = {
         await rm(tempPath, { force: true });
       }
       paths.overlay_ass = overlayPath;
-    } else if (needsText && !(paths.font && await supportsDrawtextFilter())) {
+    } else if (needsText && !(paths.font && await supportsDrawtextFilter(signal))) {
       await renderPngOverlays(plan, paths, signal);
     }
 
@@ -221,16 +222,18 @@ export const ffmpegComposeProvider: ComposeProvider = {
       metadata: {
         ...plan.metadata,
         kelvoy_compose: "ffmpeg",
-        encoder_note: await ffmpegVersionLine(),
+        encoder_note: await ffmpegVersionLine(signal),
       },
     };
 
     const args = buildFfmpegArgs(stamped, paths);
+    assertEpisodePublicationAllowed(plan.episode_id, signal);
     const { code, stderr } = await runCommand(["ffmpeg", ...args], signal);
     if (code !== 0) {
       throw new Error(`ffmpeg 合成失败（退出码 ${code}）：\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
     }
-    const probe = await probeOutput(paths.output);
+    const probe = await probeOutput(paths.output, signal);
+    assertEpisodePublicationAllowed(plan.episode_id, signal);
     if (probe.width !== plan.res.w || probe.height !== plan.res.h || Math.abs(probe.fps - plan.fps) > 0.01) {
       throw new Error(`成片参数不匹配：${probe.width}x${probe.height} ${probe.fps}fps`);
     }

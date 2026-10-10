@@ -26,6 +26,12 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
   db.exec("create index if not exists idx_tasks_status_created_lease on tasks(status, created_at, lease_until)");
   db.exec("create index if not exists idx_tasks_episode_status_updated on tasks(episode_id, status, updated_at)");
   db.exec("create index if not exists idx_tasks_episode_stage_shot_status on tasks(episode_id, stage, shot_no, status)");
+  db.transaction(() => {
+    db!.exec(`insert or ignore into task_executions (task_id, lease_token, episode_id, lease_until)
+      select task_id, lease_token, episode_id, coalesce(lease_until, unixepoch('now') + 90)
+      from tasks where status = 'processing' and lease_token is not null`);
+    db!.query("insert or ignore into schema_migrations (migration_id) values (?)").run("episode_deletions_v1");
+  }).immediate();
   migrateLegacyCatalogVersions(db);
   migrateShotIdentities(db);
   return db;
