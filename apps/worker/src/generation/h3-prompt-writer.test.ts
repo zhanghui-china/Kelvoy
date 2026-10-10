@@ -139,13 +139,12 @@ test("cache fingerprints include aspect, guide text and writer LLM configuration
   expect(calls).toBe(6);
 });
 
-test("source role swaps, malformed labels, invalid retention and added actions fail once", async () => {
+test("source role swaps, malformed labels and added actions fail once", async () => {
   const valid = sections() as Record<string, string>;
   const variants = [
     { ...valid, subject_definitions: "<Subject 1> is the person from <Picture 2>. <Subject 2> is the scene from <Picture 1>." },
     { ...valid, summary: "[reference generation] <Picture 3.0> guides hands." },
     { ...valid, summary: "[reference generation] <Subject X> guides hands." },
-    { ...valid, retention_analysis: "<Subject 1>: reference - hands." },
     { ...valid, detailed_description: valid.detailed_description + " The camera pans." },
     { ...valid, detailed_description: valid.detailed_description + " The clip lasts 8 seconds." },
     { ...valid, detailed_description: valid.detailed_description + " A person says hello." },
@@ -235,4 +234,31 @@ test("all rewrite sections reject added dialogue, lyrics and visible text", asyn
   const allowed = { ...valid, overall_soundscape: "Quiet ambient sound. No dialogue, lyrics, or narration. No vocals.", summary: valid.summary + " No subtitles. No on-screen text." };
   expect((await writer((async () => response(allowed)) as unknown as typeof fetch)
     .write({ episode_id: "e1", context: context() })).prompt).toContain("No dialogue, lyrics, or narration");
+});
+
+test("retention section grammar receives one format correction without changing source context", async () => {
+  let calls = 0;
+  const original = context();
+  const result = await writer((async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(init.body as string); calls++;
+    expect(JSON.parse(body.messages[1].content)).toEqual(original);
+    if (calls === 2) expect(body.messages.at(-1).content).toContain("invalid visible retention syntax");
+    return response(calls === 1 ? { ...sections(), retention_analysis: "<Subject 1>: partially_preserved; <Subject 2>: weak_reference" } : sections());
+  }) as unknown as typeof fetch).write({ episode_id: "e1", context: original });
+  expect(calls).toBe(2);
+  expect(result.prompt).toContain("(appears in [Shot 1]): partially_preserved");
+});
+
+test("retention grammar still invalid after correction stops after two requests", async () => {
+  let calls = 0;
+  await expect(writer((async () => { calls++; return response({ ...sections(), retention_analysis: "invalid format" }); }) as unknown as typeof fetch)
+    .write({ episode_id: "e1", context: context() })).rejects.toThrow("invalid visible retention syntax");
+  expect(calls).toBe(2);
+});
+
+ test("retention formatting never permits correcting unsafe described actions", async () => {
+  let calls = 0;
+  await expect(writer((async () => { calls++; return response({ ...sections(), retention_analysis: "bad format", detailed_description: sections().detailed_description + " The camera pans." }); }) as unknown as typeof fetch)
+    .write({ episode_id: "e1", context: context() })).rejects.toThrow("static camera cannot move");
+  expect(calls).toBe(1);
 });

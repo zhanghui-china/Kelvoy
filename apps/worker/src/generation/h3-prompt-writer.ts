@@ -127,14 +127,16 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
         if (typeof content !== "string") throw new Error("invalid H3 LLM response envelope");
         moderate(content, "h3_output");
         let sections: Record<string, string>;
-        try { sections = parseSections(content, context); }
+        try {
+          sections = parseSections(content, context);
+          moderate(JSON.stringify(sections), "h3_output");
+          validateSections(sections, context);
+        }
         catch (error) {
-          if (!(error instanceof H3FormatError) || attempt === 1) throw error;
-          messages.push({ role: "assistant", content }, { role: "user", content: `${error.message}. Fix JSON field format only; do not alter actions, timing or constraints.` });
+          if (!(error instanceof H3FormatError) || !error.correctable || attempt === 1) throw error;
+          messages.push({ role: "assistant", content }, { role: "user", content: `${error.message}. Fix JSON and section formatting only; do not alter actions, timing, references or constraints.` });
           continue;
         }
-        moderate(JSON.stringify(sections), "h3_output");
-        validateSections(sections, context);
         await assertReferences();
         const result = { prompt: renderSections(sections, context), provenance };
         controller.signal.throwIfAborted();

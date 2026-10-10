@@ -3,7 +3,9 @@ import type { H3PromptContext } from "@kelvoy/engine";
 export const FIRST_FRAME_INSTRUCTION = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
 export const BASE_FIELDS = ["integrated_multimodal_description", "overall_soundscape", "non_diegetic_music"];
 export const REF_FIELDS = ["subject_definitions", "summary", "retention_analysis", "detailed_description", "overall_soundscape", "non_diegetic_music"];
-export class H3FormatError extends Error {}
+export class H3FormatError extends Error {
+  constructor(message: string, public correctable = true) { super(message); }
+}
 
 function removeNegativeConstraints(text: string): string {
   const term = "(?:(?:spoken|sung|audible|visible)\\s+)?(?:face|mouth|eating|cuts?|dialogue|narration|subtitles?|captions?|on-screen text|lyrics?|vocals?|voices?|singing|speech|spoken words)";
@@ -30,7 +32,7 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   // Negative production constraints are allowed; only described actions are checked below.
   const actions = removeNegativeConstraints(timeline);
   const output = removeNegativeConstraints(all);
-  const fail = (reason: string): never => { throw new H3FormatError(`H3 constraint: ${reason}`); };
+  const fail = (reason: string): never => { throw new H3FormatError(`H3 constraint: ${reason}`, reason === "invalid visible retention syntax"); };
   if (/[\u3400-\u9fff]/.test(all)) fail("rewrite must be English");
   if (/\b(?:I (?:see|observe)|I have (?:seen|viewed)|observed in|the (?:reference )?(?:image|picture|photo) shows)\b/i.test(all)) fail("must not claim image observation");
   if (value.non_diegetic_music !== "N/A") fail("background music must be N/A");
@@ -50,6 +52,7 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   if (/<(?:Video|Audio) \d+>/.test(all)) fail("unprovided media reference");
   const pictures = [...all.matchAll(/<Picture (\d+)>/g)].map(match => Number(match[1]));
   if (pictures.some(n => !context.references.some(ref => ref.picture === n))) fail("unprovided picture reference");
+  let retentionSyntaxInvalid = false;
   if (context.mode === "Ref2VA") {
     if (context.references.some(ref => !pictures.includes(ref.picture))) fail("all supplied pictures must be referenced");
     const definitions = [...value.subject_definitions!.matchAll(/<Subject (\d+)>\s+(?:is|represents|refers to)/g)].map(match => match[1]);
@@ -57,7 +60,7 @@ export function validateSections(value: Record<string, string>, context: H3Promp
     if (!value.summary!.startsWith("[reference generation]")) fail("summary must start with [reference generation]");
     const retention = value.retention_analysis!.trim().split(/\n+/);
     const retained = retention.map(line => line.match(/^<Subject (\d+)> \(appears in \[Shot 1\]\): (fully_preserved|partially_preserved|attribute_transfer|weak_reference) - .+/)?.[1]);
-    if (retained.some(n => !n) || definitions.some(n => !retained.includes(n)) || retained.length !== definitions.length) fail("invalid visible retention syntax");
+    retentionSyntaxInvalid = retained.some(n => !n) || definitions.some(n => !retained.includes(n)) || retained.length !== definitions.length;
     if (definitions.length !== context.references.length || definitions.some((n, index) => Number(n) !== index + 1)) fail("subject order must match actual pictures");
     for (const ref of context.references) {
       const definition = value.subject_definitions!.match(new RegExp(`<Subject ${ref.picture}>\\s+(?:is|represents|refers to)\\s+[^\\n]*?<Picture (\\d+)>`));
@@ -89,6 +92,8 @@ export function validateSections(value: Record<string, string>, context: H3Promp
       !/\b(?:rotat(?:e|es|ing|ion)|turn(?:s|ing)?)\b/i.test(timeline) ||
       /\b(?:face|mouth|eats?|eating|bite|bites|biting)\b/i.test(actions)) fail("pastry detail requires hands and slight wrist rotation only");
   }
+  // Semantic violations must remain terminal even when retention formatting is malformed.
+  if (retentionSyntaxInvalid) fail("invalid visible retention syntax");
 }
 
 export function renderSections(value: Record<string, string>, context: H3PromptContext): string {
