@@ -277,8 +277,6 @@ flowchart LR
 
 `shot.model.*.provider` ∈ `local` / `kling` / `jimeng` / …；`attempts` 含本地重试与溢出总次数；复现键 = (episode_id, shot_no, stage, provider, model, version, seed, prompt 哈希, ref_hashes)。
 
-`model.image` 可带 `qwen_prompt: { writer_version: string, official_commit: string, system_prompt_hash: string, model: string, model_revision: string, sampling: Record<string, number | boolean | string>, input_hash: string, ref_hashes: string[], mode: "edit", aspect: "9:16" | "16:9" }`。`input_hash`、`system_prompt_hash` 与有序 `ref_hashes` 均为 SHA256，代码提交和模型 revision 为固定提交；旧记录可省略该来源字段。`model.image.prompt` 为实际提交生图模型的全文，编辑原稿仍在 `kf_prompt`。
-
 ## 7. 模型与工具适配层
 
 硬件是 **2 台单 GPU 的 DGX Spark**（统一内存架构，具体算力以实机为准），不是多卡服务器。后果：
@@ -675,13 +673,3 @@ SQLite 新增单例 `system_config`（id=1）：`version` 初始 1，`comfyui_ba
 输入和输出执行现有内容审核；StepFun 单次超时 60 秒，格式错误最多纠正一次。失败、取消和内容拦截沿用现有任务与退款流程，无原稿回退。有效结果原子存为期内独立 prompt JSON；缓存标识包含输入字段、真实参考图散列、模式、时长、画幅、skill 内容版本、编写器版本及 LLM 配置。相同输入跨任务／租约复用，编辑或换图失效。
 
 `ShotModelRecord` 新增可选 `h3_prompt: { skill_version: string, writer_version: string, model: string, input_hash: string, mode: "I2VA" | "Ref2VA", duration_s: number, ref_hashes: string[] }`，其中 `duration_s` 运行时仅允许 4 或 5，`skill_version` 是所用官方指南的内容 SHA256，`input_hash` 是完整编写输入的 SHA256，`ref_hashes` 按实际上传顺序保存参考图内容 SHA256。提交视频前再次核对参考图散列，避免编写期间换图。`model.video.prompt` 保存实际 H3 全文，缓存命中同样记录来源。旧记录缺少来源仍有效；无数据库迁移、新路由或新计费项。职责和上线边界见 ADR-0011。
-
-### 2026-10 官方 Qwen 图片提示词增强
-
-当前带参考图的关键帧生图在首次、编辑后重新生成和失败重试时，使用本机 `Qwen/Qwen-Image-2.1-PE-I2I` 官方 `edit` 模式。每镜候选循环前改写一次，多个候选共用最终英文提示词；中文 `kf_prompt` 保留，手工保存不执行模型调用或扣费。候选数量、作品 9:16／16:9 及图片积分价格保持现有规则，增强费用包含在图片价格中，不新增纯文字生图入口。
-
-Engine 构造画面、动作、景别、构图、场景与参考角色上下文；Worker 负责内容审核、缓存、取消和调用；Inference `/image/rewrite/` 复用固定官方图片预处理、消息构造和答案解析，读取真实参考图片。`<image1>` 为角色，有地标参考时 `<image2>` 为场景；字幕不作为可读画面文字要求。使用配套系统提示词、官方采样与 thinking，仅保留解析后的答案，不保存模型思考。答案必须非空英文、参考标记合法、`wh_ratio` 等于作品画幅且 `ratio_follow` 为空。格式／画幅冲突最多纠正一次，整次改写总超时 900 秒。超时、取消、失去租约或审核失败不提交原稿。
-
-有效结果原子存入期内独立图片 prompt 缓存，包含输入字段、有序参考内容散列、画幅、固定官方代码／系统提示词／权重版本、编写器版本和采样配置，不含候选号或租约。重试复用，编辑、换图和版本变更失效；命中重新审核与校验。提交生图前重新检查参考散列，`model.image.prompt` 与实际提交全文一致。旧记录兼容，无数据库迁移；不批量重生成历史素材。
-
-独立环境和权重安装至 GX10 `/home1/huntun`，服务只监听 `127.0.0.1:8110`；不修改共享 ComfyUI、宿主驱动及其他项目环境。固定来源、许可和散列随发布记录分发，运行时不下载。优先官方 vLLM，兼容性不通过时验证官方 Transformers；两者均不可用则保留原部署、不启用增强。允许少量真实改写验收，生图使用模拟模型，临时业务数据清理；不据此宣称真实出图质量。职责、启用门槛与回退见 ADR-0012。

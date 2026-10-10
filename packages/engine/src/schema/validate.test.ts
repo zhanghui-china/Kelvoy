@@ -462,14 +462,3 @@ test("video H3 provenance remains optional but validates new reproducibility rec
     expect(validateShot({ ...legacy, model: { video: { ...record, h3_prompt: { ...record.h3_prompt, ...patch } } } }).valid).toBe(false);
   }
 });
-
-test("optional Qwen provenance accepts pinned metadata and rejects malformed new records", () => {
-  const shot = validShot();
-  expect(validateShot(shot).valid).toBe(true);
-  const provenance = { writer_version: "v1", official_commit: "a".repeat(40), system_prompt_hash: "b".repeat(64), model: "Qwen/Qwen-Image-2.1-PE-I2I", model_revision: "c".repeat(40), sampling: { temperature: 0.6 }, input_hash: "d".repeat(64), ref_hashes: ["e".repeat(64)], mode: "edit", aspect: "9:16" };
-  const withRecord = { ...shot, model: { image: { ...shot.model.image!, qwen_prompt: provenance } } };
-  expect(validateShot(withRecord).valid).toBe(true);
-  for (const patch of [{ mode: "generate" }, { aspect: "1:1" }, { input_hash: "bad" }, { ref_hashes: [] }, { official_commit: "main" }, { sampling: { temperature: Infinity } }]) {
-    expect(validateShot({ ...withRecord, model: { image: { ...withRecord.model.image, qwen_prompt: { ...provenance, ...patch } } } }).valid).toBe(false);
-  }
-});

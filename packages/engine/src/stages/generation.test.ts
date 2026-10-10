@@ -202,26 +202,3 @@ test("video JSON rewrite context keeps source composition, actions and ordered r
     expect(result.shots[0]!.kf_prompt).toBe(original.kf_prompt);
   }
 });
-
-test("Qwen rewrites once per shot before candidates, preserves draft and stores submitted prompt", async () => {
-  let writes = 0;
-  const submissions: Array<{ prompt: string; expected_ref_hashes?: string[] }> = [];
-  const hashes = ["a".repeat(64), "b".repeat(64)];
-  const original = shot({ status: "generating_kf", size: "detail", kf_prompt: "仅手部与烧饼" });
-  const result = await runKeyframe(episode({ status: "keyframing", candidate_count: 3, shots: [original] }), 1, {
-    persona, destination, generation_id: "qwen",
-    imagePromptWriter: { async write({ context }) {
-      writes++;
-      expect(context.references.map(ref => ref.role)).toEqual(["person", "scene"]);
-      expect(context.kf_prompt).toBe(original.kf_prompt);
-      expect(context).not.toHaveProperty("caption");
-      return { prompt: "Only hands holding pastry from <image1>.", provenance: { writer_version: "test", official_commit: "a".repeat(40), system_prompt_hash: "c".repeat(64), model: "Qwen/Qwen-Image-2.1-PE-I2I", model_revision: "d".repeat(40), sampling: { temperature: 0.6 }, input_hash: "e".repeat(64), ref_hashes: hashes, mode: "edit", aspect: "9:16" } };
-    } },
-    keyframe: { async generate(input) { submissions.push(input); return { key: `kf/${input.candidate_no}.png`, model: "Qwen", version: "1", seed: input.seed, seconds: 1, ref_hashes: hashes }; } },
-  });
-  expect(writes).toBe(1);
-  expect(submissions).toHaveLength(3);
-  expect(submissions.every(input => input.prompt === result.shots[0]!.model.image!.prompt && JSON.stringify(input.expected_ref_hashes) === JSON.stringify(hashes))).toBe(true);
-  expect(result.shots[0]!.kf_prompt).toBe(original.kf_prompt);
-  expect(result.shots[0]!.model.image!.qwen_prompt!.mode).toBe("edit");
-});

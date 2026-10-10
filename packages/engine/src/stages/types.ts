@@ -1,4 +1,3 @@
-import type { ImagePromptWriter } from "./image-prompt";
 import type { H3PromptWriter } from "./h3-prompt";
 import type { ComposeProvider } from "../providers/types";
 import type { Destination, EpisodeAspect, Persona } from "../schema";
@@ -12,7 +11,6 @@ import type { Destination, EpisodeAspect, Persona } from "../schema";
  * throw a clear error rather than guessing.
  */
 export interface StageContext {
-  imagePromptWriter?: ImagePromptWriter;
   h3PromptWriter?: H3PromptWriter;
   destination?: Destination;
   persona?: Persona;
@@ -28,7 +26,6 @@ export interface StageContext {
       shot_no: number;
       shot_id?: string;
       candidate_no: number;
-      expected_ref_hashes?: string[];
       aspect?: EpisodeAspect;
       prompt: string;
       refs: string[];

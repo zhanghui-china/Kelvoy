@@ -54,21 +54,7 @@ export interface H3PromptProvenance {
   duration_s: number;
 }
 
-export interface QwenPromptProvenance {
-  writer_version: string;
-  official_commit: string;
-  system_prompt_hash: string;
-  model: string;
-  model_revision: string;
-  sampling: Record<string, number | boolean | string>;
-  input_hash: string;
-  ref_hashes: string[];
-  mode: "edit";
-  aspect: EpisodeAspect;
-}
-
 export interface ShotModelRecord {
-  qwen_prompt?: QwenPromptProvenance;
   h3_prompt?: H3PromptProvenance;
   provider: ProviderId;
   model: string;

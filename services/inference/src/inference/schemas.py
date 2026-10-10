@@ -14,7 +14,6 @@ class InferenceRequest(BaseModel):
     comfyui_base_url: str | None = None
     prompt: str
     refs: list[str] = Field(default_factory=list)
-    expected_ref_hashes: list[str] | None = None
     seed: int | None = None
     size: str | None = None
     count: int | None = None

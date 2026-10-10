@@ -1,5 +1,7 @@
 # infra/dgx/
 
+2026-10-10 已取消本轮 Qwen 图片提示词增强接入，恢复 `e0e85b8` 并清理专用模型环境；生产未部署或重启。见 [增强接入回退记录](gx10-qwen-prompt-rollback.md)。
+
 ## 当前主要部署（2026-10-10）
 
 GX10 `gx10-8e22` 为 Kelvoy 主要机器，服务地址 `http://100.80.224.95:8888`（Tailscale）。此前 Web／Worker 发布自由分镜提交 `837aacf`，支持任意位置插镜、编辑与排序，以及按稳定身份选择性补生成；通过增量 bundle 上线，本地 main 已合入，未推送 GitHub。发布目录、备份、重复迁移、双账号验收与回退见 [自由分镜上线记录](gx10-storyboard-editing-deployment.md)。此前功能见 [角色编辑／删除上线记录](gx10-persona-deletion-deployment.md)、[共享目的地上线记录](gx10-shared-destinations-deployment.md)。上次 GitHub main 发布见 [历史主干部署记录](gx10-8e22-main-deployment.md)。
