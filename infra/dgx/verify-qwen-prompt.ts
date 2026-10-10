@@ -57,7 +57,7 @@ try {
   const session = await createSession(owner), cookie = `kelvoy_session=${session.session_id}`;
   grantCredits(owner, 1000, `qwen-acceptance-${owner}`);
   const persona = (await request('/api/personas', cookie)).personas.find((p: Persona) => p.owner_id === null) as Persona;
-  const destination = (await request('/api/destinations', cookie)).destinations[0] as Destination;
+  const destination = (await request('/api/destinations', cookie)).destinations.find((item: Destination) => item.name.includes('黄山')) as Destination;
   const template = (await request('/api/templates', cookie)).templates[0] as Template;
   check(persona && destination && template, 'existing catalog');
   id = `e_verify_qwen_${crypto.randomUUID()}`;
@@ -69,7 +69,7 @@ try {
   await copyFile(sharedAssetPath(personKey), join(root, id, 'person.png'));
   await copyFile(sharedAssetPath(sceneKey), join(root, id, 'scene.png'));
   const temporaryPersona = { ...persona, refs: [`${id}/person.png`, `${id}/person.png`, `${id}/person.png`] };
-  const temporaryDestination = { ...destination, landmarks: [{ id: landmark.id, name: '街头', best_time: '上午', must_keep: [], refs: [`${id}/scene.png`, `${id}/scene.png`, `${id}/scene.png`] }] };
+  const temporaryDestination = { ...destination, landmarks: [{ id: landmark.id, name: landmark.name, best_time: '上午', must_keep: [], refs: [`${id}/scene.png`, `${id}/scene.png`, `${id}/scene.png`] }] };
   // No existing catalog row or reference image is modified.
   const shot: Shot = { no: 1, shot_id: 'sh_qwen_acceptance', scene: 'sc1', size: 'detail',
     beat: '展示黄山烧饼', caption: '黄山烧饼', camera: 'static', landmark: landmark.id,
@@ -83,7 +83,7 @@ try {
     video_source: 'keyframe', cut_policy: 'fixed_1s', candidate_count: 2,
     created_at: new Date().toISOString(), estimated_credits: 0, credits_used: 0,
     share: { enabled: false, slug: '' }, brief: { season: '秋', aspect: '9:16', requirements: '', duration_s: 1, tone: '', outfit_override: null, banned: [] },
-    scenes: [{ id: 'sc1', name: '街头', time: 'morning', landmarks: [] }], shots: [shot], removed_shots: [], grid_refs: [],
+    scenes: [{ id: 'sc1', name: landmark.name, time: 'morning', landmarks: [] }], shots: [shot], removed_shots: [], grid_refs: [],
     music: { file: '', bpm: 0, license: '' }, render: { res: '1080x1920', fps: 30, title: '', intro: null, outro: null, ai_label: true } };
   await insertEpisode(episode);
   const path = `/api/episodes/${id}`;
