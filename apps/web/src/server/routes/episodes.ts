@@ -8,6 +8,7 @@ import {
   MUSIC_CATALOG,
   validateCreateEpisodeRequest,
   validatePatchEpisodeRequest,
+  subtitlesEnabled,
 } from "@kelvoy/engine";
 import {
   createEpisodeWithScriptTask,
@@ -110,12 +111,12 @@ episodes.post("/", async (c) => {
     status: "draft",
     mode,
     video_source: videoSource,
-    cut_policy: "fixed_1s",
+    cut_policy: "long_3_6",
     candidate_count: candidateCount,
     created_at: new Date().toISOString(),
     // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
     // 镜数常量（credits.ts，M0-6 占位）；候选数取本期保存的值。
-    estimated_credits: estimateCreditQuote(candidateCount, 30, videoSource),
+    estimated_credits: estimateCreditQuote(candidateCount, 7, videoSource),
     credits_used: 0,
     share: { enabled: false, slug: "" },
     brief: {
@@ -183,7 +184,7 @@ episodes.get("/estimate", async (c) => {
     candidates = user?.settings.default_candidates;
   }
   return c.json({ ok: true, estimate: estimateCost({ mode, candidates, video_source: videoSource }),
-    credit_quote: estimateCreditQuote(candidates ?? 3, 30, videoSource) });
+    credit_quote: estimateCreditQuote(candidates ?? 3, 7, videoSource) });
 });
 
 episodes.get("/:id", async (c) => {
@@ -224,8 +225,8 @@ episodes.patch("/:id", async (c) => {
   const render = result.value.patch.render;
   if (render && (render.res !== loaded.episode.render.res || render.fps !== loaded.episode.render.fps ||
       render.ai_label !== loaded.episode.render.ai_label ||
-      ![null, "intro/kelvoy_open.mp4"].includes(render.intro) ||
-      ![null, "outro/kelvoy_close.mp4"].includes(render.outro))) {
+      ![null, "intro/kelvoy_open.mp4", loaded.episode.render.intro].includes(render.intro) ||
+      ![null, "outro/kelvoy_close.mp4", loaded.episode.render.outro].includes(render.outro))) {
     return c.json({ ok: false, error: "invalid_render_settings" }, 400);
   }
   if (render && checkContent([{ field: "title", text: render.title }]).length > 0) {
@@ -241,7 +242,9 @@ episodes.patch("/:id", async (c) => {
   const patchResult = await patchEpisode(
     loaded.episode.episode_id,
     result.value.row_version,
-    result.value.patch,
+    { ...result.value.patch,
+      ...(loaded.episode.final && render && subtitlesEnabled(render) !== subtitlesEnabled(loaded.episode.render)
+        ? { final_needs_recompose: true } : {}) },
   );
   if (!patchResult.ok) return patchErrorResponse(c, patchResult);
   return c.json({ ok: true, row_version: patchResult.row_version });

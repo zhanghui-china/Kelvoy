@@ -12,7 +12,7 @@ import type { Episode, EpisodeMode, VideoSource } from "../schema/episode";
  */
 
 // M0-6(#6) 占位，实测后回填：预算估算的默认镜数，不作为创作配额。
-export const DEFAULT_SHOT_COUNT = 28;
+export const DEFAULT_SHOT_COUNT = 7;
 
 // M0-6(#6) 占位，实测后回填：新期默认 3；旧期缺字段由 store 按 2 解析。
 export const DEFAULT_CANDIDATES = 3;

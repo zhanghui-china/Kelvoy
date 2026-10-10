@@ -38,6 +38,7 @@ export async function runScript(episode: Episode, _shotNo?: number, context?: St
 
   const { shots, scenes } = await stepfunScriptProvider.generateShots({
     brief: episode.brief,
+    cutPolicy: episode.cut_policy,
     destination: context.destination,
   });
   const nextStatus = transitionEpisode(episode.status, { type: "advance" });
@@ -58,6 +59,7 @@ export async function runScriptRevision(episode: Episode, instruction: string, c
   if (violations.length > 0) throw new ContentBlockedError(violations);
   const { shots, scenes } = await stepfunScriptProvider.generateShots({
     brief: episode.brief,
+    cutPolicy: episode.cut_policy,
     destination: context.destination,
     instruction,
     previousShots: episode.shots,

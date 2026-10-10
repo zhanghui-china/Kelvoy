@@ -1,6 +1,8 @@
 import { musicLibraryProvider } from "../providers/music-library";
-import type { ComposePlan, ComposePlanMusic } from "../providers/types";
+import type { ComposeMediaDurations, ComposePlan, ComposePlanMusic } from "../providers/types";
+import { subtitlesEnabled } from "../rules/subtitles";
 import { planCuts, planFixedCuts } from "../rules/beat";
+import { CompositionConstraintError, mediaFrameCount, planLongCuts } from "../rules/long-cuts";
 import type { Episode } from "../schema";
 import { transitionEpisode } from "../state";
 import type { StageContext } from "./types";
@@ -9,7 +11,7 @@ import type { StageContext } from "./types";
  * Stage F — 合成 (PRD §4, FR-07, M1-13)。切片、卡拍对齐、账号级 LUT、
  * 片头片尾、标题、AI 标识（画面水印 + 元数据）、配乐、封装 1080×1920 30fps。
  *
- * 这个文件只做**纯计算**：把期 JSON 编译成一份后端无关的 ComposePlan，再交给
+ * 把期 JSON 编译成后端无关的 ComposePlan；长镜通过注入的 provider 探测素材，再交给
  * 调用方注入的 ComposeProvider 去执行。ffmpeg 在 apps/worker
  * （CLAUDE.md 不可越的边界："compose 是唯一碰 ffmpeg 的地方，只在 worker 上跑"）。
  *
@@ -51,8 +53,7 @@ async function resolveMusic(episode: Episode): Promise<ComposePlanMusic> {
 }
 
 /**
- * 把一期编译成合成计划。纯函数（async 只是因为选曲 provider 的接口是 async，
- * 曲库本身是代码常量，没有 IO）。
+ * 把一期编译成合成计划。媒体 IO 委托给 worker 注入的 provider，engine 只计算切点。
  */
 export async function buildComposePlan(episode: Episode, context?: StageContext): Promise<ComposePlan> {
   const persona = context?.persona;
@@ -61,9 +62,27 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
   }
 
   const music = await resolveMusic(episode);
-  const cuts = episode.cut_policy === "fixed_1s"
-    ? planFixedCuts(episode.shots, episode.render.fps)
-    : planCuts(episode.shots, music.bpm);
+  let media: ComposeMediaDurations | undefined;
+  let cuts;
+  if (episode.cut_policy === "long_3_6") {
+    if (!context?.compose?.probeMedia) {
+      throw new CompositionConstraintError("长镜合成需要媒体时长探测能力");
+    }
+    const clips = episode.shots.map(shot => {
+      if (shot.status !== "approved" || !shot.clip) {
+        throw new CompositionConstraintError(`第 ${shot.no} 镜尚未批准或缺少片段`);
+      }
+      return { no: shot.no, clip_key: shot.clip };
+    });
+    media = await context.compose.probeMedia({ episode_id: episode.episode_id, clips,
+      intro_key: episode.render.intro, outro_key: episode.render.outro, signal: context.signal });
+    context.signal?.throwIfAborted();
+    cuts = planLongCuts(episode.shots, music.bpm, episode.brief.duration_s, media, episode.render.fps);
+  } else {
+    cuts = episode.cut_policy === "fixed_1s"
+      ? planFixedCuts(episode.shots, episode.render.fps)
+      : planCuts(episode.shots, music.bpm);
+  }
 
   return {
     episode_id: episode.episode_id,
@@ -72,6 +91,8 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
     cuts,
     music,
     lut_key: persona.style.lut !== "" ? persona.style.lut : null,
+    ...(media ? { intro_frame_count: mediaFrameCount(media.intro_duration_s, episode.render.fps),
+      outro_frame_count: mediaFrameCount(media.outro_duration_s, episode.render.fps) } : {}),
     intro_key: episode.render.intro,
     outro_key: episode.render.outro,
     title: episode.render.title,
@@ -89,7 +110,7 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
     },
     res: parseRes(episode.render.res),
     fps: episode.render.fps,
-    subtitles_enabled: episode.render.subtitles_enabled === true,
+    subtitles_enabled: subtitlesEnabled(episode.render),
     transitions_enabled: episode.cut_policy === "fixed_1s" && episode.render.transitions_enabled === true,
   };
 }
@@ -107,6 +128,11 @@ export async function runCompose(
   const result = await context.compose.compose({ plan, signal: context.signal });
   context.signal?.throwIfAborted();
   if (result.output_key !== plan.output_key) throw new Error("合成产物路径与计划不一致");
+
+  if (episode.cut_policy === "long_3_6" && (!Number.isFinite(result.probe.duration_s) ||
+      Math.abs(result.probe.duration_s - episode.brief.duration_s) > 0.5)) {
+    throw new CompositionConstraintError(`成片实际 ${result.probe.duration_s.toFixed(2)} 秒，超出 ${episode.brief.duration_s}±0.5 秒要求`);
+  }
 
   // 选中的曲子回写进期记录：license 是合规留痕，bpm 是下次重新合成时保持同一
   // 套切点的依据（PRD §8 / FR-07）。

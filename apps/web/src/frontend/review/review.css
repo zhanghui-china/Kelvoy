@@ -374,3 +374,31 @@
 
 .k-desk-script-content .k-desk-tablewrap { overflow-x: auto; }
 .k-desk-script-content .k-desk-table { min-width: 960px; }
+
+/* Real progress colors remain; the outline independently identifies the viewed stage. */
+.k-desk-step:has(.k-desk-step-button) { padding: 0; }
+.k-desk-step-button {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.k-desk-step-button:disabled { cursor: default; opacity: 0.65; }
+.k-desk-step.is-viewing { outline: 2px solid var(--color-accent-dark); outline-offset: 2px; }
+.k-desk-step-button:focus-visible { outline: 3px solid var(--color-ink); outline-offset: 3px; }
+.k-playback { margin-top: 1rem; }
+.k-playback-banner { justify-content: space-between; margin-bottom: 1rem; }
+.k-playback-fields { display: grid; gap: 0.7rem; }
+.k-playback-fields > div { display: grid; grid-template-columns: minmax(80px, 1fr) minmax(0, 3fr); gap: 1rem; }
+.k-playback-fields dt { color: var(--color-muted); }
+.k-playback-fields dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.k-playback-candidate { cursor: default; margin: 0; }
+.k-playback .k-desk-table { min-width: 960px; }
+[data-episode-operations][hidden] { display: none; }

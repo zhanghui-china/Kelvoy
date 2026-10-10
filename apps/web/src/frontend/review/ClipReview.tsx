@@ -70,19 +70,21 @@ function ClipShot({
 
   const total = clipSeconds ?? FALLBACK_CLIP_SECONDS;
   const fixedCut = episode.cut_policy === "fixed_1s";
-  const cutSeconds = fixedCut ? 1 : shot.duration_s;
+  const longCut = episode.cut_policy === "long_3_6";
+  const cutSeconds = fixedCut ? 1 : longCut ? Math.min(shot.duration_s, Math.max(0, total - trimStart)) : shot.duration_s;
   const maxStart = Math.max(0, fixedCut
     ? Math.floor((total - cutSeconds) * 30) / 30
-    : Number((total - cutSeconds).toFixed(2)));
+    : longCut ? Math.floor((total - 3) * episode.render.fps) / episode.render.fps
+      : Number((total - cutSeconds).toFixed(2)));
   const allChecked = REDLINES.every((r) => checked[r.key]);
 
-  // 拖动时实时预览那 1 秒（FR-05）：把播放头挪到起点，放 1 秒就停。
+  // 预览选段：一秒作品保持一秒；长镜按建议时长与剩余素材预览。
   function preview(value: number) {
     const video = videoRef.current;
     if (!video) return;
     video.currentTime = value;
     void video.play().then(() => {
-      window.setTimeout(() => video.pause(), PREVIEW_SECONDS * 1000);
+      window.setTimeout(() => video.pause(), (longCut ? Math.min(shot.duration_s, Math.max(0, total - value)) : PREVIEW_SECONDS) * 1000);
     }).catch(() => {
       /* 文件还没生成，或浏览器拒绝自动播放——静默即可，不影响改起点 */
     });
@@ -163,18 +165,19 @@ function ClipShot({
             />
           )}
           <label className="k-field k-desk-slider">
-            起点（截取 {cutSeconds} 秒，片段长 {total.toFixed(1)} 秒）
+            起点（{longCut ? `建议 ${shot.duration_s} 秒，最终分配 3–6 秒` : `截取 ${cutSeconds} 秒`}，片段长 {total.toFixed(1)} 秒）
             <input
               type="range"
               min={0}
               max={maxStart}
-              step={fixedCut ? 1 / 30 : 0.1}
+              step={fixedCut ? 1 / 30 : longCut ? 1 / episode.render.fps : 0.1}
               value={Math.min(trimStart, maxStart)}
               aria-valuetext={`起点 ${trimStart.toFixed(2)} 秒`}
               disabled={mutation.pending}
               onChange={(e) => {
                 const value = Number(e.target.value);
-                const snapped = fixedCut ? Math.round(value * 30) / 30 : value;
+                const snapped = fixedCut ? Math.round(value * 30) / 30 : longCut
+                  ? Math.min(maxStart, Math.round(value * episode.render.fps) / episode.render.fps) : value;
                 setTrimStart(snapped);
                 preview(snapped);
               }}
@@ -272,11 +275,13 @@ export default function ClipReview({
         </div>
         <GuideTip section="clips">{episode.cut_policy === "fixed_1s"
           ? "每镜严格截取 1 秒，起点按 30 fps 帧格调整；看完动作并确认五项质量红线后再通过。坏镜可报告并免费重生成一次。"
+          : episode.cut_policy === "long_3_6"
+            ? "每镜成片 3–6 秒，最终时长由素材与目标预算分配；起点后至少保留 3 秒素材。逐镜检查动作与五项质量红线，通过后进入合成设置。"
           : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 1 秒剪辑时，先转换并重新确认。"}</GuideTip>
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />
         <MutationError error={mutation.error} />
-        {episode.cut_policy !== "fixed_1s" && episode.shots.every((shot) => !!shot.clip) &&
+        {episode.cut_policy !== "fixed_1s" && episode.cut_policy !== "long_3_6" && episode.shots.every((shot) => !!shot.clip) &&
           <div className="k-card">
             <div className="k-card-title">旧版剪辑</div>
             <p className="k-card-meta">可保留现有片段，改为每镜严格 1 秒。转换后需要重新确认每镜起点和质量。</p>
@@ -305,7 +310,7 @@ export default function ClipReview({
             disabled={mutation.pending || unapproved > 0 || episode.status !== "clip_review"}
             onClick={() => mutation.run((rowVersion) => continueEpisode(episode.episode_id, rowVersion))}
           >
-            {episode.cut_policy === "fixed_1s" ? "下一步：合成设置" : "继续 → 合成"}
+            {["fixed_1s", "long_3_6"].includes(episode.cut_policy ?? "") ? "下一步：合成设置" : "继续 → 合成"}
           </button>
           {unapproved > 0 && <span className="k-card-meta">还有 {unapproved} 镜没通过。</span>}
         </div>

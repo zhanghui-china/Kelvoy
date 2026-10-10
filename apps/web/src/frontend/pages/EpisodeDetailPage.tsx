@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Destination, Episode, Persona } from "@kelvoy/engine";
 import { getEpisode } from "../api/client";
@@ -11,7 +12,8 @@ import DoneView from "../review/DoneView";
 import KeyframeReview from "../review/KeyframeReview";
 import ProgressView from "../review/ProgressView";
 import SaveAsTemplateForm from "../review/SaveAsTemplateForm";
-import StageSteps from "../review/StageSteps";
+import StageSteps, { episodeStages, currentEpisodeStage, failedStageLabel, type StageId } from "../review/StageSteps";
+import StagePlayback from "../review/StagePlayback";
 import PriorFinal from "../review/PriorFinal";
 import StoryboardEditor from "../review/StoryboardEditor";
 import ScriptReview from "../review/ScriptReview";
@@ -58,6 +60,25 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
   storyboardPrices?: StoryboardPrices;
 }) {
 
+  const [viewing, setViewing] = useState<{ episodeId: string; stage: StageId } | null>(null);
+  const operationRef = useRef<HTMLDivElement>(null);
+  const stages = episodeStages(episode, failedTask);
+  const currentStage = currentEpisodeStage(episode, failedTask);
+  const selectedStage = viewing?.episodeId === episode.episode_id &&
+    stages.some(stage => stage.id === viewing.stage && stage.available) ? viewing.stage : null;
+  const replaying = selectedStage !== null && selectedStage !== currentStage;
+  useEffect(() => {
+    if (viewing && !selectedStage) setViewing(null);
+  }, [viewing, selectedStage]);
+  useEffect(() => {
+    if (replaying) operationRef.current?.querySelectorAll("video").forEach(video => video.pause());
+  }, [replaying, episode]);
+  function selectStage(stage: StageId) {
+    // Pause immediately, including any delayed preview play event in the hidden view.
+    operationRef.current?.querySelectorAll("video").forEach(video => video.pause());
+    setViewing(stage === currentStage ? null : { episodeId: episode.episode_id, stage });
+  }
+
   return (
     <div>
       <div className="k-eyebrow">审片台</div>
@@ -77,43 +98,63 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
       {destinationHistoryApproximate && <p className="k-card-meta">
         此期使用旧数据创建：原始目的地版本已无法恢复，显示的是迁移时保存的近似资料。
       </p>}
-      <StageSteps status={episode.status} failedTask={failedTask} videoSource={episode.video_source} />
-      {episode.status !== "done" && episode.final && <PriorFinal episode={episode} />}
+      <StageSteps status={episode.status} failedTask={failedTask} videoSource={episode.video_source}
+        stages={stages} selectedStage={selectedStage ?? currentStage} onSelect={selectStage} />
+      {replaying && <section className="k-playback" aria-label="只读阶段回看">
+        <div className="k-desk-toolbar k-playback-banner">
+          <p role="status">正在回看：{stages.find(stage => stage.id === selectedStage)?.label.slice(2)} · 只读</p>
+          <button type="button" className="k-btn k-btn-secondary" onClick={() => setViewing(null)}>返回当前进度</button>
+        </div>
+        {(episode.status === "failed" || episode.shots.some(shot => shot.status === "failed")) && <p className="k-error" role="alert">
+          生成失败{failedTask ? ` · 失败阶段：${failedStageLabel(failedTask)}${failedTask.shot_no !== null ? ` · 第 ${failedTask.shot_no} 镜` : ""}` : " · 阶段未知"}
+          {episode.failure_reason ? `：${episode.failure_reason}` : ""}。返回当前进度后可查看重试操作。
+        </p>}
+        <StagePlayback key={`${episode.episode_id}:${selectedStage}`} stage={selectedStage} episode={episode} destination={destination} persona={persona} />
+      </section>}
+      {/* Keep local edits mounted while replaying, but remove all operation entries from view. */}
+      <div ref={operationRef} hidden={replaying} data-episode-operations
+        onBlurCapture={event => {
+          // Stage navigation must not submit an edit through a review field's blur autosave.
+          if (event.relatedTarget instanceof Element && event.relatedTarget.closest("[data-stage]")) event.stopPropagation();
+        }}
+        onPlayCapture={event => { if (replaying && event.target instanceof HTMLVideoElement) event.target.pause(); }}>
+        {episode.status !== "done" && episode.final && <PriorFinal episode={episode} />}
 
-      {episode.status === "script_review" && (
-        <ScriptReview episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy} warnings={storyboardWarnings} prices={storyboardPrices} showEditor={false} />
-      )}
-      {(episode.status === "kf_review" || episode.status === "keyframing") && (
-        <KeyframeReview
-          episode={episode}
-          destination={destination}
-          persona={persona}
-          mutation={mutation}
-          busy={storyboardBusy}
-        />
-      )}
-      {(episode.status === "clip_review" || episode.status === "clipping") && (
-        <ClipReview episode={episode} mutation={mutation} />
-      )}
-      {episode.status === "compose_ready" && <ComposeSetup episode={episode} mutation={mutation} />}
-      {(episode.status === "done" || episode.status === "composing") && (
-        <DoneView episode={episode} mutation={mutation} />
-      )}
-      {(episode.status === "draft" ||
-        episode.status === "scripting" ||
-        episode.status === "assets" ||
-        episode.status === "failed") && <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
-      {(episode.status === "keyframing" || episode.status === "kf_review" ||
-        episode.status === "clipping" || episode.status === "clip_review") &&
-        episode.shots.some((shot) => shot.status === "failed") &&
-        <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
+        {episode.status === "script_review" && (
+          <ScriptReview episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy} warnings={storyboardWarnings} prices={storyboardPrices} showEditor={false} />
+        )}
+        {(episode.status === "kf_review" || episode.status === "keyframing") && (
+          <KeyframeReview
+            episode={episode}
+            destination={destination}
+            persona={persona}
+            mutation={mutation}
+            busy={storyboardBusy}
+          />
+        )}
+        {(episode.status === "clip_review" || episode.status === "clipping") && (
+          <ClipReview episode={episode} mutation={mutation} />
+        )}
+        {episode.status === "compose_ready" && <ComposeSetup episode={episode} mutation={mutation} />}
+        {(episode.status === "done" || episode.status === "composing") && (
+          <DoneView episode={episode} mutation={mutation} />
+        )}
+        {(episode.status === "draft" ||
+          episode.status === "scripting" ||
+          episode.status === "assets" ||
+          episode.status === "failed") && <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
+        {(episode.status === "keyframing" || episode.status === "kf_review" ||
+          episode.status === "clipping" || episode.status === "clip_review") &&
+          episode.shots.some((shot) => shot.status === "failed") &&
+          <ProgressView episode={episode} mutation={mutation} failedTask={failedTask} />}
 
-      {episode.mode === "per_shot" && <details className="k-desk-main" open={episode.status === "script_review" ? true : undefined}>
-        <summary>编辑分镜 · {episode.shots.length} 镜</summary>
-        <StoryboardEditor episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy}
-          warnings={storyboardWarnings} prices={storyboardPrices} />
-      </details>}
-      <SaveAsTemplateForm episodeId={episode.episode_id} />
+        {episode.mode === "per_shot" && <details className="k-desk-main" open={episode.status === "script_review" ? true : undefined}>
+          <summary>编辑分镜 · {episode.shots.length} 镜</summary>
+          <StoryboardEditor episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy}
+            warnings={storyboardWarnings} prices={storyboardPrices} />
+        </details>}
+        <SaveAsTemplateForm episodeId={episode.episode_id} />
+      </div>
     </div>
   );
 }

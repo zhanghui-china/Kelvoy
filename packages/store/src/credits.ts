@@ -45,7 +45,7 @@ export function getCreditPrice(kind: CreditKind): number {
   return row.price;
 }
 
-export function estimateCreditQuote(candidates: number, shotCount = 30,
+export function estimateCreditQuote(candidates: number, shotCount = 7,
   videoSource: "keyframe" | "references" = "keyframe"): number {
   if (!Number.isInteger(candidates) || candidates < 1 || candidates > 3 ||
       !Number.isInteger(shotCount) || shotCount < 0) throw new Error("invalid quote parameters");

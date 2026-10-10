@@ -203,3 +203,59 @@ test("runCompose refuses to run without a ComposeProvider (engine never touches 
     "compose 阶段需要 ComposeProvider",
   );
 });
+
+for (const policy of ["fixed_1s", "beat_aligned"] as const) {
+  test(`${policy} carries captions in shot order without changing trims`, async () => {
+    const episode = episodeFixture({ cut_policy: policy, music: { file: "music/test.mp3", bpm: 120, license: "test" }, shots: [
+      shotFixture(7, { caption: "中文\n引号' : , {测试} \\ 路", trim_start_s: 0.5, duration_s: 2 }),
+      shotFixture(2, { caption: "  ", trim_start_s: 1, duration_s: 1 }),
+      shotFixture(9),
+    ] });
+    const plan = await buildComposePlan(episode, { persona: personaFixture() });
+    expect(plan.subtitles_enabled).toBe(true);
+    expect(plan.cuts.map(c => c.no)).toEqual([7, 2, 9]);
+    expect(plan.cuts.map(c => c.caption)).toEqual([episode.shots[0]!.caption, "  ", ""]);
+    expect(plan.cuts.map(c => c.trim_start_s)).toEqual([0.5, 1, 0]);
+    expect(plan.cuts.map(c => c.duration_s)).toEqual(policy === "fixed_1s" ? [1, 1, 1] : [2, 1, 1]);
+    for (const enabled of [true, false]) {
+      const explicit = await buildComposePlan({ ...episode, render: { ...episode.render, subtitles_enabled: enabled } }, { persona: personaFixture() });
+      expect(explicit.subtitles_enabled).toBe(enabled);
+    }
+  });
+}
+
+test("legacy subtitles survive an explicitly enabled compose", async () => {
+  const episode = episodeFixture({ shots: [shotFixture(1, { caption: "字幕" })] });
+  episode.render.subtitles_enabled = true;
+  const plan = await buildComposePlan(episode, { persona: personaFixture() });
+  expect(plan.cuts[0]?.caption).toBe("字幕");
+});
+
+test("restored long policy probes actual media and keeps old long suggestions", async () => {
+  const episode = episodeFixture({ cut_policy: "long_3_6", shots: Array.from({length:7}, (_, i) => shotFixture(i+1, {duration_s:4, caption:`字幕${i}`})),
+    music: {file:"music/test.mp3",bpm:120,license:"test"} });
+  const compose: ComposeProvider = { ...fakeComposeProvider(), async probeMedia(input) {
+    expect(input.clips.map(c => c.clip_key)).toEqual(episode.shots.map(s => s.clip!));
+    return { clip_duration_s: Object.fromEntries(input.clips.map(c => [c.no, 5])), intro_duration_s: 1, outro_duration_s: 1 };
+  } };
+  const before = JSON.stringify(episode);
+  const plan = await buildComposePlan(episode, {persona:personaFixture(),compose});
+  expect(totalCutDurationS(plan.cuts)).toBe(28);
+  expect(plan.intro_frame_count).toBe(30);
+  expect(plan.outro_frame_count).toBe(30);
+  expect(plan.cuts.every(c => c.duration_s >= 3 && c.duration_s <= 5)).toBe(true);
+  expect(plan.subtitles_enabled).toBe(true);
+  expect(plan.transitions_enabled).toBe(false);
+  expect(JSON.stringify(episode)).toBe(before);
+  await expect(buildComposePlan(episode, {persona:personaFixture()})).rejects.toThrow("探测");
+});
+
+test("long output outside duration tolerance cannot replace an old delivery", async () => {
+  const old = {version:1,key:"final/old.mp4",duration_s:30,width:1080,height:1920,fps:30,size_bytes:1000,completed_at:"2026-09-29"};
+  const episode = episodeFixture({cut_policy:"long_3_6",final:old,shots:Array.from({length:7}, (_,i) => shotFixture(i+1,{duration_s:4}))});
+  const compose: ComposeProvider = { ...fakeComposeProvider(), async probeMedia() {
+    return {clip_duration_s:Object.fromEntries(episode.shots.map(s => [s.no,5])),intro_duration_s:0,outro_duration_s:0};
+  } };
+  await expect(runCompose(episode,undefined,{persona:personaFixture(),compose})).rejects.toThrow("成片实际");
+  expect(episode.final).toEqual(old);
+});

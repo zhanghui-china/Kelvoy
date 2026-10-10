@@ -196,3 +196,114 @@ test.skipIf(!HAS_FFMPEG || process.platform !== "darwin")("renders title, captio
   expect(await Bun.file(`${output}.overlay-0.png`).exists()).toBe(true);
   expect(await probeFrames(output)).toBeGreaterThan(90);
 });
+
+/** Count bright pixels in the caption area of an actual decoded frame. */
+async function captionPixels(path: string, at: number, width: number, height: number): Promise<number> {
+  const proc = Bun.spawn(["ffmpeg", "-v", "error", "-ss", String(at), "-i", path,
+    "-frames:v", "1", "-vf", `crop=${width}:${Math.floor(height * 0.4)}:0:${Math.floor(height * 0.6)}`,
+    "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"], { stdout: "pipe", stderr: "pipe" });
+  const [pixels, code, stderr] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited, new Response(proc.stderr).text()]);
+  if (code !== 0) throw Error(stderr);
+  expect(pixels.byteLength).toBeGreaterThan(0);
+  const bytes = new Uint8Array(pixels);
+  let bright = 0;
+  for (let i = 0; i < bytes.length; i += 3) {
+    if (bytes[i]! > 180 && bytes[i + 1]! > 180 && bytes[i + 2]! > 180) bright++;
+  }
+  return bright;
+}
+
+for (const fixed of [false, true]) {
+  for (const res of [{ w: 540, h: 960 }, { w: 960, h: 540 }]) {
+    for (const bookends of [false, true]) {
+      test.skipIf(!HAS_FFMPEG)(`caption pixels stay inside ${fixed ? "fixed" : "beat"} cuts at ${res.w}x${res.h}, bookends=${bookends}`, async () => {
+        const plan = planFixture();
+        plan.res = res;
+        plan.music = null;
+        plan.lut_key = null;
+        plan.intro_key = bookends ? "intro/test.mp4" : null;
+        plan.outro_key = bookends ? "intro/test.mp4" : null;
+        plan.cuts = [
+          { no: 7, clip_key: "clip/02.mp4", trim_start_s: 0.5, duration_s: fixed ? 1 : 1.5, caption: "山风\n你好' : , {旅途} \\ 路" },
+          { no: 2, clip_key: "clip/01.mp4", trim_start_s: 1, duration_s: 1, caption: "  \n " },
+          { no: 9, clip_key: "clip/02.mp4", trim_start_s: 0.5, duration_s: 1, caption: "第二句" },
+        ];
+        if (fixed) plan.cuts = plan.cuts.map(cut => ({ ...cut, trim_start_frame: cut.trim_start_s * 30, frame_count: 30 }));
+        plan.subtitles_enabled = true;
+        plan.output_key = "final/captions-on.mp4";
+        await ffmpegComposeProvider.compose({ plan });
+        const enabled = join(projectsRoot, "e_it", plan.output_key);
+        plan.subtitles_enabled = false;
+        plan.output_key = "final/captions-off.mp4";
+        await ffmpegComposeProvider.compose({ plan });
+        const disabled = join(projectsRoot, "e_it", plan.output_key);
+        const intro = bookends ? 1 : 0;
+        const firstEnd = intro + plan.cuts[0]!.duration_s;
+        const lastStart = firstEnd + 1;
+        for (const at of [intro + 0.2, firstEnd - 1 / 30, lastStart, lastStart + 0.5]) {
+          expect(await captionPixels(enabled, at, res.w, res.h)).toBeGreaterThan(20);
+          expect(await captionPixels(disabled, at, res.w, res.h)).toBe(0);
+        }
+        for (const at of [firstEnd, firstEnd + 0.5, ...(bookends ? [0.5, lastStart + 1, lastStart + 1.5] : [])]) {
+          expect(await captionPixels(enabled, at, res.w, res.h)).toBe(0);
+        }
+      });
+    }
+  }
+}
+
+for (const res of [{ w: 360, h: 640 }, { w: 640, h: 360 }]) for (const bookends of [false, true]) {
+  test.skipIf(!HAS_FFMPEG)(`long color-film frame boundaries and subtitles ${res.w}x${res.h}, bookends=${bookends}`, async () => {
+    const { planLongCuts, mediaFrameCount } = await import("@kelvoy/engine");
+    await makeColorClip(join(projectsRoot, "e_it/clip/01.mp4"), "blue", 5.2);
+    await makeColorClip(join(projectsRoot, "e_it/clip/02.mp4"), "red", 5);
+    await makeColorClip(join(projectsRoot, "e_it/clip/03.mp4"), "yellow", 6);
+    const plan = planFixture();
+    plan.res = res; plan.fps = bookends ? 24 : 30;
+    plan.music = null; plan.lut_key = null;
+    plan.intro_key = bookends ? "intro/test.mp4" : null;
+    plan.outro_key = bookends ? "intro/test.mp4" : null;
+    const shots = [
+      { no:7,clip:"clip/01.mp4",trim_start_s:0.51,duration_s:3.5,status:"approved",caption:"旅途字幕" },
+      { no:2,clip:"clip/02.mp4",trim_start_s:0,duration_s:4,status:"approved",caption:"" },
+      { no:9,clip:"clip/03.mp4",trim_start_s:0,duration_s:5,status:"approved",caption:"再见" },
+    ] as import("@kelvoy/engine").Shot[];
+    const media = await ffmpegComposeProvider.probeMedia!({episode_id:plan.episode_id,
+      clips:shots.map(s => ({no:s.no,clip_key:s.clip!})),intro_key:plan.intro_key,outro_key:plan.outro_key});
+    expect(media.clip_duration_s[7]).toBeCloseTo(5.2,2);
+    const target = 12.5 + (bookends ? 2 : 0);
+    plan.cuts = planLongCuts(shots,120,target,media,plan.fps);
+    plan.intro_frame_count = mediaFrameCount(media.intro_duration_s,plan.fps);
+    plan.outro_frame_count = mediaFrameCount(media.outro_duration_s,plan.fps);
+    let enabledPath = ""; let disabledPath = "";
+    for (const enabled of [true,false]) {
+      plan.subtitles_enabled = enabled; plan.output_key = `final/long-${enabled}.mp4`;
+      const result = await ffmpegComposeProvider.compose({plan});
+      expect(Math.abs(result.probe.duration_s-target)).toBeLessThanOrEqual(0.5);
+      const path = join(projectsRoot,"e_it",plan.output_key);
+      if(enabled) enabledPath=path; else disabledPath=path;
+      const proc = Bun.spawn(["ffmpeg","-v","error","-i",path,"-vf","crop=2:2:0:0",
+        "-pix_fmt","rgb24","-f","rawvideo","pipe:1"],{stdout:"pipe",stderr:"pipe"});
+      const [buffer,code] = await Promise.all([new Response(proc.stdout).arrayBuffer(),proc.exited]);
+      expect(code).toBe(0);
+      const pixels = new Uint8Array(buffer);
+      const segments = [
+        ...(bookends ? [{frames:plan.intro_frame_count!,color:"green"}] : []),
+        ...plan.cuts.map((c,i) => ({frames:c.frame_count!,color:["blue","red","yellow"][i]!})),
+        ...(bookends ? [{frames:plan.outro_frame_count!,color:"green"}] : []),
+      ];
+      expect(pixels.length / 12).toBe(segments.reduce((s,c) => s+c.frames,0));
+      let frame=0;
+      for (const segment of segments) for (let i=0;i<segment.frames;i++,frame++) {
+        const [r,g,b] = [pixels[frame*12]!,pixels[frame*12+1]!,pixels[frame*12+2]!];
+        const color = b>150 && r<80 ? "blue" : r>150 && g<80 ? "red" : r>150 && g>150 ? "yellow" : "green";
+        expect(color).toBe(segment.color);
+      }
+    }
+    const at = (bookends ? 1 : 0) + 0.5;
+    expect(await captionPixels(enabledPath,at,res.w,res.h)).toBeGreaterThan(20);
+    expect(await captionPixels(disabledPath,at,res.w,res.h)).toBe(0);
+    const blankAt=(bookends?1:0)+plan.cuts[0]!.duration_s+0.5;
+    expect(await captionPixels(enabledPath,blankAt,res.w,res.h)).toBe(0);
+  },20000);
+}

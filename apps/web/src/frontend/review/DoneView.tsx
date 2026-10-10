@@ -1,5 +1,6 @@
-import type { Episode } from "@kelvoy/engine";
-import { convertLegacyCuts, episodeFileUrl, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
+import { useState } from "react";
+import { subtitlesEnabled, type Episode } from "@kelvoy/engine";
+import { convertLegacyCuts, episodeFileUrl, patchEpisode, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import ShareActions from "./ShareActions";
 import { MutationError } from "./ShotHeader";
@@ -19,6 +20,8 @@ export default function DoneView({
   episode: Episode;
   mutation: EpisodeMutation;
 }) {
+  const [subtitles, setSubtitles] = useState(subtitlesEnabled(episode.render));
+  const settingsChanged = subtitles !== subtitlesEnabled(episode.render);
   const url = episodeFileUrl(episode.episode_id, finalKey(episode));
   const rows = tally(episode);
   const totalCost = rows.reduce((sum, row) => sum + row.costUsd, 0);
@@ -39,7 +42,7 @@ export default function DoneView({
     <section className="k-desk-main">
       <div className="k-card-title">成片 · {episode.render.title || episode.name}</div>
       {(episode as Episode & { final_needs_recompose?: boolean }).final_needs_recompose &&
-        <p role="status">分镜已修改，当前为上一版成片；下载与分享保留上一版，重新合成后更新。</p>}
+        <p role="status">分镜或字幕设置已修改，当前为上一版成片；下载与分享保留上一版，重新合成后更新。</p>}
       <GuideTip section="deliver">先完整播放成片，再下载或开启分享链接。</GuideTip>
       <div className="k-delivery-preview">
         <video className="k-media k-desk-final" style={{ aspectRatio }} src={url} controls aria-label="成片" />
@@ -51,7 +54,8 @@ export default function DoneView({
           <a className="k-btn k-btn-primary" href={url} download>下载 MP4 成片</a>
         </div>
       </div>
-      {episode.cut_policy !== "fixed_1s" && episode.mode === "per_shot" &&
+      <p className="k-card-meta">{episode.cut_policy === "long_3_6" ? `每镜 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入` : episode.cut_policy === "fixed_1s" ? "每镜 1 秒" : "沿用旧项目的节拍切点"}</p>
+      {episode.cut_policy !== "fixed_1s" && episode.cut_policy !== "long_3_6" && episode.mode === "per_shot" &&
         episode.shots.length > 0 && episode.shots.every((shot) => !!shot.clip) &&
         <div className="k-card">
           <div className="k-card-title">使用新版 1 秒剪辑</div>
@@ -154,16 +158,25 @@ export default function DoneView({
           </div>
         ))}
       </div>
-      <div className="k-desk-actions">
-        <button
-          type="button"
-          className="k-btn k-btn-secondary"
-          disabled={mutation.pending}
-          onClick={() => mutation.run((rowVersion) => recompose(episode.episode_id, rowVersion))}
-        >
-          重新合成
-        </button>
-        <span className="k-card-meta">重新合成只重跑合成，不动任何镜（FR-08）。</span>
+      <div className="k-card">
+        <div className="k-card-title">字幕与重新合成</div>
+        <label><input type="checkbox" checked={subtitles} disabled={mutation.pending}
+          onChange={(event) => setSubtitles(event.target.checked)} /> 烧录每镜字幕</label>
+        <p className="k-card-meta">已填写字幕 {episode.shots.filter(shot => shot.caption?.trim()).length} / {episode.shots.length} 镜 · 空字幕不显示。{!subtitles && "本次成片不显示每镜字幕。"}</p>
+        <p className="k-card-meta">保存后需合成／重新合成才会更新成片。</p>
+        {settingsChanged && <p role="status">字幕开关尚未保存，请先保存字幕设置，再重新合成。</p>}
+        <div className="k-desk-actions">
+          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || !settingsChanged}
+            onClick={() => void mutation.run((rowVersion) => patchEpisode(episode.episode_id, rowVersion,
+              { render: { ...episode.render, subtitles_enabled: subtitles } }))}>
+            保存字幕设置
+          </button>
+          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || settingsChanged}
+            onClick={() => mutation.run((rowVersion) => recompose(episode.episode_id, rowVersion))}>
+            重新合成
+          </button>
+          <span className="k-card-meta">重新合成只重跑合成，不动任何镜（FR-08）。</span>
+        </div>
       </div>
     </section>
   );

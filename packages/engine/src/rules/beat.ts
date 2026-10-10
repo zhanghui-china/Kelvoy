@@ -59,7 +59,7 @@ export interface ShotCut {
   caption?: string;
 }
 
-/** New projects use integer-frame cuts; music never moves a shot boundary. */
+/** Existing fixed_1s projects use integer-frame cuts; music never moves a boundary. */
 export function planFixedCuts(shots: Shot[], fps: number): ShotCut[] {
   if (!Number.isInteger(fps) || fps <= 0) throw new Error("固定剪辑需要有效帧率");
   if (shots.length === 0) throw new Error("没有镜头可以合成");
@@ -104,6 +104,7 @@ export function planCuts(shots: Shot[], bpm: number): ShotCut[] {
       clip_key: shot.clip,
       trim_start_s: roundMs(Math.max(0, shot.trim_start_s ?? 0)),
       duration_s: alignToBeat(shot.duration_s, bpm),
+      caption: shot.caption ?? "",
     };
   });
 }

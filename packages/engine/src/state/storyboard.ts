@@ -36,7 +36,7 @@ export function editStoryboard(episode: Episode, edit: StoryboardEdit): Episode 
     if (!scenes.length) scenes = [{ id: "scene_default", name: "默认场景", time: "morning", landmarks: [] }];
     const draft = { ...edit.shot, scene: edit.shot.scene || scenes[0].id };
     if (!scenes.some(s => s.id === draft.scene)) throw new Error("invalid_scene");
-    shots.splice(index + 1, 0, { ...draft, shot_id: edit.shot_id, no: 0, duration_s: 1,
+    shots.splice(index + 1, 0, { ...draft, shot_id: edit.shot_id, no: 0, duration_s: episode.cut_policy === "long_3_6" ? 4 : 1,
       candidates: [], kf_selected: null, clip: null, trim_start_s: null, status: "draft",
       regen_stage: null, bad_shot_reported: false, model: {} });
   } else if (edit.type === "reorder") {

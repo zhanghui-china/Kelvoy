@@ -246,7 +246,7 @@ test("resolveArtifactPath accepts a normal nested key", () => {
   expect(result).toBe(join(tmpRoot, "projects", "e_1", "kf", "01_a.png"));
 });
 
-test("POST creates a fixed-cut draft with intro/outro off and enqueues a brief task", async () => {
+test("POST creates a long-cut draft with intro/outro off and enqueues a brief task", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertPersona(personaFixture("c_1", ownerId));
   await upsertDestination(destinationFixture("d_1"));
@@ -267,10 +267,10 @@ test("POST creates a fixed-cut draft with intro/outro off and enqueues a brief t
   expect(episode.persona_version).toBe(1);
   expect(episode.destination_version).toBe(1);
   expect(episode.mode).toBe("per_shot"); // FR-01: 默认逐镜
-  expect(episode.cut_policy).toBe("fixed_1s");
+  expect(episode.cut_policy).toBe("long_3_6");
   expect(episode.video_source).toBe("references");
   // FR-01/FR-09 粗估：建期这一刻没有真实镜数，estimateCost 用它的默认常量。
-  expect(episode.estimated_credits).toBe(estimateCreditQuote(3, 30, "references"));
+  expect(episode.estimated_credits).toBe(estimateCreditQuote(3, 7, "references"));
   expect(episode.estimated_credits).toBeGreaterThan(0);
   expect(episode.render.intro).toBeNull();
   expect(episode.render.outro).toBeNull();
@@ -330,7 +330,7 @@ test("POST saves independent name, requirements, aspect and candidate count", as
   expect(episode.brief.aspect).toBe("16:9");
   expect(episode.render.res).toBe("1920x1080");
   expect(episode.candidate_count).toBe(1);
-  expect(episode.estimated_credits).toBe(estimateCreditQuote(1, 30, "references"));
+  expect(episode.estimated_credits).toBe(estimateCreditQuote(1, 7, "references"));
 });
 
 test("POST rejects invalid aspect and candidate count", async () => {
@@ -388,7 +388,7 @@ test("POST honors an explicit season/tone/banned/mode over the defaults", async 
     banned: ["真人"],
   });
   expect(body.episode.mode).toBe("per_shot");
-  expect(body.episode.estimated_credits).toBe(estimateCreditQuote(3, 30, "references"));
+  expect(body.episode.estimated_credits).toBe(estimateCreditQuote(3, 7, "references"));
 });
 
 test("GET /estimate returns a cost estimate for a given mode without touching the db", async () => {

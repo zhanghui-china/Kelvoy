@@ -1,5 +1,5 @@
 import type { DestinationType } from "../schema/destination";
-import type { Scene, SceneTime, Shot, ShotCamera, ShotSize } from "../schema/episode";
+import type { Episode, Scene, SceneTime, Shot, ShotCamera, ShotSize } from "../schema/episode";
 import { checkContent, ContentBlockedError } from "../rules/content";
 import { checkScriptRules } from "../rules/script";
 import { SKELETONS } from "../templates/skeletons";
@@ -21,6 +21,7 @@ const SHOT_CAMERAS: ShotCamera[] = ["static", "pan", "push", "follow"];
 const SCENE_TIMES: SceneTime[] = ["morning", "noon", "afternoon", "evening", "night"];
 
 interface RawShot {
+  duration_s?: number;
   scene: string;
   time: SceneTime;
   size: ShotSize;
@@ -33,6 +34,8 @@ interface RawShot {
 }
 
 function buildPrompt(input: {
+  cutPolicy?: Episode["cut_policy"];
+  durationTotal: number;
   destinationType: DestinationType;
   destinationName: string;
   route: string[];
@@ -61,7 +64,7 @@ function buildPrompt(input: {
 季节：${input.season}　语气：${input.tone}
 画幅：${input.aspect}
 创作要求：${input.requirements || "无"}
-${input.previousShots ? `这是本期现有分镜，保留目的地与角色设定，保持当前镜数，重新创作完整分镜：${JSON.stringify(input.previousShots.map((shot) => ({ no: shot.no, beat: shot.beat, caption: shot.caption, landmark: shot.landmark })))}` : ""}
+${input.previousShots ? `这是本期现有分镜，保留目的地与角色设定，允许按优化指令增删镜头，重新创作完整分镜：${JSON.stringify(input.previousShots.map((shot) => ({ no: shot.no, beat: shot.beat, caption: shot.caption, landmark: shot.landmark, duration_s: shot.duration_s })))}` : ""}
 ${input.instruction ? `本次优化指令：${input.instruction}` : ""}
 禁止出现：${input.banned.join("、") || "无"}
 
@@ -69,7 +72,8 @@ ${input.instruction ? `本次优化指令：${input.instruction}` : ""}
 ${skeleton.notes}
 
 硬规则：
-- 镜数自由；首次生成可从约 28 镜开始，按创作要求调整；优化时允许按用户指令增加或删除镜头
+- 镜数自由；首次生成可从${input.cutPolicy === "long_3_6" ? "约 7–8 镜" : "约 28 镜"}开始，按创作要求调整；优化时允许按用户指令增加或删除镜头
+${input.cutPolicy === "long_3_6" ? `- 每镜建议时长 duration_s 必须为 3–6 秒的有限数值；目标成片约 ${input.durationTotal} 秒，片头片尾计入；优先让建议时长总和接近目标，镜数仍按创作要求自由调整` : ""}
 - 每镜一个动作 beat，不要塞多个动作
 - size 只能是 wide/medium/close/detail/pov 之一
 - landmark 可为 null；引用地标时必须是上面给的 id
@@ -78,7 +82,7 @@ ${skeleton.notes}
 - 不得出现政治、色情、暴力、违法、歧视内容及他人商标
 - scene 字段填这一镜所属的段落名（同一段落内的镜头用完全相同的字符串，用于后续分组）
 
-每个元素字段：scene, time, size, beat, caption, camera, landmark, kf_prompt, motion_prompt。
+每个元素字段：${input.cutPolicy === "long_3_6" ? "duration_s, " : ""}scene, time, size, beat, caption, camera, landmark, kf_prompt, motion_prompt。
 caption 是可以直接烧录到成片的一句简短中文字幕，不能重复冗长镜头描述。
 kf_prompt 是关键帧图片生成的描述（中文，一句话，含光线/机位/动作，不含角色外貌细节）。
 motion_prompt 是给视频阶段的运动提示（中文，一句话，只描述一个动作）。
@@ -94,7 +98,7 @@ function extractJsonArray(text: string): unknown {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-function parseRawShots(data: unknown): RawShot[] {
+function parseRawShots(data: unknown, cutPolicy?: Episode["cut_policy"]): RawShot[] {
   if (!Array.isArray(data)) throw new Error("StepFun 返回的不是数组");
   return data.map((item, i) => {
     if (typeof item !== "object" || item === null) throw new Error(`第 ${i + 1} 项不是对象`);
@@ -107,7 +111,11 @@ function parseRawShots(data: unknown): RawShot[] {
     if (r.landmark !== null && typeof r.landmark !== "string") throw new Error(`第 ${i + 1} 镜 landmark 字段类型不对`);
     if (typeof r.kf_prompt !== "string" || !r.kf_prompt) throw new Error(`第 ${i + 1} 镜 kf_prompt 缺失`);
     if (typeof r.motion_prompt !== "string" || !r.motion_prompt) throw new Error(`第 ${i + 1} 镜 motion_prompt 缺失`);
+    if (cutPolicy === "long_3_6" && (typeof r.duration_s !== "number" || !Number.isFinite(r.duration_s) || r.duration_s < 3 || r.duration_s > 6)) {
+      throw new Error(`第 ${i + 1} 镜 duration_s 必须为 3–6 秒的有限数值`);
+    }
     return {
+      duration_s: cutPolicy === "long_3_6" ? r.duration_s as number : undefined,
       scene: r.scene,
       time: r.time as SceneTime,
       size: r.size as ShotSize,
@@ -154,7 +162,7 @@ function buildScenesAndShots(raw: RawShot[], durationTotal: number): { shots: Sh
     landmark: r.landmark,
     kf_prompt: r.kf_prompt,
     motion_prompt: r.motion_prompt,
-    duration_s: durationPerShot,
+    duration_s: r.duration_s ?? durationPerShot,
     candidates: [],
     kf_selected: null,
     clip: null,
@@ -206,12 +214,14 @@ export async function callChatCompletion(prompt: string, signal?: AbortSignal): 
 }
 
 export const stepfunScriptProvider: ScriptProvider = {
-  async generateShots({ brief, destination, instruction, previousShots }) {
+  async generateShots({ brief, destination, instruction, previousShots, cutPolicy }) {
     let feedback: string | undefined;
     let contentViolations: ReturnType<typeof checkShotsContent> = [];
 
     for (let round = 1; round <= MAX_CORRECTION_ROUNDS; round++) {
       const prompt = buildPrompt({
+        cutPolicy,
+        durationTotal: brief.duration_s,
         destinationType: destination.type,
         destinationName: destination.name,
         route: destination.route,
@@ -228,7 +238,7 @@ export const stepfunScriptProvider: ScriptProvider = {
       });
 
       const content = await callChatCompletion(prompt);
-      const raw = parseRawShots(extractJsonArray(content));
+      const raw = parseRawShots(extractJsonArray(content), cutPolicy);
       const { shots, scenes } = buildScenesAndShots(raw, brief.duration_s);
 
       const ruleViolations = checkScriptRules(shots, destination);

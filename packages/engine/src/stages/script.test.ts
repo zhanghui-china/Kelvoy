@@ -89,7 +89,7 @@ test("advances scripting -> script_review and fills shots/scenes", async () => {
   expect(updated.scenes).toHaveLength(1);
 });
 
-test("new projects get one-second shots and editable generated captions", async () => {
+test("fixed-cut projects get one-second shots and editable generated captions", async () => {
   const updated = await runScript({ ...fixtureEpisode(), cut_policy: "fixed_1s" }, undefined, { destination });
   expect(updated.shots).toHaveLength(26);
   expect(updated.shots.every((shot) => shot.duration_s === 1)).toBe(true);
@@ -131,4 +131,18 @@ test("throws ContentBlockedError before calling the provider when brief.banned h
 test("throws (via state machine) when the episode isn't in scripting", async () => {
   const episode = { ...fixtureEpisode(), status: "done" as const };
   await expect(runScript(episode, undefined, { destination })).rejects.toThrow();
+});
+
+
+test("long generation and revision retain per-shot suggestions", async () => {
+  let prompt = "";
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    prompt = JSON.parse(init!.body as string).messages[0].content;
+    return Response.json({ choices: [{ message: { content: JSON.stringify(validRawShots().slice(0, 7).map((s, i) => ({ ...s, duration_s: 3 + i / 2 }))) } }] });
+  }) as unknown as typeof fetch;
+  const generated = await runScript({ ...fixtureEpisode(), cut_policy: "long_3_6" }, undefined, { destination });
+  expect(generated.shots.map(s => s.duration_s)).toEqual([3, 3.5, 4, 4.5, 5, 5.5, 6]);
+  expect(prompt).toContain("约 7–8 镜");
+  const revised = await runScriptRevision(generated, "修改动作", { destination });
+  expect(revised.shots.map(s => s.duration_s)).toEqual(generated.shots.map(s => s.duration_s));
 });

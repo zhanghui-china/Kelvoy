@@ -15,7 +15,7 @@ export default function LandingHero({ destinationCount }: { destinationCount: nu
           </div>
           <div className="k-lp-hero-stats" aria-label="创作参数">
             <div><strong>镜数自由</strong><span>按创意增删</span></div>
-            <div><strong>1 秒</strong><span>每镜成片时长</span></div>
+            <div><strong>3–6 秒</strong><span>每镜成片时长</span></div>
             <div><strong>{destinationCount ?? "—"}</strong><span>已入库目的地</span></div>
           </div>
         </div>

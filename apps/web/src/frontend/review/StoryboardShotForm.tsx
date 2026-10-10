@@ -101,6 +101,7 @@ export default function StoryboardShotForm({ episode, destination, initial, muta
       </fieldset>
     </>}
     {(captionOnly || afterId !== undefined) && <fieldset disabled={(locked && !taskId) || mutation.pending}><legend>成片字幕</legend>
+      <p className="k-card-meta">保存后需合成／重新合成才会更新成片，空字幕不显示。</p>
       <label className="k-field">字幕（可留空）<textarea value={draft.caption ?? ""} maxLength={120} onChange={(e) => update("caption", e.target.value)} /></label>
     </fieldset>}
     {afterId !== undefined && <div className="k-card">
@@ -112,7 +113,7 @@ export default function StoryboardShotForm({ episode, destination, initial, muta
     </div>}
     {error && <p className="k-error" role="alert">{error}</p>}
     <div className="k-desk-actions">
-      <button type="submit" className="k-btn k-btn-primary" disabled={submittingDisabled}>{mutation.pending ? "保存中…" : afterId !== undefined ? "确认插入" : "保存修改"}</button>
+      <button type="submit" className="k-btn k-btn-primary" disabled={submittingDisabled}>{mutation.pending ? "保存中…" : afterId !== undefined ? "确认插入" : captionOnly ? "保存字幕" : "保存修改"}</button>
       <button type="button" className="k-btn k-btn-secondary" disabled={Boolean(taskId) || mutation.pending} onClick={onCancel}>取消</button>
     </div>
   </form>;

@@ -174,7 +174,7 @@ test("optimization prompt permits adding and removing shots and omits quotas", a
   expect(result.shots).toHaveLength(3);
   expect(prompt).toContain("精简到 3 镜");
   expect(prompt).toContain("允许按用户指令增加或删除镜头");
-  for (const quota of ["优化保留当前镜数", "镜头类型配比", "至少 5 镜", "连续超过 2 镜", "写一份 26 镜"]) expect(prompt).not.toContain(quota);
+  for (const quota of ["保持当前镜数", "优化保留当前镜数", "镜头类型配比", "至少 5 镜", "连续超过 2 镜", "写一份 26 镜"]) expect(prompt).not.toContain(quota);
 });
 
 test.each([{ scene: "" }, { time: "dawn" }, { size: "invalid" }, { camera: "invalid" }, { beat: "" }, { kf_prompt: "" }, { motion_prompt: "" }])("rejects invalid generated fields %j", async (patch) => {
@@ -193,4 +193,39 @@ test("first generation prompt treats 28 shots as a flexible starting point", asy
   expect(prompt).toContain("首次生成可从约 28 镜开始");
   expect(prompt).not.toContain("镜头类型配比");
   expect(prompt).not.toContain("写一份 28 镜");
+});
+
+
+test.each([1, 7, 8, 12])("long policy preserves suggested durations for %i shots without a quota", async count => {
+  let prompt = "";
+  const raw = buildValidRawShots(count).map((s, i) => ({ ...s, duration_s: [3, 4.25, 6][i % 3] }));
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    prompt = JSON.parse(init!.body as string).messages[0].content;
+    return Response.json({ choices: [{ message: { content: JSON.stringify(raw) } }] });
+  }) as unknown as typeof fetch;
+  const result = await stepfunScriptProvider.generateShots({ brief, destination, cutPolicy: "long_3_6" });
+  expect(result.shots.map(s => s.duration_s)).toEqual(raw.map(s => s.duration_s!));
+  expect(prompt).toContain("约 7–8 镜");
+  expect(prompt).toContain("3–6 秒");
+  expect(prompt).not.toContain("约 28 镜");
+});
+
+test.each([undefined, null, "4", 2.99, 6.01, Number.NaN, Infinity])("long policy rejects invalid suggestion %j", async duration_s => {
+  mockFetchOnce(JSON.stringify(buildValidRawShots(1).map(s => ({ ...s, duration_s }))));
+  await expect(stepfunScriptProvider.generateShots({ brief, destination, cutPolicy: "long_3_6" }))
+    .rejects.toThrow("duration_s 必须为 3–6 秒的有限数值");
+});
+
+test("long optimization preserves new durations while changing the shot count", async () => {
+  mockFetchOnce(JSON.stringify(buildValidRawShots(7).map(s => ({ ...s, duration_s: 4 }))));
+  const previous = await stepfunScriptProvider.generateShots({ brief, destination, cutPolicy: "long_3_6" });
+  let prompt = "";
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    prompt = JSON.parse(init!.body as string).messages[0].content;
+    return Response.json({ choices: [{ message: { content: JSON.stringify(buildValidRawShots(11).map(s => ({ ...s, duration_s: 3.5 }))) } }] });
+  }) as unknown as typeof fetch;
+  const result = await stepfunScriptProvider.generateShots({ brief, destination, cutPolicy: "long_3_6", previousShots: previous.shots, instruction: "增加到 11 镜" });
+  expect(result.shots).toHaveLength(11);
+  expect(result.shots.every(s => s.duration_s === 3.5)).toBe(true);
+  expect(prompt).not.toContain("保持当前镜数");
 });
