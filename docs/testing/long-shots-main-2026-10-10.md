@@ -19,7 +19,7 @@ H3 生视频仍只生成 4–5 秒素材，所以 6 秒剪辑仅适用于已有�
 ## 自动与真实媒体验证
 
 - `make typecheck`：五个 TypeScript workspace 通过。
-- `make test`：950 个 Bun 测试通过；100 个 Python 测试通过。保留既有 Starlette/httpx 弃用警告。
+- `make test`：951 个 Bun 测试通过；100 个 Python 测试通过。保留既有 Starlette/httpx 弃用警告。
 - `bun run build`：生产 Vite 构建通过。
 - `UV_NO_SYNC=1 UV_CACHE_DIR=/tmp/kelvoy-long-uv-cache make lint`：Ruff 通过。使用现有受管理 Python 环境，避免 worktree 路径触发重复依赖构建。
 - `git diff --check`：通过。
@@ -43,5 +43,7 @@ Chrome 使用独立临时数据库 `/private/tmp/kelvoy-long-browser/test.db`、
 ## 生产旧长镜副本验收依赖
 
 生产完整旧作品 JSON 与素材时长导出到本地的只读动作被自动审批拒绝，理由是完整作品内容可能敏感、认为本地保存目的地未被明确授权。已向用户请求授权，未经授权没有通过其他路径导出。旧长镜行为已有合成计划和历史解码测试，真实生产副本的读取、编辑、合成计划验收仍待授权，不能据此宣称已通过。
+
+本地合并提交 `a8f1bc3`（实现提交 `e772b15`），合并后的 main 再次通过类型检查、951 个 Bun 测试、100 个 Python 测试、生产构建与 Ruff。
 
 本次仅本地合并，不推送、不部署两台机器、不改原作品。后续生产部署必须完成真实旧长镜作品行为兼容验收。
