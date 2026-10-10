@@ -14,7 +14,7 @@ export default function LandingHero({ destinationCount }: { destinationCount: nu
             <a href="#how" className="k-lp-button-secondary">了解创作流程 <span aria-hidden="true">↗</span></a>
           </div>
           <div className="k-lp-hero-stats" aria-label="创作参数">
-            <div><strong>24–30</strong><span>镜头 / 期</span></div>
+            <div><strong>镜数自由</strong><span>按创意增删</span></div>
             <div><strong>1 秒</strong><span>每镜成片时长</span></div>
             <div><strong>{destinationCount ?? "—"}</strong><span>已入库目的地</span></div>
           </div>

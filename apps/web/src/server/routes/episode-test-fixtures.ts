@@ -58,9 +58,7 @@ export function shotFixture(no: number, overrides: Partial<Shot> = {}): Shot {
 
 const SHOT_SIZES: ShotSize[] = ["wide", "medium", "close"];
 
-// FR-02 结构规则 (MIN_SHOTS=24, MAX_SAME_SIZE_RUN=2, MIN_LANDMARK_SHOTS=5)
-// compliant fixture — cycling sizes avoids same-size runs, first
-// `landmarkCount` shots reference destinationFixture()'s one landmark ("l1").
+// Varied shot fixture; landmark references come from destinationFixture().
 export function compliantShots(count: number, landmarkCount = 5): Shot[] {
   return Array.from({ length: count }, (_, i) =>
     shotFixture(i + 1, {

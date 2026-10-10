@@ -23,7 +23,7 @@ Kelvoy is an **AI travel-vlog production workbench for "virtual character × rea
 Users pick one virtual on-camera character and one scenic-level destination; the system then automatically handles:
 
 - Destination symbol-pack retrieval and narrative-skeleton generation;
-- A 24–30-shot storyboard script with per-shot captions;
+- A freely editable storyboard script (about 28 shots as an initial starting point) with per-shot captions;
 - Either creation path:
   - **Direct path (default for new projects)**: character reference image + landmark photo go straight to dual-reference video generation, skipping image generation entirely;
   - **Classic path**: 1–3 keyframe candidates per shot → manual selection → image-to-video;
@@ -31,7 +31,7 @@ Users pick one virtual on-camera character and one scenic-level destination; the
 - Fixed one-second-per-shot cutting (30 frames @30fps), LUT grading, subtitles, transitions, intro/outro, and AI labeling in the compose stage;
 - Final-cut delivery, versioning, share links, and credit/usage reporting.
 
-Each episode delivers a **24–30-shot, one-second-per-shot, ~30-second travel vlog in 9:16 portrait (default) or 16:9 landscape**; the same character can be reused across destinations, forming the content of a serialized travel account.
+Each episode delivers a **travel vlog with freely adjustable shot count and one second per shot in 9:16 portrait (default) or 16:9 landscape**; the same character can be reused across destinations, forming the content of a serialized travel account.
 
 **Core slogan**:
 
@@ -65,7 +65,7 @@ Production is decomposed into a **six-stage pipeline** with human review gates, 
 | Stage | Name | Output | Review gate |
 |---|---|---|---|
 | Brief | Project creation | Character + destination + season + template + aspect + creation mode | — |
-| S1 | Script generation | 24–30-shot storyboard JSON (with per-shot captions) | Review 1: revise script |
+| S1 | Script generation | Storyboard JSON with freely adjustable shot count (with per-shot captions) | Review 1: revise script |
 | S2 | Character assets | Reference set + character card (version snapshot) | — |
 | S3 | Keyframe generation (classic path) | 1–3 candidates per shot, 9:16 / 16:9 | Review 2: pick keyframes |
 | S4 | Video generation | 3–5s clip per shot (for a strict 1s cut) | Review 3: pick clips |
@@ -258,7 +258,7 @@ Any generating state may enter `failed`; marking regeneration in reviews 2/3 mov
 
 | Stage | Implementation | Model / service | Notes |
 |---|---|---|---|
-| Script / storyboard | `providers/stepfun-llm.ts` | StepFun API (`STEPFUN_API_KEY`) | brief + destination pack → 24–30-shot JSON (with captions); structured output + schema validation; landmark entries must come from the destination library; supports instruction-based regeneration |
+| Script / storyboard | `providers/stepfun-llm.ts` | StepFun API (`STEPFUN_API_KEY`) | brief + destination pack → flexible-shot-count JSON (with captions); structured output + schema validation; landmark entries must come from the destination library; supports instruction-based regeneration |
 | Keyframes (classic) | `services/inference /image/` → ComfyUI | Qwen-Image 2.1 (single ref = character; dual ref = character + landmark) | 1–3 candidates per shot; 9:16 / 16:9; 240s generation budget |
 | Image-to-video (classic) | `services/inference /video/` → ComfyUI | MiniMax H3 single-reference (approved keyframe) | 3–5s material cut to 1s; 240s budget |
 | Dual-reference direct (default) | `services/inference /video/` → ComfyUI | MiniMax H3 dual-reference (character + scene) | 3–5s material cut to 1s; 270s budget; no image credits |

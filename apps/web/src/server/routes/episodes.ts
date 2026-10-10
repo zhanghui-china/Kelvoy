@@ -2,7 +2,6 @@ import { join, resolve, sep } from "node:path";
 import type { Episode, Template } from "@kelvoy/engine";
 import {
   checkContent,
-  checkScriptRules,
   estimateCost,
   SETTINGS_CANDIDATES_MAX,
   SETTINGS_CANDIDATES_MIN,
@@ -205,7 +204,7 @@ episodes.get("/:id", async (c) => {
     destination_history_approximate: destinationRevision?.compatibility_approximation ?? false,
     row_version: result.row_version, failed_task,
     storyboard_busy: storyboardBusy(result.episode.episode_id),
-    storyboard_warnings: destinationRevision ? checkScriptRules(result.episode.shots, destinationRevision.destination).filter(v => v.rule !== "landmark_reference").map(v => v.message) : [],
+    storyboard_warnings: [],
     storyboard_prices: { script: getCreditPrice("script"), image: getCreditPrice("image"), video: getCreditPrice("video"), compose: getCreditPrice("compose") } });
 });
 

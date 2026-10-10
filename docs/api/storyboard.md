@@ -15,7 +15,7 @@
 
 404 表示期／镜头／任务不可见；400 表示非法输入、状态、排序、引用或 `action_pending`；409 为 `storyboard_busy` 或 `version_conflict`，返回 current_row_version；AI 或生成余额不足 402。内容仍受现有安全规则限制。所有输入及参考引用在 store 事务内重新校验。
 
-期详情新增 `storyboard_busy`、`storyboard_warnings:string[]`、`storyboard_prices:{script,image,video,compose}`。24–30 镜、地标数量、景别连续只作人工创作建议，至少一镜且所有必填完整才可继续。`Episode.final_needs_recompose` 与 `shared_storyboard` 表示修改后的期仍保有上一版成片及分镜；成功合成后同时替换。
+期详情新增 `storyboard_busy`、`storyboard_warnings:string[]`、`storyboard_prices:{script,image,video,compose}`。保留 `storyboard_warnings` 接口字段；镜数、地标数量及景别连续不再产生提示，也不触发 AI 重写。首次约 28 镜仅为创作起点，优化允许按用户指令增删镜头；至少一镜且字段、场景、地标引用及内容有效才可继续。`Episode.final_needs_recompose` 与 `shared_storyboard` 表示修改后的期仍保有上一版成片及分镜；成功合成后同时替换。
 
 保存内容或结构后回到 script_review；继续只为缺失图片／视频排队并预留积分，有候选图时要求选择，有有效未审片段时直接回片段审核，全部有效且批准时进入 compose_ready。手工编辑免费，AI 建议按 script 单价预留／结算，失败释放；结果先供用户确认，不自动插入。
 

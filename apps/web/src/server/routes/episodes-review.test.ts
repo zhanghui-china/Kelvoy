@@ -172,7 +172,7 @@ test("POST /:id/shots/:no/remove permits shorter manual scripts", async () => {
   expect(((await got.json()) as { episode: Episode }).episode.shots).toHaveLength(23);
 });
 
-test("POST /:id/shots/:no/remove permits coverage warnings", async () => {
+test("POST /:id/shots/:no/remove permits removing landmark shots", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);
@@ -415,7 +415,7 @@ test("a delayed reorder cannot erase a script action by sending its newer row ve
   expect(saved.row_version).toBe(2);
 });
 
-test("POST /:id/shots/reorder permits size-run warnings", async () => {
+test("POST /:id/shots/reorder permits consecutive shots of the same size", async () => {
   const { cookie, ownerId } = await login("dannei");
   await upsertDestination(destinationFixture("d_1"));
   const episode = fixture("e_1", ownerId);

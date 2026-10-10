@@ -38,7 +38,7 @@ flowchart LR
 |---|---|
 | `packages/engine` schema(Persona/Destination/Episode) | 类型已按 PRD §6 落实,`schema/validate.ts` 有运行时校验 |
 | `packages/engine` state(状态机) | Episode/Shot 转移函数 + 合法性判断已完成，有测试 |
-| `packages/engine` rules(FR-02) | 镜数/景别连续/地标覆盖/地标引用规则已实现 |
+| `packages/engine` rules(FR-02) | 仅校验地标引用；镜数、景别连续和地标覆盖无配额及告警 |
 | `packages/engine` stages/providers | brief/script/assets/keyframe/video/compose 主流程已实现；engine 产出生成及合成请求，实际推理与 ffmpeg 由 Worker 注入；模型契约和真机验收仍待完成 |
 | `packages/store` | SQLite 期/目录/任务/积分；目的地版本快照、一次性旧库回填和任务结果事务见 [ADR-0007](decisions/0007-transactional-results-and-catalog-snapshots.md) |
 | `apps/web` | Hono 账号、期、审核、上传、分享 API 与 React 前端已实现；首页/作品页使用概览列表，性能和交互审计仍在进行 |

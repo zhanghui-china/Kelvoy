@@ -63,24 +63,28 @@ function wellFormedShots(): Shot[] {
 }
 
 describe("checkScriptRules", () => {
+  test.each([1, 10, 23, 31, 40])("accepts %i same-size shots without landmarks", (count) => {
+    expect(checkScriptRules(Array.from({ length: count }, (_, i) => makeShot(i + 1)), makeDestination([]))).toEqual([]);
+  });
+
   test("accepts a well-formed 30-shot script", () => {
     const violations = checkScriptRules(wellFormedShots(), makeDestination(["l1"]));
     expect(violations).toEqual([]);
   });
 
-  test("flags too few shots", () => {
+  test("accepts fewer than 24 shots", () => {
     const shots = wellFormedShots().slice(0, 20);
     const violations = checkScriptRules(shots, makeDestination(["l1"]));
-    expect(violations.some((v) => v.rule === "shot_count")).toBe(true);
+    expect(violations).toEqual([]);
   });
 
-  test("flags too many shots", () => {
+  test("accepts more than 30 shots", () => {
     const shots = [...wellFormedShots(), makeShot(31, { size: "pov" })];
     const violations = checkScriptRules(shots, makeDestination(["l1"]));
-    expect(violations.some((v) => v.rule === "shot_count")).toBe(true);
+    expect(violations).toEqual([]);
   });
 
-  test("flags a same-size run longer than 2", () => {
+  test("accepts consecutive shots of the same size", () => {
     const shots = [
       makeShot(1, { size: "wide" }),
       makeShot(2, { size: "wide" }),
@@ -88,13 +92,13 @@ describe("checkScriptRules", () => {
       ...wellFormedShots().slice(3),
     ];
     const violations = checkScriptRules(shots, makeDestination(["l1"]));
-    expect(violations.some((v) => v.rule === "size_run")).toBe(true);
+    expect(violations).toEqual([]);
   });
 
-  test("flags too few landmark shots", () => {
+  test("accepts scripts without landmark shots", () => {
     const shots = wellFormedShots().map((s) => ({ ...s, landmark: null }));
     const violations = checkScriptRules(shots, makeDestination(["l1"]));
-    expect(violations.some((v) => v.rule === "landmark_coverage")).toBe(true);
+    expect(violations).toEqual([]);
   });
 
   test("flags a landmark reference that doesn't exist in the destination", () => {
@@ -111,8 +115,7 @@ describe("checkScriptRules", () => {
       removed_shots: [],
     } as unknown as Episode;
 
-    // Remove a non-landmark shot (no. 30) to stay above MIN_SHOTS and keep
-    // landmark coverage intact.
+    // Deletion preserves valid landmark references.
     const after = removeShot(episode, 30);
     const violations = checkScriptRules(after.shots, makeDestination(["l1"]));
     expect(violations).toEqual([]);

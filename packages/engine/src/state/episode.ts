@@ -151,7 +151,7 @@ export function removeShot(episode: Episode, shotNo: number): Episode {
  * than leaving it to the caller.
  *
  * Returns a new Episode; does not mutate the input. FR-02 re-validation
- * (size_run changes when shots move) is the caller's job, same as
+ * is the caller's job, same as
  * removeShot.
  */
 export function reorderShots(episode: Episode, order: number[]): Episode {

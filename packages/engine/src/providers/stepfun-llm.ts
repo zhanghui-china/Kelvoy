@@ -52,7 +52,7 @@ function buildPrompt(input: {
     .map((l) => `${l.id}（${l.name}${l.must_keep?.length ? "，须保真：" + l.must_keep.join("/") : ""}）`)
     .join("；");
 
-  return `你是旅行 vlog 分镜师。给下面这个目的地写一份 ${input.previousShots?.length || 28} 镜的分镜表，JSON 数组格式，不要任何 JSON 之外的文字。
+  return `你是旅行 vlog 分镜师。给下面这个目的地写一份分镜表，JSON 数组格式，不要任何 JSON 之外的文字。
 
 目的地：${input.destinationName}（类型：${input.destinationType}）
 动线：${input.route.join(" → ") || "无固定动线，自行安排"}
@@ -66,14 +66,13 @@ ${input.instruction ? `本次优化指令：${input.instruction}` : ""}
 禁止出现：${input.banned.join("、") || "无"}
 
 叙事骨架（段落顺序参考，不用照抄段落名，用于把握节奏）：${skeleton.segments.join(" → ")}
-镜头类型配比参考：地标 ${skeleton.shot_mix.landmark} / 美食 ${skeleton.shot_mix.food} / 人物动作 ${skeleton.shot_mix.action} / 氛围空镜 ${skeleton.shot_mix.atmosphere} / 转场 ${skeleton.shot_mix.transition}
 ${skeleton.notes}
 
 硬规则：
-- ${input.previousShots?.length || 28} 镜（首次生成默认 28 镜，优化保留当前镜数）
+- 镜数自由；首次生成可从约 28 镜开始，按创作要求调整；优化时允许按用户指令增加或删除镜头
 - 每镜一个动作 beat，不要塞多个动作
-- 建议景别（size）不要连续超过 2 镜相同，size 只能是 wide/medium/close/detail/pov 之一
-- 建议至少 5 镜的 landmark 字段非 null，且必须是上面给的 id
+- size 只能是 wide/medium/close/detail/pov 之一
+- landmark 可为 null；引用地标时必须是上面给的 id
 - camera 只能是 static/pan/push/follow 之一；time 只能是 morning/noon/afternoon/evening/night 之一，按段落推进順序递进
 - 画面里不能出现可读文字、不能出现真人（vlog 角色除外，角色由后续阶段用参考图控制，这里的 kf_prompt 不用具体描述角色外貌）
 - 不得出现政治、色情、暴力、违法、歧视内容及他人商标
@@ -232,7 +231,7 @@ export const stepfunScriptProvider: ScriptProvider = {
       const raw = parseRawShots(extractJsonArray(content));
       const { shots, scenes } = buildScenesAndShots(raw, brief.duration_s);
 
-      const ruleViolations = checkScriptRules(shots, destination).filter(violation => !previousShots || violation.rule === "landmark_reference");
+      const ruleViolations = checkScriptRules(shots, destination);
       contentViolations = checkShotsContent(shots);
       if (ruleViolations.length === 0 && contentViolations.length === 0) {
         return { shots, scenes };

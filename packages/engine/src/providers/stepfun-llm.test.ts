@@ -31,8 +31,7 @@ const brief: EpisodeBrief = {
   banned: [],
 };
 
-// 5 个景别循环，保证任何长度下都不会连续 2 镜以上同景别 —— checkScriptRules
-// 的 size_run 检查天然通过，测试焦点不在这条规则上。
+// 使用不同景别提供基础输出夹具。
 const SIZES = ["wide", "medium", "close", "detail", "pov"] as const;
 
 function buildValidRawShots(count: number, landmarkEvery = 5) {
@@ -83,12 +82,12 @@ test("generateShots returns shots+scenes when the first round already passes the
 });
 
 test("retries with rule-violation feedback and succeeds on a later round", async () => {
-  const tooFew = buildValidRawShots(10); // 违反最少 24 镜
+  const invalid = buildValidRawShots(10).map(s => ({ ...s, landmark: "unknown" }));
   const valid = buildValidRawShots(26);
   let call = 0;
   (globalThis as { fetch: typeof fetch }).fetch = (async () => {
     call += 1;
-    const raw = call === 1 ? tooFew : valid;
+    const raw = call === 1 ? invalid : valid;
     return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(raw) } }] }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -130,8 +129,8 @@ test("throws ContentBlockedError after exhausting all correction rounds while st
 });
 
 test("throws after exhausting all correction rounds", async () => {
-  const alwaysTooFew = buildValidRawShots(5);
-  mockFetchOnce(JSON.stringify(alwaysTooFew));
+  const invalid = buildValidRawShots(5).map(s => ({ ...s, landmark: "unknown" }));
+  mockFetchOnce(JSON.stringify(invalid));
 
   await expect(stepfunScriptProvider.generateShots({ brief, destination })).rejects.toThrow("3 轮自动修正后仍不满足规则");
 });
@@ -148,4 +147,50 @@ test("throws when a landmark id isn't in the destination's landmark list", async
   await expect(stepfunScriptProvider.generateShots({ brief, destination })).rejects.toThrow(
     "3 轮自动修正后仍不满足规则",
   );
+});
+
+
+test.each([1, 10, 23, 31, 40])("first generation accepts %i same-size shots without landmarks in one call", async (count) => {
+  const raw = buildValidRawShots(count).map(s => ({ ...s, size: "wide", landmark: null }));
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls++;
+    return Response.json({ choices: [{ message: { content: JSON.stringify(raw) } }] });
+  }) as unknown as typeof fetch;
+  const result = await stepfunScriptProvider.generateShots({ brief, destination });
+  expect(result.shots).toHaveLength(count);
+  expect(calls).toBe(1);
+});
+
+test("optimization prompt permits adding and removing shots and omits quotas", async () => {
+  mockFetchOnce(JSON.stringify(buildValidRawShots(26)));
+  const previous = await stepfunScriptProvider.generateShots({ brief, destination });
+  let prompt = "";
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    prompt = JSON.parse(init!.body as string).messages[0].content;
+    return Response.json({ choices: [{ message: { content: JSON.stringify(buildValidRawShots(3).map(s => ({ ...s, landmark: null }))) } }] });
+  }) as unknown as typeof fetch;
+  const result = await stepfunScriptProvider.generateShots({ brief, destination, previousShots: previous.shots, instruction: "精简到 3 镜" });
+  expect(result.shots).toHaveLength(3);
+  expect(prompt).toContain("精简到 3 镜");
+  expect(prompt).toContain("允许按用户指令增加或删除镜头");
+  for (const quota of ["优化保留当前镜数", "镜头类型配比", "至少 5 镜", "连续超过 2 镜", "写一份 26 镜"]) expect(prompt).not.toContain(quota);
+});
+
+test.each([{ scene: "" }, { time: "dawn" }, { size: "invalid" }, { camera: "invalid" }, { beat: "" }, { kf_prompt: "" }, { motion_prompt: "" }])("rejects invalid generated fields %j", async (patch) => {
+  mockFetchOnce(JSON.stringify(buildValidRawShots(1).map(s => ({ ...s, ...patch }))));
+  await expect(stepfunScriptProvider.generateShots({ brief, destination })).rejects.toThrow();
+});
+
+
+test("first generation prompt treats 28 shots as a flexible starting point", async () => {
+  let prompt = "";
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    prompt = JSON.parse(init!.body as string).messages[0].content;
+    return Response.json({ choices: [{ message: { content: JSON.stringify(buildValidRawShots(1)) } }] });
+  }) as unknown as typeof fetch;
+  await stepfunScriptProvider.generateShots({ brief, destination });
+  expect(prompt).toContain("首次生成可从约 28 镜开始");
+  expect(prompt).not.toContain("镜头类型配比");
+  expect(prompt).not.toContain("写一份 28 镜");
 });
