@@ -1,0 +1,20 @@
+[Unit]
+Description=Kelvoy official Qwen image prompt enhancer (isolated)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home1/huntun/kelvoy-qwen-pe
+ExecStart=/bin/bash /home1/huntun/kelvoy-qwen-pe/serve-qwen-pe.sh
+Restart=on-failure
+RestartSec=15
+KillMode=control-group
+TimeoutStopSec=30
+MemoryHigh=44G
+MemoryMax=48G
+Environment=PYTHONUNBUFFERED=1
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+
+[Install]
+WantedBy=default.target

@@ -133,3 +133,27 @@ test.each([
   expect(ready.episode.credits_used).toBe(price);
   expect(await dequeueTask()).toBeNull();
 });
+
+test("Qwen rewrite failures refund the existing image reservation and preserve approved media", async () => {
+  const ep = { ...fixtureEpisode("e_qwen_failure"), status: "kf_review" as const,
+    shots: [{ ...shotFixture(), status: "failed" as const }, { ...shotFixture(), no: 2, status: "approved" as const, candidates: ["kf/kept.png"], kf_selected: "kf/kept.png", clip: "clip/kept.mp4" }] };
+  await insertEpisode(ep);
+  await insertPersona({ ...personaFixture("c_test"), refs: ["p/front.png"] });
+  await upsertDestination({ ...destinationFixture("d_test"), landmarks: [{ id: "l1", name: "地标", refs: ["d/a.jpg"], best_time: "上午" }] });
+  getDb().query("insert into users (user_id, username, password_hash) values ('u_test', 'qwen-fail', 'hash')").run();
+  await enqueueTask({ episode_id: ep.episode_id, stage: "keyframe", shot_no: 1 });
+  getDb().query("update tasks set status = 'failed' where episode_id = ?").run(ep.episode_id);
+  grantCredits(ep.owner_id, 2, "qwen-failure-credit");
+  expect(submitFailedTaskRetry({ episode_id: ep.episode_id, owner_id: ep.owner_id, row_version: 1 }).ok).toBe(true);
+  let calls = 0;
+  const overrides = { imagePromptWriter: { async write(): Promise<never> { throw new Error("Qwen image rewrite timed out"); } }, keyframe: { async generate(): Promise<never> { calls++; throw new Error("must not submit"); } } };
+  await handleTask((await dequeueTask())!, overrides);
+  await handleTask((await dequeueTask())!, overrides);
+  expect(calls).toBe(0);
+  const result = await getEpisode(ep.episode_id);
+  if (!result.ok) throw new Error("missing episode");
+  expect(result.episode.shots[0]?.status).toBe("failed");
+  expect(result.episode.shots[1]).toMatchObject({ status: "approved", kf_selected: "kf/kept.png", clip: "clip/kept.mp4" });
+  expect(result.episode.credits_used).toBe(0);
+  expect(getDb().query("select available, reserved from credit_accounts where user_id = 'u_test'").get()).toEqual({ available: 2, reserved: 0 });
+});

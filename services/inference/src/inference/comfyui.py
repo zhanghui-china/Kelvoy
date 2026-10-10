@@ -180,6 +180,7 @@ async def _generate_once(
     duration_s: int = 5,
     client: httpx.AsyncClient | None = None,
     aspect: str = "9:16",
+    expected_ref_hashes: list[str] | None = None,
 ) -> InferenceResponse:
     if kind not in ("image", "video", "video_reference"):
         raise ValueError("unsupported workflow")
@@ -197,6 +198,11 @@ async def _generate_once(
     if kind in ("video", "video_reference") and shutil.which("ffmpeg") is None:
         raise ComfyUIError(503, "ffmpeg is required for video validation")
     inputs = [resolve_reference(projects_root, key) for key in refs]
+    reference_blobs = None
+    if expected_ref_hashes is not None:
+        # Upload the exact checked bytes, avoiding a hash/upload file replacement race.
+        from inference.image_rewrite import reference_bytes
+        reference_blobs = reference_bytes(projects_root, refs, expected_ref_hashes)
     template_kind = "image_single" if kind == "image" and len(refs) == 1 else kind
     filename, output_node, output_key, extension = TEMPLATES[template_kind]
     template_bytes = (BRIDGE / filename).read_bytes()
@@ -210,11 +216,15 @@ async def _generate_once(
     started = time.monotonic()
     try:
         uploaded = []
-        for source in inputs:
+        for index, source in enumerate(inputs):
             with source.open("rb") as file:
                 response = await client.post(
                     "/upload/image",
-                    files={"image": (source.name, file, "application/octet-stream")},
+                    files={"image": (
+                        source.name,
+                        reference_blobs[index] if reference_blobs is not None else file,
+                        "application/octet-stream",
+                    )},
                     data={"overwrite": "false"},
                 )
             response.raise_for_status()
@@ -337,6 +347,7 @@ async def generate(
     timeout_s: float | None = None,
     client: httpx.AsyncClient | None = None,
     aspect: str = "9:16",
+    expected_ref_hashes: list[str] | None = None,
 ) -> InferenceResponse:
     """Enforce one generation deadline, followed by bounded targeted cancellation."""
     if timeout_s is None:
@@ -344,7 +355,7 @@ async def generate(
     try:
         return await asyncio.wait_for(
             _generate_once(kind, prompt, refs, projects_root, base_url, seed, duration_s,
-                           client, aspect),
+                           client, aspect, expected_ref_hashes),
             timeout=timeout_s,
         )
     except TimeoutError as exc:

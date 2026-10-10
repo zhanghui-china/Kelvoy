@@ -10,6 +10,7 @@ export interface InferenceRequest {
   prompt: string;
   comfyui_base_url?: string | null;
   refs?: string[];
+  expected_ref_hashes?: string[];
   seed?: number;
   size?: string;
   count?: number;

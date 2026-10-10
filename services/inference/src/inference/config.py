@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     backend_allowed_origins: str = Field(
         default="", validation_alias="KELVOY_BACKEND_ALLOWED_ORIGINS"
     )
+    image_rewrite_enabled: bool = Field(
+        default=False, validation_alias="KELVOY_IMAGE_REWRITE_ENABLED"
+    )
+    image_rewrite_url: str = Field(
+        default="http://127.0.0.1:8110/v1", validation_alias="KELVOY_IMAGE_REWRITE_URL"
+    )
     host: str = "127.0.0.1"
     # 8000 is taken by visionary-backend on the shared DGX (gx10-8e22) —
     # see infra/dgx/README.md. Don't move this back to 8000.

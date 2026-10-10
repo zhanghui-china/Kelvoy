@@ -23,6 +23,17 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
     if (!landmark?.refs[0]) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
     refs.push(landmark.refs[0]);
   }
+  const rewritten = context.imagePromptWriter ? await context.imagePromptWriter.write({
+    episode_id: episode.episode_id, signal: context.signal, context: {
+      mode: "edit", aspect: episode.brief.aspect, kf_prompt: shot.kf_prompt,
+      size: shot.size, camera: shot.camera, beat: shot.beat,
+      scene: episode.scenes.find(scene => scene.id === shot.scene) ?? null,
+      destination: context.destination.name,
+      landmark: context.destination.landmarks.find(item => item.id === shot.landmark)?.name ?? null,
+      references: refs.map((key, index) => ({ key, role: index === 0 ? "person" : "scene", image: index + 1 })),
+    },
+  }) : undefined;
+  const prompt = rewritten?.prompt ?? shot.kf_prompt;
   const seed = generationSeed(context.generation_id, shot.shot_id ?? shotNo, "image");
   const generated: GeneratedAsset[] = [];
   for (let candidateNo = 0; candidateNo < candidateCount; candidateNo++) {
@@ -31,7 +42,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
       episode_id: episode.episode_id, shot_no: shotNo,
       ...(shot.shot_id ? { shot_id: shot.shot_id } : {}), candidate_no: candidateNo,
       aspect: episode.brief.aspect,
-      prompt: shot.kf_prompt, refs, seed: (seed + candidateNo) >>> 0,
+      prompt, refs, ...(rewritten ? { expected_ref_hashes: rewritten.provenance.ref_hashes } : {}), seed: (seed + candidateNo) >>> 0,
       generation_id: context.generation_id,
       ...(context.execution_id ? { execution_id: context.execution_id } : {}),
       ...(context.signal ? { signal: context.signal } : {}),
@@ -51,7 +62,8 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
     regen_stage: null,
     model: { ...shot.model, image: {
       provider: "local" as const, model: first.model, version: first.version,
-      seed: first.seed, prompt: shot.kf_prompt, ref_hashes: first.ref_hashes,
+      seed: first.seed, prompt, ref_hashes: first.ref_hashes,
+      ...(rewritten ? { qwen_prompt: rewritten.provenance } : {}),
       attempts: context.attempt ?? 1, cost_usd: 0,
     } },
   };

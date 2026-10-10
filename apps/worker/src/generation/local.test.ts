@@ -294,3 +294,12 @@ test("video rejects reference changes since the prompt rewrite before inference"
     expected_ref_hashes: ["a".repeat(64)], prompt: "official H3", duration_s: 4, seed: 1 })).rejects.toThrow("references changed");
   expect(calls).toBe(0);
 });
+
+test("image rejects changed rewrite references before inference", async () => {
+  root = await mkdtemp(join(tmpdir(), "kelvoy-image-hash-")); process.env.KELVOY_PROJECTS_ROOT = root;
+  await mkdir(join(root, "persona")); await writeFile(join(root, "persona/front.png"), "changed reference");
+  let calls = 0;
+  const provider = createLocalGenerationProviders(async () => { calls++; throw new Error("must not submit"); });
+  await expect(provider.keyframe.generate({ episode_id: "e1", shot_no: 1, candidate_no: 0, prompt: "Only hands from <image1>.", refs: ["persona/front.png"], expected_ref_hashes: ["a".repeat(64)], seed: 42, generation_id: "g1" })).rejects.toThrow("references changed");
+  expect(calls).toBe(0);
+});

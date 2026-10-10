@@ -62,6 +62,25 @@ function validateShotModelRecord(input: unknown, path: string, errors: string[])
     errors.push(`${path}: 不是对象`);
     return;
   }
+  if (input.qwen_prompt !== undefined) {
+    const qwen = input.qwen_prompt;
+    if (!isPlainObject(qwen)) errors.push(`${path}.qwen_prompt: 不是对象`);
+    else {
+      for (const key of ["writer_version", "model"]) {
+        if (!isNonEmptyString(qwen[key])) errors.push(`${path}.qwen_prompt.${key}: 缺失或为空`);
+      }
+      for (const key of ["official_commit", "model_revision"]) {
+        if (typeof qwen[key] !== "string" || !/^[a-f0-9]{40}$/.test(qwen[key])) errors.push(`${path}.qwen_prompt.${key}: 无效 revision`);
+      }
+      for (const key of ["system_prompt_hash", "input_hash"]) {
+        if (typeof qwen[key] !== "string" || !/^[a-f0-9]{64}$/.test(qwen[key])) errors.push(`${path}.qwen_prompt.${key}: 无效哈希`);
+      }
+      if (!isStringArray(qwen.ref_hashes) || qwen.ref_hashes.length < 1 || qwen.ref_hashes.length > 2 || qwen.ref_hashes.some(value => !/^[a-f0-9]{64}$/.test(value))) errors.push(`${path}.qwen_prompt.ref_hashes: 无效哈希数组`);
+      if (qwen.mode !== "edit") errors.push(`${path}.qwen_prompt.mode: 无效模式`);
+      if (qwen.aspect !== "9:16" && qwen.aspect !== "16:9") errors.push(`${path}.qwen_prompt.aspect: 无效画幅`);
+      if (!isPlainObject(qwen.sampling) || !Object.keys(qwen.sampling).length || Object.values(qwen.sampling).some(value => !["string", "boolean", "number"].includes(typeof value) || (typeof value === "number" && !Number.isFinite(value)))) errors.push(`${path}.qwen_prompt.sampling: 无效采样设置`);
+    }
+  }
   if (input.h3_prompt !== undefined) {
     const h3 = input.h3_prompt;
     if (!isPlainObject(h3)) errors.push(`${path}.h3_prompt: 不是对象`);

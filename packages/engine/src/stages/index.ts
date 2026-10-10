@@ -56,3 +56,5 @@ export async function runStage(
 }
 
 export type { H3PromptContext, H3PromptResult, H3PromptWriter } from "./h3-prompt";
+
+export type { ImagePromptContext, ImagePromptResult, ImagePromptWriter } from "./image-prompt";

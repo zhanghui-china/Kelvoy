@@ -170,6 +170,10 @@ export function createLocalGenerationProviders(call: InferenceCall = callInferen
       if (input.execution_id) safeId(input.execution_id);
       if (!Number.isInteger(input.candidate_no) || input.candidate_no < 0) throw new Error("invalid candidate index");
       const hashes = await Promise.all(input.refs.map(hashKey));
+      if (input.expected_ref_hashes && (input.expected_ref_hashes.length !== hashes.length ||
+        hashes.some((hash, index) => hash !== input.expected_ref_hashes![index]))) {
+        throw new Error("image references changed after Qwen prompt rewrite");
+      }
       const key = `kf/${identity}_${input.generation_id}${input.execution_id ? `_${input.execution_id}` : ""}_${input.candidate_no}.png`;
       const { signal: _signal, ...requestInput } = input;
       const { execution_id: _executionId, ...reusableInput } = requestInput;

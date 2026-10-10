@@ -56,3 +56,28 @@ ComfyUI 媒体下载使用流式临时文件，单文件上限 512 MiB；超限�
 `/image/`、`/video/` 请求可携带顶层 `comfyui_base_url`，覆盖地址经过同一部署名单与格式校验；
 省略或传 `null` 时继承 `KELVOY_COMFYUI_BASE_URL`，继承地址也经过同一部署名单与格式校验。目标地址由 Worker 在任务开始时固定，
 不通过推理服务写入全站配置。上述检测不提交任务、上传素材、清空或取消队列。
+
+## 官方 Qwen 图片提示词增强
+
+内部 `GET /image/rewrite/metadata/` 返回缓存必须使用的固定版本信息。
+`POST /image/rewrite/` 接收 `context`（`mode: "edit"`、`aspect: "9:16" | "16:9"`、
+中文 `kf_prompt` 和镜头上下文）、按角色／场景顺序排列的 `refs` 项目内相对路径、
+对应的 `expected_ref_hashes` SHA256 列表。返回 `prompt`、`wh_ratio`、空 `ratio_follow`、
+`reference_hashes` 和 `metadata`；不会返回或保存思考内容。
+
+固定上游代码、配套系统提示词与校验散列在
+`src/inference/vendor/qwen_pe/manifest.json`，固定上游仓库代码与模型 checkpoint 的许可证均为 Qwen Research License，
+仅允许非商业研究／评估，商用需要另行获得商业许可。
+两个来源的许可原文分别保存在 `LICENSE` 与 `MODEL_LICENSE`，来源 URL 和散列
+在 manifest 中保留，`Notice` 保留许可要求的归属声明。
+运行时只读取这些本地文件，不下载代码或权重。图片预处理、消息构造、答案解析直接调用
+未修改的官方 `pe_core.py`，部署前必须验证权重 revision 与 manifest 一致。
+
+默认关闭增强。独立模型服务准备好后设置 `KELVOY_IMAGE_REWRITE_ENABLED=true`；
+`KELVOY_IMAGE_REWRITE_URL` 默认 `http://127.0.0.1:8110/v1`，模型服务需要提供
+OpenAI SSE `chat/completions`，启用 thinking，限制并发为 1。Inference 也串行调用，
+官方 edit 采样参数固定在 manifest 中。所有格式纠正与排队共享 900 秒总期限，
+只允许纠正一次；超时、断开连接、图片变更、格式或画幅错误均拒绝出图，绝不降级提交原稿。
+
+`POST /image/` 仍只接收最终 prompt，可附带 `expected_ref_hashes`，提交前核对参考图，
+上传同一份已核对的不可变字节，避免核对后替换文件导致参考图悄然改变。
