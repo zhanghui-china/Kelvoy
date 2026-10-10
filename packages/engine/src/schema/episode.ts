@@ -150,7 +150,7 @@ export interface Episode {
   mode: EpisodeMode;
   /** Missing on older episodes; they keep the reviewed-keyframe path. */
   video_source?: VideoSource;
-  cut_policy?: "fixed_1s" | "beat_aligned";
+  cut_policy?: "fixed_1s" | "beat_aligned" | "long_3_6";
   candidate_count: number;
   script_pending_task_id?: string | null;
   script_action_error?: string | null;

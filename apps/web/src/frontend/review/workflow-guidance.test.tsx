@@ -88,3 +88,20 @@ test("keyframe and clip review initially focus one shot while retaining queue na
     expect(html).toContain("第 2 镜"); // 待审队列仍能定位未展示的镜头
   }
 });
+
+
+test("long workflow describes actual allocation and never offers one-second conversion", () => {
+  const long = { ...episode, cut_policy: "long_3_6", shots: [{ ...shot, duration_s: 4, clip: "clip/01.mp4", status: "approved" }] } as Episode;
+  const script = render(<ScriptReview episode={long} destination={null} mutation={mutation} />);
+  const clips = render(<ClipReview episode={long} mutation={mutation} />);
+  const compose = render(<ComposeSetup episode={long} mutation={mutation} />);
+  const done = render(<DoneView episode={long} mutation={mutation} />);
+  expect(script).toContain("每镜建议 3–6 秒");
+  expect(script).toContain("建议时长");
+  expect(clips).toContain("起点后至少保留 3 秒素材");
+  expect(clips).toContain("下一步：合成设置");
+  expect(compose).toContain("每镜 3–6 秒，目标约 30 秒，片头片尾计入");
+  expect(compose).toContain("实际分配由素材探测决定");
+  expect(done).toContain("每镜 3–6 秒");
+  expect(clips + done).not.toContain("使用新版 1 秒剪辑");
+});

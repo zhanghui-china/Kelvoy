@@ -24,16 +24,16 @@ export default function ScriptReview({ episode, destination, mutation, busy = fa
         <button type="button" className="k-btn k-btn-secondary k-btn-tiny" aria-pressed={view === "storyboard"} onClick={() => setView("storyboard")}>故事板视图</button>
       </div>
     </div>
-    <GuideTip section="script">逐镜检查画面与字幕。镜头数量自由；可新增、删除、调整顺序，也可用 AI 补充建议。</GuideTip>
+    <GuideTip section="script">逐镜检查画面与字幕。{episode.cut_policy === "long_3_6" ? `每镜建议 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入。` : episode.cut_policy === "fixed_1s" ? "每镜成片 1 秒。" : "沿用旧项目的节拍剪辑。"}镜头数量自由；可新增、删除、调整顺序，也可用 AI 补充建议。</GuideTip>
     <div className="k-desk-script-layout">
       <div className="k-desk-script-content">
         {view === "script" && <>
           <p className="k-card-meta k-desk-scroll-hint">表格可横向滚动查看全部字段。</p>
           <div className="k-desk-tablewrap"><table className="k-desk-table">
-            <thead><tr><th>#</th><th>场景</th><th>景别</th><th>动作 beat</th><th>字幕</th><th>机位</th><th>关键帧描述</th></tr></thead>
+            <thead><tr><th>#</th><th>场景</th><th>景别</th><th>动作 beat</th><th>字幕</th>{episode.cut_policy === "long_3_6" && <th>建议时长</th>}<th>机位</th><th>关键帧描述</th></tr></thead>
             <tbody>{episode.shots.map((shot) => <tr key={(shot as typeof shot & { shot_id?: string }).shot_id ?? shot.no}>
               <td>{shot.no}</td><td>{episode.scenes.find((scene) => scene.id === shot.scene)?.name ?? shot.scene}</td>
-              <td>{SHOT_SIZE_LABELS[shot.size]}</td><td>{shot.beat}</td><td>{shot.caption || "—"}</td><td>{SHOT_CAMERA_LABELS[shot.camera]}</td><td>{shot.kf_prompt || "—"}</td>
+              <td>{SHOT_SIZE_LABELS[shot.size]}</td><td>{shot.beat}</td><td>{shot.caption || "—"}</td>{episode.cut_policy === "long_3_6" && <td>{shot.duration_s} 秒</td>}<td>{SHOT_CAMERA_LABELS[shot.camera]}</td><td>{shot.kf_prompt || "—"}</td>
             </tr>)}</tbody>
           </table></div>
         </>}

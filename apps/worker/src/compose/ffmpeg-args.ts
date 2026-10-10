@@ -127,7 +127,7 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
 
   if (paths.intro !== null) {
     args.push("-i", paths.intro);
-    filters.push(`[${inputIndex}:v]${normalizeChain(plan)}[vintro]`);
+    filters.push(`[${inputIndex}:v]${normalizeChain(plan)}${plan.intro_frame_count === undefined ? "" : `,trim=end_frame=${plan.intro_frame_count},setpts=PTS-STARTPTS`}[vintro]`);
     concatLabels.push("[vintro]");
     inputIndex += 1;
   }
@@ -160,7 +160,7 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
 
   if (paths.outro !== null) {
     args.push("-i", paths.outro);
-    filters.push(`[${inputIndex}:v]${normalizeChain(plan)}[voutro]`);
+    filters.push(`[${inputIndex}:v]${normalizeChain(plan)}${plan.outro_frame_count === undefined ? "" : `,trim=end_frame=${plan.outro_frame_count},setpts=PTS-STARTPTS`}[voutro]`);
     concatLabels.push("[voutro]");
     inputIndex += 1;
   }

@@ -20,6 +20,7 @@ export default function ComposeSetup({ episode, mutation }: { episode: Episode; 
     intro !== episode.render.intro ||
     outro !== episode.render.outro;
   const fixed = episode.cut_policy === "fixed_1s";
+  const long = episode.cut_policy === "long_3_6";
   const standardBookends = (!intro || intro === "intro/kelvoy_open.mp4") && (!outro || outro === "outro/kelvoy_close.mp4");
   const duration = fixed && standardBookends ? episode.shots.length + (intro ? 1.2 : 0) + (outro ? 1 : 0) : null;
   const music = MUSIC_CATALOG.find((item) => item.file === musicFile);
@@ -30,9 +31,10 @@ export default function ComposeSetup({ episode, mutation }: { episode: Episode; 
       <h2>合成设置</h2>
       <GuideTip section="compose">{fixed
         ? "调整标题、字幕、配乐与片头片尾后，先保存设置，再开始合成。下方时长按当前镜头数和首尾设置计算。"
+        : long ? `每镜 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入；实际分配由素材探测决定。调整后先保存设置，再开始合成。`
         : "旧版作品沿用原有节拍切点；调整标题、字幕、配乐与片头片尾后，先保存设置，再开始合成。"}</GuideTip>
       <p className="k-card-meta">
-        {episode.shots.length} 镜 · {fixed ? `${duration === null ? "原有首尾素材时长合成时计算" : `${duration.toFixed(1)} 秒成片`}，每镜 ${episode.render.fps} 帧` : "沿用旧项目的节拍切点"}
+        {episode.shots.length} 镜 · {fixed ? `${duration === null ? "原有首尾素材时长合成时计算" : `${duration.toFixed(1)} 秒成片`}，每镜 ${episode.render.fps} 帧` : long ? `每镜 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入` : "沿用旧项目的节拍切点"}
         {` · ${episode.render.res} · ${episode.render.fps} fps`}
       </p>
       <label className="k-field">

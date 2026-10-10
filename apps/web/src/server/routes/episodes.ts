@@ -111,12 +111,12 @@ episodes.post("/", async (c) => {
     status: "draft",
     mode,
     video_source: videoSource,
-    cut_policy: "fixed_1s",
+    cut_policy: "long_3_6",
     candidate_count: candidateCount,
     created_at: new Date().toISOString(),
     // FR-01/FR-09 提交前粗估：这一刻还没有脚本，estimateCost 用它的默认
     // 镜数常量（credits.ts，M0-6 占位）；候选数取本期保存的值。
-    estimated_credits: estimateCreditQuote(candidateCount, 30, videoSource),
+    estimated_credits: estimateCreditQuote(candidateCount, 7, videoSource),
     credits_used: 0,
     share: { enabled: false, slug: "" },
     brief: {
@@ -184,7 +184,7 @@ episodes.get("/estimate", async (c) => {
     candidates = user?.settings.default_candidates;
   }
   return c.json({ ok: true, estimate: estimateCost({ mode, candidates, video_source: videoSource }),
-    credit_quote: estimateCreditQuote(candidates ?? 3, 30, videoSource) });
+    credit_quote: estimateCreditQuote(candidates ?? 3, 7, videoSource) });
 });
 
 episodes.get("/:id", async (c) => {

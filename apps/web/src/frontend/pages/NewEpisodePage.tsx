@@ -276,7 +276,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
       <div className="k-eyebrow">创作工作台 / 新建一期</div>
       <h1>创建新的旅行故事</h1>
       <p className="k-page-intro">选择角色与目的地，再写下这趟旅程希望呈现的内容。</p>
-      <GuideTip section="create">先选出镜角色与目的地。推荐人物图＋场景图直出视频，省去每镜图片生成；创建前核对实时积分预估。初始 28 镜只是起点，生成后可自由增删分镜。</GuideTip>
+      <GuideTip section="create">先选出镜角色与目的地。推荐人物图＋场景图直出视频，省去每镜图片生成；创建前核对实时积分预估。默认目标约 30 秒，每镜 3–6 秒；初始 7–8 镜只是起点，生成后可自由增删分镜。</GuideTip>
       <form onSubmit={handleSubmit} className="k-create-layout">
         <div className="k-card k-create-form-panel">
           <div className="k-create-panel-heading"><span className="k-create-step">01</span><div><h2>本期内容</h2><p>为这期作品设定目的地与创作方向</p></div></div>

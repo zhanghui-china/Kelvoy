@@ -1,6 +1,7 @@
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { ComposePlan, ComposeProvider } from "@kelvoy/engine";
+import { CompositionConstraintError } from "@kelvoy/engine";
 import { artifactPath, sharedAssetPath } from "../storage/artifacts";
 import { buildFfmpegArgs, type ComposeInputPaths } from "./ffmpeg-args";
 import { buildAssOverlay, textOverlayEvents } from "./ass-overlay";
@@ -47,7 +48,7 @@ export async function runCommand(cmd: string[], signal?: AbortSignal): Promise<{
 }
 
 /** 片头片尾的时长是素材属性，engine 量不到——这里用 ffprobe 读。 */
-async function probeDurationS(path: string): Promise<number> {
+async function probeDurationS(path: string, signal?: AbortSignal): Promise<number> {
   const { code, stdout, stderr } = await runCommand([
     "ffprobe",
     "-v",
@@ -57,33 +58,33 @@ async function probeDurationS(path: string): Promise<number> {
     "-of",
     "default=noprint_wrappers=1:nokey=1",
     path,
-  ]);
+  ], signal);
   const seconds = Number(stdout.trim());
-  if (code !== 0 || !Number.isFinite(seconds)) {
+  if (code !== 0 || !Number.isFinite(seconds) || seconds <= 0) {
     throw new Error(`ffprobe 读不出时长：${path}\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
   }
   return seconds;
 }
 
-async function probeVideoDurationS(path: string): Promise<number> {
+async function probeVideoDurationS(path: string, signal?: AbortSignal): Promise<number> {
   const { code, stdout, stderr } = await runCommand([
     "ffprobe", "-v", "error", "-select_streams", "v:0",
     "-show_entries", "stream=duration", "-of", "default=noprint_wrappers=1:nokey=1", path,
-  ]);
+  ], signal);
   const seconds = Number(stdout.trim());
-  if (code !== 0 || !Number.isFinite(seconds)) {
+  if (code !== 0 || !Number.isFinite(seconds) || seconds <= 0) {
     throw new Error(`ffprobe 读不出视频时长：${path}\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
   }
   return seconds;
 }
 
-async function probeOutput(path: string): Promise<{
+async function probeOutput(path: string, signal?: AbortSignal): Promise<{
   duration_s: number; width: number; height: number; fps: number; size_bytes: number;
 }> {
   const { code, stdout, stderr } = await runCommand([
     "ffprobe", "-v", "error", "-select_streams", "v:0",
     "-show_entries", "stream=width,height,avg_frame_rate:format=duration,size", "-of", "json", path,
-  ]);
+  ], signal);
   if (code !== 0) throw new Error(`ffprobe 验证成片失败：${stderr.slice(-STDERR_TAIL_CHARS)}`);
   const data = JSON.parse(stdout) as {
     streams?: { width?: number; height?: number; avg_frame_rate?: string }[];
@@ -148,7 +149,7 @@ async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
     if (cut.frame_count === undefined) continue;
     const duration = await probeVideoDurationS(clips[index]!);
     if (cut.trim_start_s + cut.duration_s > duration + 1e-6) {
-      throw new Error(`第 ${cut.no} 镜选段超出片段尾部：需要 ${cut.trim_start_s + cut.duration_s} 秒，实际 ${duration} 秒`);
+      throw new CompositionConstraintError(`第 ${cut.no} 镜选段超出片段尾部：需要 ${cut.trim_start_s + cut.duration_s} 秒，实际 ${duration} 秒`);
     }
   }
 
@@ -176,10 +177,28 @@ async function resolvePaths(plan: ComposePlan): Promise<ComposeInputPaths> {
 }
 
 export const ffmpegComposeProvider: ComposeProvider = {
+  async probeMedia({ episode_id, clips, intro_key, outro_key, signal }) {
+    signal?.throwIfAborted();
+    const clipEntries = await Promise.all(clips.map(async ({ no, clip_key }) => {
+      const path = await requireFile(artifactPath(episode_id, clip_key), `第 ${no} 镜的片段`);
+      return [no, await probeVideoDurationS(path, signal)] as const;
+    }));
+    const intro = intro_key === null ? null : await requireFile(sharedAssetPath(intro_key), "片头");
+    const outro = outro_key === null ? null : await requireFile(sharedAssetPath(outro_key), "片尾");
+    const [introDuration, outroDuration] = await Promise.all([
+      intro === null ? 0 : probeVideoDurationS(intro, signal),
+      outro === null ? 0 : probeVideoDurationS(outro, signal),
+    ]);
+    signal?.throwIfAborted();
+    return { clip_duration_s: Object.fromEntries(clipEntries),
+      intro_duration_s: introDuration, outro_duration_s: outroDuration };
+  },
   async compose({ plan, signal }) {
     signal?.throwIfAborted();
     const paths = await resolvePaths(plan);
     signal?.throwIfAborted();
+    if (plan.intro_frame_count !== undefined) paths.intro_duration_s = plan.intro_frame_count / plan.fps;
+    if (plan.outro_frame_count !== undefined) paths.outro_duration_s = plan.outro_frame_count / plan.fps;
     await mkdir(dirname(paths.output), { recursive: true });
     const needsText = Boolean(plan.title) || plan.ai_label ||
       (plan.subtitles_enabled && plan.cuts.some((cut) => Boolean(cut.caption?.trim())));

@@ -257,8 +257,8 @@ export function validateEpisode(input: unknown): ValidationResult<Episode> {
     errors.push(`status: 必须是 ${EPISODE_STATUSES.join(" / ")} 之一`);
   }
   if (e.mode !== "per_shot" && e.mode !== "grid") errors.push("mode: 必须是 per_shot / grid 之一");
-  if (e.cut_policy !== undefined && e.cut_policy !== "fixed_1s" && e.cut_policy !== "beat_aligned") {
-    errors.push("cut_policy: 必须是 fixed_1s / beat_aligned 之一");
+  if (e.cut_policy !== undefined && e.cut_policy !== "fixed_1s" && e.cut_policy !== "beat_aligned" && e.cut_policy !== "long_3_6") {
+    errors.push("cut_policy: 必须是 fixed_1s / beat_aligned / long_3_6 之一");
   }
   if (!isNonEmptyString(e.created_at)) errors.push("created_at: 缺失或为空");
   if (!isFiniteNumber(e.estimated_credits) || e.estimated_credits < 0) {

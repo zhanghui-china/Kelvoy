@@ -54,7 +54,8 @@ export default function DoneView({
           <a className="k-btn k-btn-primary" href={url} download>下载 MP4 成片</a>
         </div>
       </div>
-      {episode.cut_policy !== "fixed_1s" && episode.mode === "per_shot" &&
+      <p className="k-card-meta">{episode.cut_policy === "long_3_6" ? `每镜 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入` : episode.cut_policy === "fixed_1s" ? "每镜 1 秒" : "沿用旧项目的节拍切点"}</p>
+      {episode.cut_policy !== "fixed_1s" && episode.cut_policy !== "long_3_6" && episode.mode === "per_shot" &&
         episode.shots.length > 0 && episode.shots.every((shot) => !!shot.clip) &&
         <div className="k-card">
           <div className="k-card-title">使用新版 1 秒剪辑</div>

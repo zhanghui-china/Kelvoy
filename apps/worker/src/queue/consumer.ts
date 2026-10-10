@@ -1,5 +1,6 @@
 import {
   ContentBlockedError,
+  CompositionConstraintError,
   type Episode,
   type ShotStatus,
   type StageContext,
@@ -43,6 +44,7 @@ const POLL_INTERVAL_MS = 1000;
 const MAX_LOCAL_ATTEMPTS = 2;
 
 function failureReason(error: unknown): string {
+  if (error instanceof CompositionConstraintError) return error.message;
   if (error instanceof ContentBlockedError) return "内容未通过审核，请修改创作要求后重新提交。";
   const message = error instanceof Error ? error.message : String(error);
   if (/no active step plan subscription/i.test(message))
@@ -211,7 +213,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
   } catch (err) {
     if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
-    if (err instanceof ContentBlockedError) {
+    if (err instanceof ContentBlockedError || err instanceof CompositionConstraintError) {
       failTaskWithCredits(task, false, failureReason(err));
       return;
     }

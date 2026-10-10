@@ -164,7 +164,7 @@ review.post("/:id/continue", async (c) => {
   if (!REVIEW_GATE_ADVANCE.includes(loaded.episode.status)) return c.json({ ok: false, error: "illegal_transition" }, 400);
   const reviewError = reviewAdvanceError(loaded.episode);
   if (reviewError) return c.json({ ok: false, error: reviewError }, 400);
-  const nextStatus = loaded.episode.status === "clip_review" && loaded.episode.cut_policy === "fixed_1s"
+  const nextStatus = loaded.episode.status === "clip_review" && ["fixed_1s", "long_3_6"].includes(loaded.episode.cut_policy ?? "")
     ? transitionEpisode(loaded.episode.status, { type: "prepare_compose" })
     : transitionEpisode(loaded.episode.status, { type: "advance" });
 

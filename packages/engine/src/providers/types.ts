@@ -1,9 +1,10 @@
-import type { Destination, EpisodeBrief, Persona, Scene, Shot } from "../schema";
+import type { Destination, Episode, EpisodeBrief, Persona, Scene, Shot } from "../schema";
 import type { ShotCut } from "../rules/beat";
 
 export interface ScriptProvider {
   generateShots(input: {
     brief: EpisodeBrief;
+    cutPolicy?: Episode["cut_policy"];
     destination: Destination;
     instruction?: string;
     previousShots?: Shot[];
@@ -60,7 +61,9 @@ export interface ComposePlan {
   /** 账号级 LUT（Persona.style.lut），只作用于正片，不作用于片头片尾。 */
   lut_key: string | null;
   intro_key: string | null;
+  intro_frame_count?: number;
   outro_key: string | null;
+  outro_frame_count?: number;
   title: string;
   title_style: string;
   /** 显式 AI 标识：画面水印开关（PRD §8）。 */
@@ -80,7 +83,20 @@ export interface ComposePlanMusic {
   license: string;
 }
 
+export interface ComposeMediaDurations {
+  clip_duration_s: Record<number, number>;
+  intro_duration_s: number;
+  outro_duration_s: number;
+}
+
 export interface ComposeProvider {
+  probeMedia?(input: {
+    episode_id: string;
+    clips: { no: number; clip_key: string }[];
+    intro_key: string | null;
+    outro_key: string | null;
+    signal?: AbortSignal;
+  }): Promise<ComposeMediaDurations>;
   compose(input: { plan: ComposePlan; signal?: AbortSignal }): Promise<{ output_key: string; probe: {
     duration_s: number; width: number; height: number; fps: number; size_bytes: number;
   } }>;

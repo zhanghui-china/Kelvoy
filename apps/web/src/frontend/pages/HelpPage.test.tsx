@@ -20,13 +20,15 @@ test("guide renders six anchored stages and links to live workspace routes", () 
   expect(html).toContain("16:9");
   expect(html).toContain("1–3");
   expect(html).toContain("30 fps");
-  expect(html).toContain("旧版作品沿用原有节拍切点");
-  expect(html).toContain("旧版合成设置不提供字幕和转场开关");
+  expect(html).toContain("每镜建议 3–6 秒");
+  expect(html).toContain("目标约 30 秒");
+  expect(html).toContain("旧节拍作品保留原剪辑方式");
+  expect(html).toContain("所有方式均支持字幕");
   const clips = GUIDE_SECTIONS.find((section) => section.id === "clips")!;
   const compose = GUIDE_SECTIONS.find((section) => section.id === "compose")!;
   expect(clips.summary).not.toContain("1 秒");
   expect(clips.review).not.toContain("1 秒");
-  expect(compose.review).toContain("新版作品还需检查字幕和转场");
+  expect(compose.review).toContain("长镜作品检查整体时长");
   expect(compose.summary).not.toContain("字幕");
   expect(compose.steps[1]).toContain("如启用字幕则检查字幕");
   expect(html).toContain("首次报告坏镜");

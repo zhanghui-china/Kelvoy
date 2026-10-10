@@ -66,7 +66,7 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
     <div className="k-desk-focus-nav" role="group" aria-label="切换镜头">{episode.shots.map(s => <button key={s.no} type="button" className="k-btn k-btn-secondary k-btn-tiny" aria-pressed={s.no === shot?.no} onClick={() => setPickedNo(s.no)}>第 {s.no} 镜</button>)}</div>
     {shot ? <article className="k-card"><h3>第 {shot.no} 镜 · {shot.beat}</h3>
       <p className="k-card-meta">已保存的截取起点：{shot.trim_start_s === null ? "未保存（默认 0 秒）" : `${shot.trim_start_s.toFixed(2)} 秒`} · 审核状态：{SHOT_STATUS_LABELS[shot.status]}</p>
-      <p className="k-card-meta">截取长度：{episode.cut_policy === "fixed_1s" ? 1 : shot.duration_s} 秒</p>
+      <p className="k-card-meta">{episode.cut_policy === "long_3_6" ? "建议长度（最终按素材分配）" : "截取长度"}：{episode.cut_policy === "fixed_1s" ? 1 : shot.duration_s} 秒</p>
       {shot.clip ? <SavedMedia key={`${shot.no}:${shot.clip}`} src={file(shot.clip)} label={`第 ${shot.no} 镜视频`} video /> : <p className="k-empty">暂无已保存的视频</p>}
     </article> : <p className="k-empty">暂无已保存的视频</p>}
   </section>;
@@ -74,7 +74,7 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
     <Fields values={[["成片标题", episode.render.title], ["分辨率", episode.render.res], ["帧率", `${episode.render.fps} fps`],
       ["字幕", subtitlesEnabled(episode.render) ? "开启" : "关闭"], ["转场", episode.render.transitions_enabled ? "开启" : "关闭"],
       ["配乐", episode.music.file || "自动选曲"], ["配乐节拍", `${episode.music.bpm} BPM`], ["片头", episode.render.intro ?? "无"], ["片尾", episode.render.outro ?? "无"],
-      ["AI 标识", episode.render.ai_label ? "开启" : "关闭"], ["剪辑方式", episode.cut_policy === "fixed_1s" ? "每镜 1 秒" : "旧版节拍切点"]]} />
+      ["AI 标识", episode.render.ai_label ? "开启" : "关闭"], ["剪辑方式", episode.cut_policy === "fixed_1s" ? "每镜 1 秒" : episode.cut_policy === "long_3_6" ? "每镜 3–6 秒" : "旧版节拍切点"]]} />
   </article>{episode.final ? <article className="k-card"><h2>{episode.final_needs_recompose || episode.status !== "done" ? "上一版成片 · 需要重新合成" : "已保存的成片"}</h2>
     <SavedMedia key={episode.final.key} src={file(episode.final.key)} label="已保存的成片" video /></article> : <p className="k-empty">暂无已保存的视频</p>}</section>;
 }

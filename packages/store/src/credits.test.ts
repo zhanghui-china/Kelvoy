@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { close, open } from "./db";
-import { finalizeCredits, getCreditBalance, getCreditPrice, grantCredits, listCreditLedger, reserveCredits, setCreditPrice } from "./credits";
+import { estimateCreditQuote, finalizeCredits, getCreditBalance, getCreditPrice, grantCredits, listCreditLedger, reserveCredits, setCreditPrice } from "./credits";
 import { createUser } from "./users";
 
 let userId = "";
@@ -52,4 +52,12 @@ test("a changed team price only applies to new reservations", () => {
   const second = reserveCredits({ action_id: "second", user_id: userId, kind: "video", units: 1 });
   expect(second).toMatchObject({ ok: true, action: { price: 12 } });
   expect(getCreditBalance(userId)).toEqual({ available: 8, reserved: 22 });
+});
+
+
+test("initial estimate starts at seven shots and actual quote uses the supplied count", () => {
+  expect(estimateCreditQuote(3)).toBe(93);
+  expect(estimateCreditQuote(3, undefined, "references")).toBe(72);
+  expect(estimateCreditQuote(3, 11, "references")).toBe(112);
+  expect(estimateCreditQuote(2, 11, "keyframe")).toBe(134);
 });

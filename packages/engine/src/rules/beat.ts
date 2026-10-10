@@ -59,7 +59,7 @@ export interface ShotCut {
   caption?: string;
 }
 
-/** New projects use integer-frame cuts; music never moves a shot boundary. */
+/** Existing fixed_1s projects use integer-frame cuts; music never moves a boundary. */
 export function planFixedCuts(shots: Shot[], fps: number): ShotCut[] {
   if (!Number.isInteger(fps) || fps <= 0) throw new Error("固定剪辑需要有效帧率");
   if (shots.length === 0) throw new Error("没有镜头可以合成");

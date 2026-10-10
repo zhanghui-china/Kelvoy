@@ -125,3 +125,19 @@ test("migration freezes seven legacy shot/task identities and leaves all media k
  expect(migrated.query<{shot_id:string},[]>("select shot_id from tasks where task_id='task'").get()!.shot_id).toBe(parsed.shots[6].shot_id!);close();
  const repeated=open(path);expect(repeated.query<{doc:string},[]>("select doc from episodes where episode_id='ep'").get()!.doc).toBe(first.doc);
 });
+
+
+test.each(["long_3_6", "fixed_1s", "beat_aligned", undefined] as const)("insert duration follows policy %s without converting existing shots", async policy => {
+  const ep = { ...fixtureEpisode("ep"), status: "script_review" as const, cut_policy: policy };
+  ep.shots[0].duration_s = policy === "long_3_6" ? 5 : 1;
+  await insertEpisode(ep);
+  const result = await updateStoryboard({ episode_id: "ep", owner_id: "u_test", row_version: 1,
+    edit: { type: "insert", after_shot_id: null, shot_id: "new_shot", shot: {
+      scene: "s1", size: "wide", camera: "static", beat: "走近", caption: "", landmark: null,
+      kf_prompt: "沿河走近", motion_prompt: "走近",
+    } } });
+  expect(result.ok).toBe(true);
+  const loaded = await getEpisode("ep"); if (!loaded.ok) throw Error("missing");
+  expect(loaded.episode.shots.map(s => s.duration_s)).toEqual(policy === "long_3_6" ? [4, 5] : [1, 1]);
+  expect(loaded.episode.cut_policy).toBe(policy ?? "beat_aligned");
+});

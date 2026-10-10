@@ -231,10 +231,10 @@ test("POST /:id/recompose 400s from any status other than done", async () => {
   expect(res.status).toBe(400);
 });
 
-test("fixed-cut episodes pause for compose settings and enqueue only after start", async () => {
+test.each(["fixed_1s", "long_3_6"] as const)("%s episodes pause for compose settings and enqueue only after start", async policy => {
   const { cookie, ownerId } = await login("fixed-compose");
   const episode = fixture("e_fixed", ownerId);
-  episode.cut_policy = "fixed_1s";
+  episode.cut_policy = policy;
   episode.status = "clip_review";
   episode.shots = [shotFixture(1, { status: "approved", clip: "clip/01.mp4" })];
   await insertEpisode(episode);
