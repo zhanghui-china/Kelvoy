@@ -17,7 +17,7 @@ draft → scripting → script_review → assets → (keyframing → kf_review �
       → clip_review → compose_ready → composing → done
 ```
 
-默认的 `references` 模式没有 `keyframing`／`kf_review`，下文「审核 2」仅 `keyframe` 模式出现。任一生成态可能进入 `failed`，也可能出现单镜 `failed`，读每镜状态和 `failed_task`，不能只看整期。
+API 缺省的 `references` 模式没有 `keyframing`／`kf_review`（Web 界面默认是 `keyframe`），下文「审核 2」仅 `keyframe` 模式出现。任一生成态可能进入 `failed`，也可能出现单镜 `failed`，读每镜状态和 `failed_task`，不能只看整期。
 
 - 单次观察最多 60 秒，约 5 秒查询一次。仍未完成就报告阶段、待处理镜头和作品 ID，保留恢复入口，等待超时不等于失败。
 - 服务负责阶段推进、自动重试与队列调度，Agent 不另起生成循环。

@@ -1,6 +1,6 @@
 # ADR-0013：新建作品界面默认改回关键帧，服务端缺省保持直出
 
-状态：已采纳（2026-10-11），尚未实现；实施任务见 `docs/superpowers/plans/2026-10-11-default-video-source-keyframe-tasks.md`
+状态：已采纳并实现于分支 `feat/default-keyframe-ui`（2026-10-11），未发布；实施任务见 `docs/superpowers/plans/2026-10-11-default-video-source-keyframe-tasks.md`
 
 ## 背景
 

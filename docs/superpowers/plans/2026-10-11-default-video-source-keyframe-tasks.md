@@ -1,6 +1,6 @@
 # 任务拆分：新建作品默认改回"关键帧"流程
 
-对应计划：[`2026-10-11-default-video-source-keyframe.md`](2026-10-11-default-video-source-keyframe.md)。状态：**未启动**（2026-10-11 用户决定先不做，此文档只做任务拆分）。
+对应计划：[`2026-10-11-default-video-source-keyframe.md`](2026-10-11-default-video-source-keyframe.md)。状态：T1–T6 已在分支 `feat/default-keyframe-ui` 完成并集成，T7 自动化验证已通过、浏览器走查未做，T8 未发布（2026-10-11）。
 
 ## 总体约束
 
