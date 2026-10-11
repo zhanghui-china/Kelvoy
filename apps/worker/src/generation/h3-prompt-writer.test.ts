@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { H3PromptContext } from "@kelvoy/engine";
+import type { H3PromptContext, PromptTraceEntry } from "@kelvoy/engine";
 import { createH3PromptWriter } from "./h3-prompt-writer";
 import { H3FormatError } from "./h3-prompt-format";
 import { close, deleteEpisode, insertEpisode, open } from "@kelvoy/store";
@@ -301,4 +301,91 @@ test("malformed section JSON records the structural rule", async () => {
   const error = await writeError({ summary: "only one field" });
   expect(error.rule).toBe("section_fields");
   expect(error.corrected).toBe(true);
+});
+
+// ADR-0012: prompt trace sink
+function tracing(fetcher: typeof fetch, options: Parameters<typeof writer>[1] = {}) {
+  const entries: PromptTraceEntry[] = [];
+  return { entries, writer: writer(fetcher, { ...options, trace: (entry: PromptTraceEntry) => { entries.push(entry); } }) };
+}
+function h3(entry: PromptTraceEntry | undefined) {
+  if (entry?.kind !== "h3_rewrite") throw new Error("expected an h3_rewrite entry");
+  return entry;
+}
+
+test("trace reports the exact user message, final prompt and provenance of an LLM rewrite", async () => {
+  const { entries, writer: traced } = tracing((async () => response(sections("I2VA", 5))) as unknown as typeof fetch);
+  const result = await traced.write({ episode_id: "e1", context: context("I2VA", 5) });
+  expect(entries).toHaveLength(1);
+  const entry = h3(entries[0]);
+  expect(entry.source).toBe("llm");
+  expect(entry.user_message).toBe(JSON.stringify(context("I2VA", 5)));
+  expect(entry.final_prompt).toBe(result.prompt);
+  expect(entry.outcome).toBe("ok");
+  expect(entry.correction_message).toBeUndefined();
+  expect(entry.rule).toBeUndefined();
+  expect({ model: entry.model, skill_version: entry.skill_version, writer_version: entry.writer_version, mode: entry.mode, input_hash: entry.input_hash })
+    .toEqual({ model: result.provenance.model, skill_version: result.provenance.skill_version,
+      writer_version: result.provenance.writer_version, mode: result.provenance.mode, input_hash: result.provenance.input_hash });
+});
+
+test("trace carries the correction message and failed outcome with rule but no final prompt", async () => {
+  let calls = 0;
+  const ok = tracing((async () => { calls++; return response(calls === 1 ? { wrong: "field" } : sections()); }) as unknown as typeof fetch);
+  await ok.writer.write({ episode_id: "e1", context: context() });
+  expect(h3(ok.entries[0]).correction_message).toContain("Fix JSON and section formatting only");
+  expect(h3(ok.entries[0]).outcome).toBe("ok");
+
+  const bad = tracing((async () => response({ summary: "only one field" })) as unknown as typeof fetch);
+  await expect(bad.writer.write({ episode_id: "e1", context: { ...context(), beat: "another input" } })).rejects.toBeInstanceOf(H3FormatError);
+  expect(bad.entries).toHaveLength(1);
+  const failed = h3(bad.entries[0]);
+  expect(failed.outcome).toBe("prompt_format_invalid");
+  expect(failed.rule).toBe("section_fields");
+  expect(failed.final_prompt).toBeUndefined();
+  expect(failed.correction_message).toBeDefined();
+});
+
+test("trace marks timeouts and blocked output with the shared outcome", async () => {
+  const hang = ((_: string, init: RequestInit) => new Promise((_resolve, reject) => {
+    init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true });
+  })) as unknown as typeof fetch;
+  const slow = tracing(hang, { timeoutMs: 10 });
+  await expect(slow.writer.write({ episode_id: "e1", context: context() })).rejects.toThrow();
+  expect(h3(slow.entries[0]).outcome).toBe("prompt_rewrite_timeout");
+
+  const blocked = tracing((async () => response({ ...sections(), summary: "爆炸物" })) as unknown as typeof fetch);
+  await expect(blocked.writer.write({ episode_id: "e1", context: context() })).rejects.toThrow("内容审核");
+  expect(h3(blocked.entries[0])).toMatchObject({ outcome: "content_blocked", source: "llm" });
+  expect(h3(blocked.entries[0]).final_prompt).toBeUndefined();
+});
+
+test("a cache hit is its own entry without any model call", async () => {
+  let calls = 0;
+  const fetcher = (async () => { calls++; return response(sections()); }) as unknown as typeof fetch;
+  const input = { episode_id: "e1", context: context() };
+  const first = await writer(fetcher).write(input);
+  const { entries, writer: traced } = tracing(fetcher);
+  await traced.write(input);
+  expect(calls).toBe(1);
+  expect(entries).toHaveLength(1);
+  expect(h3(entries[0])).toMatchObject({ source: "cache", outcome: "ok", final_prompt: first.prompt,
+    user_message: JSON.stringify(context()), input_hash: first.provenance.input_hash });
+});
+
+test("user cancellation emits no entry", async () => {
+  const controller = new AbortController();
+  const fetcher = (async () => { controller.abort(); throw new Error("aborted by user"); }) as unknown as typeof fetch;
+  const { entries, writer: traced } = tracing(fetcher);
+  await expect(traced.write({ episode_id: "e1", context: context(), signal: controller.signal })).rejects.toThrow();
+  expect(entries).toHaveLength(0);
+});
+
+test("a throwing sink never changes the writer result or its error", async () => {
+  const boom = () => { throw new Error("sink exploded"); };
+  const okWriter = writer((async () => response(sections())) as unknown as typeof fetch, { trace: boom });
+  const result = await okWriter.write({ episode_id: "e1", context: context() });
+  expect(result.prompt).toContain("detailed_description:");
+  const failWriter = writer((async () => response({ ...sections(), summary: "爆炸物" })) as unknown as typeof fetch, { trace: boom });
+  await expect(failWriter.write({ episode_id: "e1", context: { ...context(), beat: "x" } })).rejects.toThrow("内容审核");
 });

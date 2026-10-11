@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, mkdir, link, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { checkContent, ContentBlockedError, type H3PromptContext, type H3PromptResult, type H3PromptWriter } from "@kelvoy/engine";
+import { checkContent, ContentBlockedError, type H3PromptContext, type H3PromptResult, type H3PromptWriter, type PromptTraceSink } from "@kelvoy/engine";
+import { classifyH3Failure } from "./errors";
 import { artifactPath, assertEpisodePublicationAllowed, sharedAssetPath } from "../storage/artifacts";
 import { BASE_FIELDS, REF_FIELDS, H3FormatError, parseSections, validateSections, renderSections } from "./h3-prompt-format";
 
@@ -13,6 +14,8 @@ interface Options {
   model?: string;
   baseUrl?: string;
   apiKey?: string;
+  /** ADR-0012: receives one entry per rewrite attempt (LLM, cache hit or failure); never user cancellation. */
+  trace?: PromptTraceSink;
 }
 function hash(value: string | Uint8Array): string { return createHash("sha256").update(value).digest("hex"); }
 function moderate(text: string, field: string): void {
@@ -95,68 +98,91 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
       if (current.some((value, index) => value !== hashes[index])) throw new Error("references changed during H3 prompt rewrite");
       input.signal?.throwIfAborted();
     };
-    const hit = await cached();
-    if (hit) { await assertReferences(); assertEpisodePublicationAllowed(input.episode_id, input.signal); return hit; }
-    const apiKey = options.apiKey ?? process.env.STEPFUN_API_KEY;
-    if (!apiKey) throw new Error("缺少环境变量 STEPFUN_API_KEY");
-    const controller = new AbortController();
-    const onAbort = () => controller.abort(input.signal?.reason);
-    input.signal?.addEventListener("abort", onAbort, { once: true });
-    if (input.signal?.aborted) onAbort();
-    const messages: { role: string; content: string }[] = [
-      { role: "system", content: systemPrompt(skill, guide, context) },
-      { role: "user", content: JSON.stringify(context) },
-    ];
+    // ADR-0012: the trace is a side channel. It reports after the outcome is decided and can neither
+    // change it nor block it; prompt text goes to the sink only, never into an Error or a log.
+    const state: { source: "llm" | "cache"; correction?: string } = { source: "llm" };
+    const report = (outcome: string, extra: { final_prompt?: string; rule?: string } = {}) => {
+      if (!options.trace || input.signal?.aborted) return;
+      try {
+        options.trace({ kind: "h3_rewrite", source: state.source, user_message: JSON.stringify(context),
+          ...(state.correction === undefined ? {} : { correction_message: state.correction }),
+          ...extra, outcome, model, skill_version, writer_version: WRITER_VERSION, mode: context.mode, input_hash });
+      } catch { /* a failing sink must not alter the rewrite result */ }
+    };
+    const generate = async (): Promise<H3PromptResult> => {
+      const hit = await cached();
+      if (hit) { state.source = "cache"; await assertReferences(); assertEpisodePublicationAllowed(input.episode_id, input.signal); return hit; }
+      const apiKey = options.apiKey ?? process.env.STEPFUN_API_KEY;
+      if (!apiKey) throw new Error("缺少环境变量 STEPFUN_API_KEY");
+      const controller = new AbortController();
+      const onAbort = () => controller.abort(input.signal?.reason);
+      input.signal?.addEventListener("abort", onAbort, { once: true });
+      if (input.signal?.aborted) onAbort();
+      const messages: { role: string; content: string }[] = [
+        { role: "system", content: systemPrompt(skill, guide, context) },
+        { role: "user", content: JSON.stringify(context) },
+      ];
+      try {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          controller.signal.throwIfAborted();
+          const request = new AbortController();
+          const cancelRequest = () => request.abort(controller.signal.reason);
+          controller.signal.addEventListener("abort", cancelRequest, { once: true });
+          const timer = setTimeout(() => request.abort(new Error("H3 prompt rewrite timed out")), options.timeoutMs ?? 60_000);
+          let body: { choices?: { message?: { content?: unknown } }[] };
+          try {
+            const response = await call(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+              method: "POST", signal: request.signal,
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+              body: JSON.stringify({ model, messages, response_format: { type: "json_object" }, temperature: 0.2 }),
+            });
+            request.signal.throwIfAborted();
+            if (!response.ok) throw new Error(`H3 rewrite HTTP ${response.status}`);
+            body = await response.json() as typeof body;
+            request.signal.throwIfAborted();
+          } finally { clearTimeout(timer); controller.signal.removeEventListener("abort", cancelRequest); }
+          controller.signal.throwIfAborted();
+          const content = body.choices?.[0]?.message?.content;
+          if (typeof content !== "string") throw new Error("invalid H3 LLM response envelope");
+          moderate(content, "h3_output");
+          let sections: Record<string, string>;
+          try {
+            sections = parseSections(content, context);
+            moderate(JSON.stringify(sections), "h3_output");
+            validateSections(sections, context);
+          }
+          catch (error) {
+            // Attempt 1 only runs after a correction request was sent for attempt 0.
+            if (error instanceof H3FormatError && attempt === 1) error.corrected = true;
+            if (!(error instanceof H3FormatError) || !error.correctable || attempt === 1) throw error;
+            state.correction = `${error.message}. Fix JSON and section formatting only; do not alter actions, timing, references or constraints.`;
+          messages.push({ role: "assistant", content }, { role: "user", content: state.correction });
+            continue;
+          }
+          await assertReferences();
+          const result = { prompt: renderSections(sections, context), provenance };
+          controller.signal.throwIfAborted();
+          // Recheck the parent after mkdir so a symlink cannot escape the artifact root.
+          await mkdir(dirname(path), { recursive: true });
+          assertEpisodePublicationAllowed(input.episode_id, controller.signal);
+          artifactPath(input.episode_id, `h3-prompts/${input_hash}.json`);
+          await publish(input.episode_id, path, { sections, result }, controller.signal);
+          controller.signal.throwIfAborted();
+          const published = await cached() ?? result;
+          input.signal?.throwIfAborted();
+          return published;
+        }
+        throw new Error("H3 format correction exhausted");
+      } finally { input.signal?.removeEventListener("abort", onAbort); }
+    };
     try {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        controller.signal.throwIfAborted();
-        const request = new AbortController();
-        const cancelRequest = () => request.abort(controller.signal.reason);
-        controller.signal.addEventListener("abort", cancelRequest, { once: true });
-        const timer = setTimeout(() => request.abort(new Error("H3 prompt rewrite timed out")), options.timeoutMs ?? 60_000);
-        let body: { choices?: { message?: { content?: unknown } }[] };
-        try {
-          const response = await call(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-            method: "POST", signal: request.signal,
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({ model, messages, response_format: { type: "json_object" }, temperature: 0.2 }),
-          });
-          request.signal.throwIfAborted();
-          if (!response.ok) throw new Error(`H3 rewrite HTTP ${response.status}`);
-          body = await response.json() as typeof body;
-          request.signal.throwIfAborted();
-        } finally { clearTimeout(timer); controller.signal.removeEventListener("abort", cancelRequest); }
-        controller.signal.throwIfAborted();
-        const content = body.choices?.[0]?.message?.content;
-        if (typeof content !== "string") throw new Error("invalid H3 LLM response envelope");
-        moderate(content, "h3_output");
-        let sections: Record<string, string>;
-        try {
-          sections = parseSections(content, context);
-          moderate(JSON.stringify(sections), "h3_output");
-          validateSections(sections, context);
-        }
-        catch (error) {
-          // Attempt 1 only runs after a correction request was sent for attempt 0.
-          if (error instanceof H3FormatError && attempt === 1) error.corrected = true;
-          if (!(error instanceof H3FormatError) || !error.correctable || attempt === 1) throw error;
-          messages.push({ role: "assistant", content }, { role: "user", content: `${error.message}. Fix JSON and section formatting only; do not alter actions, timing, references or constraints.` });
-          continue;
-        }
-        await assertReferences();
-        const result = { prompt: renderSections(sections, context), provenance };
-        controller.signal.throwIfAborted();
-        // Recheck the parent after mkdir so a symlink cannot escape the artifact root.
-        await mkdir(dirname(path), { recursive: true });
-        assertEpisodePublicationAllowed(input.episode_id, controller.signal);
-        artifactPath(input.episode_id, `h3-prompts/${input_hash}.json`);
-        await publish(input.episode_id, path, { sections, result }, controller.signal);
-        controller.signal.throwIfAborted();
-        const published = await cached() ?? result;
-        input.signal?.throwIfAborted();
-        return published;
-      }
-      throw new Error("H3 format correction exhausted");
-    } finally { input.signal?.removeEventListener("abort", onAbort); }
+      const result = await generate();
+      report("ok", { final_prompt: result.prompt });
+      return result;
+    } catch (error) {
+      const failure = classifyH3Failure(error);
+      report(failure.outcome, failure.rule ? { rule: failure.rule } : {});
+      throw error;
+    }
   } };
 }

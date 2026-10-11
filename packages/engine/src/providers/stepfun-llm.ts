@@ -3,6 +3,7 @@ import type { Episode, Scene, SceneTime, Shot, ShotCamera, ShotSize } from "../s
 import { checkContent, ContentBlockedError } from "../rules/content";
 import { checkScriptRules } from "../rules/script";
 import { SKELETONS } from "../templates/skeletons";
+import type { PromptTraceEntry } from "./prompt-trace";
 import type { ScriptProvider } from "./types";
 
 /**
@@ -214,7 +215,7 @@ export async function callChatCompletion(prompt: string, signal?: AbortSignal): 
 }
 
 export const stepfunScriptProvider: ScriptProvider = {
-  async generateShots({ brief, destination, instruction, previousShots, cutPolicy }) {
+  async generateShots({ brief, destination, instruction, previousShots, cutPolicy, trace, operation = "generate" }) {
     let feedback: string | undefined;
     let contentViolations: ReturnType<typeof checkShotsContent> = [];
 
@@ -237,15 +238,25 @@ export const stepfunScriptProvider: ScriptProvider = {
         previousShots,
       });
 
-      const content = await callChatCompletion(prompt);
-      const raw = parseRawShots(extractJsonArray(content), cutPolicy);
-      const { shots, scenes } = buildScenesAndShots(raw, brief.duration_s);
+      // ADR-0012: one trace entry per round, reported after the call settles. The entry
+      // carries the prompt only; the call's error text is never copied into it.
+      let outcome: Extract<PromptTraceEntry, { kind: "script" }>["outcome"] = "call_failed";
+      let ruleViolations: ReturnType<typeof checkScriptRules> = [];
+      let built: { shots: Shot[]; scenes: Scene[] } | undefined;
+      try {
+        const content = await callChatCompletion(prompt);
+        outcome = "parse_error";
+        const raw = parseRawShots(extractJsonArray(content), cutPolicy);
+        built = buildScenesAndShots(raw, brief.duration_s);
 
-      const ruleViolations = checkScriptRules(shots, destination);
-      contentViolations = checkShotsContent(shots);
-      if (ruleViolations.length === 0 && contentViolations.length === 0) {
-        return { shots, scenes };
+        ruleViolations = checkScriptRules(built.shots, destination);
+        contentViolations = checkShotsContent(built.shots);
+        outcome = ruleViolations.length > 0 ? "rule_violation"
+          : contentViolations.length > 0 ? "content_blocked" : "accepted";
+      } finally {
+        trace?.({ kind: "script", operation, round, prompt, outcome });
       }
+      if (outcome === "accepted") return built;
 
       feedback = [
         ...ruleViolations.map((v) => `- ${v.message}`),

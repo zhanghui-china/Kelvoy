@@ -146,3 +146,14 @@ test("long generation and revision retain per-shot suggestions", async () => {
   const revised = await runScriptRevision(generated, "修改动作", { destination });
   expect(revised.shots.map(s => s.duration_s)).toEqual(generated.shots.map(s => s.duration_s));
 });
+
+test("promptTrace receives generate entries from runScript and revision entries from runScriptRevision", async () => {
+  const entries: { operation?: string; outcome: string }[] = [];
+  const promptTrace = (entry: { operation?: string; outcome: string }) => { entries.push(entry); };
+  const generated = await runScript(fixtureEpisode(), undefined, { destination, promptTrace });
+  expect(entries.map((e) => [e.operation, e.outcome])).toEqual([["generate", "accepted"]]);
+
+  entries.length = 0;
+  await runScriptRevision({ ...generated, status: "script_review" }, "精简", { destination, promptTrace });
+  expect(entries.map((e) => [e.operation, e.outcome])).toEqual([["revision", "accepted"]]);
+});

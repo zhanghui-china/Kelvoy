@@ -1,5 +1,6 @@
 import type { H3PromptWriter } from "./h3-prompt";
 import type { ComposeProvider } from "../providers/types";
+import type { PromptTraceSink } from "../providers/prompt-trace";
 import type { Destination, EpisodeAspect, Persona } from "../schema";
 
 /**
@@ -12,6 +13,8 @@ import type { Destination, EpisodeAspect, Persona } from "../schema";
  */
 export interface StageContext {
   h3PromptWriter?: H3PromptWriter;
+  /** ADR-0012: write-only report of script prompts; the caller owns persistence. */
+  promptTrace?: PromptTraceSink;
   destination?: Destination;
   persona?: Persona;
   generation_id?: string;
