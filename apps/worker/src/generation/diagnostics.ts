@@ -2,6 +2,11 @@ import { ContentBlockedError, type H3PromptWriter } from "@kelvoy/engine";
 import { GenerationError } from "./errors";
 import { H3FormatError } from "./h3-prompt-format";
 
+/**
+ * Observability only: the log line and the thrown diagnostic carry rule/corrected/timing, never the
+ * user message, final prompt or model response. Prompt records go through a separate trace sink and
+ * are written in the task settlement transaction (see ADR-0012).
+ */
 export function observeH3Rewrite(writer: H3PromptWriter, correlation: { task_id: string; shot_id?: string; attempt: number }): H3PromptWriter {
   return { async write(input) {
     const started = performance.now();

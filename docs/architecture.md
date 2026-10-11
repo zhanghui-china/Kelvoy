@@ -50,6 +50,10 @@ flowchart LR
 
 目的地共享发布：engine 定义草稿内容与发布完整性校验；store 独占私有草稿与发布快照的 SQLite 事务；web 负责会话、上传与路径授权；worker 继续读取旧期冻结的目的地版本。协议见 [草稿 API](api/destination-drafts.md)。
 
+### 提示词记录（ADR-0012）
+
+设计已定，未实现。作品所有者可在界面查看脚本与视频步骤发给模型的提示词：`packages/store` 新增只追加的 `prompt_traces` 表，Worker 在任务结算事务内一并写入，Web 经 `/api/episodes/:id/prompts` 脱敏后只读返回。原始 LLM 响应与系统提示词全文仍不入库，日志、诊断、分享、导出不含提示词。协议见 [提示词记录 API](api/prompt-traces.md)，决策见 [ADR-0012](decisions/0012-owner-visible-prompt-traces.md)。
+
 ### 全站系统配置与检测（ADR-0010）
 
 Web `/api/system/*` 认证与运维白名单 → `@kelvoy/store` 单例配置／版本／全站活跃任务事务锁；Web 使用与 Worker 相同的 `INFERENCE_BASE_URL` 调 Inference `/system/diagnostics`，由推理机器只读检查 ComfyUI 和 bridge。Worker 每任务读取冻结配置，生成请求传入 ComfyUI 覆盖，缓存纳入后端标识。普通账号不接收内部地址或静态依赖详情。bridge 不属于生成必需链路，系统检测不证明 Worker 存活或模型可实际出图。
