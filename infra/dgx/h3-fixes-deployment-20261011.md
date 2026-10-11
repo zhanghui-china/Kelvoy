@@ -185,3 +185,17 @@ H3 改写的格式／校验类失败原先是终止性的，镜头直接失败�
 ### 回退
 
 在对应节点删除 `kelvoy-{web,worker}.service.d/` 下本次新建的 `…-h3-round2-20261011.conf`（文件名比 `zzzzzzzzzzzzzzz-retry-once-20261011.conf` 多一个前导 `z`），`daemon-reload` 后重启 Web／Worker，回到 `retry-once-20261011-fe5b52b`。新表与迁移记录保留，旧版本忽略它；**不恢复数据库**，避免覆盖上线后的新数据；备份仅用于核对和人工恢复。
+
+## 九、新建界面默认关键帧（仅前端，GX10，2026-10-11）
+
+分支 `feat/default-keyframe-ui`（未合并 main），提交 `4ee2729`，基线 `813f79b`。只改 `apps/web/src/frontend` 下 15 个文件，服务端、engine、worker、store 零改动，无迁移。
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/keyframe-default-20261011-4ee2729` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-keyframe-default-20261011-20261011T115859Z` |
+| 切换 | 11:59 左右，`deploy-web-worker.py` 状态 `deployed`，未带迁移闸门参数 |
+| 节点验证 | typecheck 5 包通过；web 463 通过 / 0 失败 |
+| 切换后 | 三服务 active、重启 0、健康 `ok`、近 3 分钟日志 0 错误、`STEPFUN_MODEL` 仍为 `step-3.5-flash`、无进行中任务、线上前端包含新文案 |
+
+Spark 未发布。未做的验证：浏览器走查（新建页默认值、选图界面、直出提示行）。回退：删除 `zzzzzzzzzzzzzzzzz-keyframe-default-20261011.conf`（web 与 worker 各一份），`daemon-reload` 后重启 web / worker，回到 `h3-round2-20261011-05753a6`。
