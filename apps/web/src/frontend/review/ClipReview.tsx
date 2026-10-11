@@ -16,6 +16,7 @@ import { GuideTip } from "../GuideTip";
 import ReviewQueue from "./ReviewQueue";
 import { ShotFocusNav } from "./ShotFocusNav";
 import PromptTrace from "./PromptTrace";
+import { videoPromptRefreshKey } from "./prompt-trace-key";
 import { MutationError, ShotHeader } from "./ShotHeader";
 import { focusedShot } from "./shot-focus";
 import { canRegen, regenHint } from "./shot-rules";
@@ -146,7 +147,7 @@ function ClipShot({
     >
       <ShotHeader shot={shot} />
       {shot.shot_id && <PromptTrace episodeId={episode.episode_id} kind="video" shotId={shot.shot_id} shotNo={shot.no}
-        refreshKey={shot.clip ?? shot.model?.video?.h3_prompt?.input_hash ?? null}
+        refreshKey={videoPromptRefreshKey(shot)}
         fallbackPrompt={shot.model?.video?.prompt ?? null} />}
       <div className="k-desk-shot-body">
         <div>

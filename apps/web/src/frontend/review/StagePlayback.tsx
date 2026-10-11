@@ -4,6 +4,7 @@ import type { Destination, Episode, Persona } from "@kelvoy/engine";
 import { assetUrl, episodeFileUrl } from "../api/client";
 import { DESTINATION_TYPE_LABELS, SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS, SHOT_STATUS_LABELS } from "../labels";
 import PromptTrace from "./PromptTrace";
+import { videoPromptRefreshKey } from "./prompt-trace-key";
 import { downloadScriptCsv } from "./scriptExport";
 import type { StageId } from "./StageSteps";
 
@@ -71,7 +72,7 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
       <p className="k-card-meta">已保存的截取起点：{shot.trim_start_s === null ? "未保存（默认 0 秒）" : `${shot.trim_start_s.toFixed(2)} 秒`} · 审核状态：{SHOT_STATUS_LABELS[shot.status]}</p>
       <p className="k-card-meta">{episode.cut_policy === "long_3_6" ? "建议长度（最终按素材分配）" : "截取长度"}：{episode.cut_policy === "fixed_1s" ? 1 : shot.duration_s} 秒</p>
       {shot.shot_id && <PromptTrace key={shot.shot_id} episodeId={episode.episode_id} kind="video" shotId={shot.shot_id} shotNo={shot.no}
-        refreshKey={shot.clip ?? shot.model?.video?.h3_prompt?.input_hash ?? null}
+        refreshKey={videoPromptRefreshKey(shot)}
         fallbackPrompt={shot.model?.video?.prompt ?? null} />}
       {shot.clip ? <SavedMedia key={`${shot.no}:${shot.clip}`} src={file(shot.clip)} label={`第 ${shot.no} 镜视频`} video /> : <p className="k-empty">暂无已保存的视频</p>}
     </article> : <p className="k-empty">暂无已保存的视频</p>}
