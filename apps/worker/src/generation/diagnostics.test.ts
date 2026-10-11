@@ -42,3 +42,22 @@ test("diagnostic carries only the declared rule and distinguishes corrected fail
   expect(undeclared.diagnostic.rule).toBeUndefined();
   expect(JSON.stringify(undeclared.diagnostic)).not.toContain("private");
 });
+
+test("prompt rewrite diagnostic reports the configured per-request LLM budget", async () => {
+  const original = process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+  async function budget() {
+    const writer = observeH3Rewrite({ async write() { throw new Error("H3 rewrite HTTP 500"); } }, { task_id: "tk_1", attempt: 1 });
+    const error = await writer.write({} as Parameters<H3PromptWriter["write"]>[0])
+      .then(() => { throw new Error("expected rewrite failure"); }, (e: unknown) => e as GenerationError);
+    return error.diagnostic.budget_seconds;
+  }
+  try {
+    delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    expect(await budget()).toBe(120);
+    process.env.KELVOY_LLM_TIMEOUT_SECONDS = "45";
+    expect(await budget()).toBe(45);
+  } finally {
+    if (original === undefined) delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    else process.env.KELVOY_LLM_TIMEOUT_SECONDS = original;
+  }
+});

@@ -35,7 +35,7 @@ export KELVOY_FONT_FILE=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
 
 视频生成先执行 `src/generation/h3-prompt-writer.ts`，使用随源码发布的官方 `skills/h3-prompt-writing` 原文。固定版本、来源与许可见该目录 `UPSTREAM.json` / `LICENSE` / `NOTICE`；只安装通用 skill，不增加风格工作流。部署必须包含 SKILL.md 与 references/base-en.txt、ref-en.txt，运行期间不从 GitHub 下载。
 
-沿用 `STEPFUN_API_KEY`、`STEPFUN_API_BASE`（默认 `https://api.stepfun.com/step_plan/v1`）、`STEPFUN_MODEL`（默认 `step-3.5-flash`），密钥只放受保护环境配置。每次 LLM 调用 60 秒，JSON 或引用保留说明行的格式失败最多纠正一次；语义约束、动作或审核失败不纠正，不能提交原稿。视频积分价格包含编写。
+沿用 `STEPFUN_API_KEY`、`STEPFUN_API_BASE`（默认 `https://api.stepfun.com/step_plan/v1`）、`STEPFUN_MODEL`（默认 `step-3.5-flash`），密钥只放受保护环境配置。每次 LLM HTTP 请求的超时由 `KELVOY_LLM_TIMEOUT_SECONDS` 配置，默认 120 秒，允许 30–300 的整数，非法值启动即报错；这是单个请求的预算而非整次改写的总预算，格式纠正一轮会再发一次请求，本地重试最多两次，最坏情况一次改写会占用多个预算。JSON 或引用保留说明行的格式失败最多纠正一次；语义约束、动作或审核失败不纠正，不能提交原稿。视频积分价格包含编写。
 
 有效编写结果存于 `<root>/<episode_id>/h3-prompts/<input_hash>.json`，通过临时文件与原子发布避免半写文件。缓存以实际参考图内容散列与输入／模型／文档版本为依据，重试与租约变更可复用；编辑字段或换图会失效。不要删除活跃作品的缓存。`model.video.prompt` 保存最终 H3 全文，`h3_prompt` 保存编写来源。排查时核对记录、缓存与 Inference 请求，不打印 API 密钥。
 
@@ -43,6 +43,6 @@ export KELVOY_FONT_FILE=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
 
 ## 视频预算与失败诊断
 
-`KELVOY_VIDEO_TIMEOUT_SECONDS` 默认 900 秒，允许 30–1800 的整数，启动时校验；必须与 Inference 一致。视频 HTTP 总预算为配置加 60 秒，关闭 Bun socket idle timeout，由 AbortController 控制；图片与提示词改写预算保持原值。
+`KELVOY_VIDEO_TIMEOUT_SECONDS` 默认 900 秒，允许 30–1800 的整数，启动时校验；必须与 Inference 一致。视频 HTTP 总预算为配置加 60 秒，关闭 Bun socket idle timeout，由 AbortController 控制；图片预算保持原值，提示词改写见 `KELVOY_LLM_TIMEOUT_SECONDS`。
 
 每 30 秒续租，退出、用户取消或丢失租约会中止调用，由 Inference 定向取消本次 ComfyUI prompt。生成超时、无效参数、提示词格式校正后仍失败、内容审核失败不自动重跑；网络和暂时性服务错误最多两次尝试。阶段安全诊断保存在 `tasks.error`，重试保留最近失败、成功清除；退款提示仅在积分释放事务完成后显示。原素材、已审核镜头与已有成片均保留。

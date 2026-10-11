@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promis
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { H3PromptContext, PromptTraceEntry } from "@kelvoy/engine";
-import { createH3PromptWriter } from "./h3-prompt-writer";
+import { createH3PromptWriter, rewriteTimeoutMs } from "./h3-prompt-writer";
 import { H3FormatError } from "./h3-prompt-format";
 import { close, deleteEpisode, insertEpisode, open } from "@kelvoy/store";
 import { deletionEpisodeFixture } from "../queue/deletion-test-fixture";
@@ -428,4 +428,19 @@ test("normalization only touches provided numbers, so an unprovided <Picture 3> 
   const value = { ...bare(sections()), summary: "[reference generation] Hands in <Subject 2>, see <Picture 3>." };
   const error = await writeError(value);
   expect(error.rule).toBe("unprovided picture reference");
+});
+
+test("rewrite timeout prefers the explicit override and otherwise follows the shared LLM budget", () => {
+  const original = process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+  try {
+    delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    expect(rewriteTimeoutMs({})).toBe(120_000);
+    expect(rewriteTimeoutMs({ timeoutMs: 10 })).toBe(10);
+    process.env.KELVOY_LLM_TIMEOUT_SECONDS = "45";
+    expect(rewriteTimeoutMs({})).toBe(45_000);
+    expect(rewriteTimeoutMs({ timeoutMs: 10 })).toBe(10);
+  } finally {
+    if (original === undefined) delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    else process.env.KELVOY_LLM_TIMEOUT_SECONDS = original;
+  }
 });

@@ -3,6 +3,7 @@ import type { Episode, Scene, SceneTime, Shot, ShotCamera, ShotSize } from "../s
 import { checkContent, ContentBlockedError } from "../rules/content";
 import { checkScriptRules } from "../rules/script";
 import { SKELETONS } from "../templates/skeletons";
+import { llmTimeoutMs } from "./llm-timeout";
 import type { PromptTraceEntry } from "./prompt-trace";
 import type { ScriptProvider } from "./types";
 
@@ -195,9 +196,10 @@ export async function callChatCompletion(prompt: string, signal?: AbortSignal): 
   const baseUrl = process.env.STEPFUN_API_BASE ?? DEFAULT_BASE_URL;
   const model = process.env.STEPFUN_MODEL ?? DEFAULT_MODEL;
 
+  const timeout = AbortSignal.timeout(llmTimeoutMs()); // per HTTP request, see llm-timeout.ts
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
-    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,

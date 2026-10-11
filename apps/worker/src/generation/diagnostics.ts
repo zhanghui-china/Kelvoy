@@ -1,4 +1,4 @@
-import type { H3PromptWriter } from "@kelvoy/engine";
+import { llmTimeoutSeconds, type H3PromptWriter } from "@kelvoy/engine";
 import { classifyH3Failure, GenerationError } from "./errors";
 
 /**
@@ -22,7 +22,7 @@ export function observeH3Rewrite(writer: H3PromptWriter, correlation: { task_id:
           : failure.invalid ? (corrected ? "视频提示词格式校正后仍无效，请联系团队排查。" : "视频提示词未通过规则校验，请联系团队排查。")
           : "视频提示词改写失败，请稍后重试。",
         elapsed_seconds: (performance.now() - started) / 1000,
-        budget_seconds: 60, cancellation: "not_needed", ...(rule ? { rule } : {}),
+        budget_seconds: llmTimeoutSeconds(), cancellation: "not_needed", ...(rule ? { rule } : {}),
       }, failure.retryable);
     } finally {
       console.info(JSON.stringify({ ...correlation, stage: "prompt_rewrite", code,
