@@ -28,6 +28,12 @@ export type PromptTraceEntry =
       outcome: string;
       /** Fixed `H3FormatError.rule` identifier, never model output. */
       rule?: string;
+      /**
+       * How many bare `Picture N` labels the writer rewrote to `<Picture N>` before validation.
+       * Absent when none. Not persisted: the trace store has no column for it (see
+       * apps/worker prompt-trace-collector).
+       */
+      normalized_labels?: number;
       model: string;
       skill_version: string;
       writer_version: string;

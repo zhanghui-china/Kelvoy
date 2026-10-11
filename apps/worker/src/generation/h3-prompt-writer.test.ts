@@ -389,3 +389,43 @@ test("a throwing sink never changes the writer result or its error", async () =>
   const failWriter = writer((async () => response({ ...sections(), summary: "爆炸物" })) as unknown as typeof fetch, { trace: boom });
   await expect(failWriter.write({ episode_id: "e1", context: { ...context(), beat: "x" } })).rejects.toThrow("内容审核");
 });
+
+// Bare "Picture N" label typos (production replay: 5 of 25 rewrites failed on them).
+function bare(value: Record<string, string>): Record<string, string> {
+  return { ...value, subject_definitions: value.subject_definitions!.replace(/<(Picture \d)>/g, "$1"),
+    detailed_description: value.detailed_description!.replace("<Subject 1> is framed", "<Subject 1> from Picture 1 is framed") };
+}
+
+test("bare Picture labels are normalized before validation, rendering and caching", async () => {
+  const { entries, writer: traced } = tracing((async () => response(bare(sections()))) as unknown as typeof fetch);
+  const result = await traced.write({ episode_id: "e1", context: context() });
+  expect(result.prompt).toContain("<Picture 1>");
+  expect(result.prompt).toContain("<Picture 2>");
+  expect(result.prompt).not.toMatch(/(?<!<)Picture \d/);
+  const cached = JSON.parse(await readFile(join(root, "e1/h3-prompts", `${result.provenance.input_hash}.json`), "utf8"));
+  expect(cached.sections.subject_definitions).toBe("<Subject 1> is the person from <Picture 1>. <Subject 2> is the scene from <Picture 2>.");
+  expect(cached.result.prompt).toBe(result.prompt);
+  const entry = h3(entries[0]);
+  expect(entry.outcome).toBe("ok");
+  expect(entry.normalized_labels).toBe(3);
+  expect(entry.final_prompt).toBe(result.prompt);
+});
+
+test("a clean rewrite reports no normalized_labels", async () => {
+  const { entries, writer: traced } = tracing((async () => response(sections())) as unknown as typeof fetch);
+  await traced.write({ episode_id: "e1", context: context() });
+  expect(h3(entries[0]).normalized_labels).toBeUndefined();
+});
+
+test("normalization does not rescue a supplied picture the model never mentioned", async () => {
+  const value = { ...sections(), subject_definitions: "<Subject 1> is the person from Picture 1. <Subject 2> is the scene from Picture 3.",
+    summary: "[reference generation] A detail of <Subject 1>'s hands with pastry in <Subject 2>." };
+  const error = await writeError(value);
+  expect(error.rule).toBe("all supplied pictures must be referenced");
+});
+
+test("normalization only touches provided numbers, so an unprovided <Picture 3> still fails", async () => {
+  const value = { ...bare(sections()), summary: "[reference generation] Hands in <Subject 2>, see <Picture 3>." };
+  const error = await writeError(value);
+  expect(error.rule).toBe("unprovided picture reference");
+});
