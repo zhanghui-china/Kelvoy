@@ -69,3 +69,57 @@
 ## 回退
 
 在对应节点删除 `kelvoy-{web,worker}.service.d/zzzzzzzzzzzz-h3-fixes-20261011.conf`，`daemon-reload` 后重启 Web／Worker，回到上一版（Spark 为 `prompt-traces-20261011-573aa90`，GX10 为 `prompt-traces-20261011-6946b27`）。不恢复数据库。
+
+## 六、后续：校验器误判修复与保留说明放宽（同日，`d84f995`、`c107ebd`）
+
+对上一节遗留的失败类别，用 GX10 同一批 4 个镜头（2/4/5/6）重放，抓取模型原文后逐个归因。结论：16 次失败里约 70% 是我们这一侧的规则或输入，没有一次能确认是模型答错。
+
+### 归因（`step-3.5-flash`，新代码，24 次调用：8 通过、16 失败）
+
+| 归属 | 次数 | 内容 |
+| --- | --- | --- |
+| 校验规则过严／写错 | 7 | 角色词表不认 `persona`（4）；否定句 `no … vocal sounds` 被当成有人声（2）；`close-up` 不被当成 `detail`（1） |
+| 上游数据自相矛盾 | 4 | 脚本阶段把机位标成 `pan`，运动描述却是"仰拍"；机位枚举没有 tilt |
+| 设计冲突 | 1 | 每镜强制带人物参考图，镜头里没人，模型写 `(absent)`，规范没有"不出现"的写法 |
+| 未能判定 | 4 | 保留说明语法 2、`one continuous Shot 1` 1、景别机位 1，没抓到原文 |
+
+### 修复
+
+1. **角色规则**：只在整行只命中对方角色词表、且没命中己方词表时才失败；扩充词表（`persona`、`traveler`、`visitor` 等）；整行判断而不是只看到 `<Picture>` 为止。
+2. **否定从句**：`removeNegativeConstraints` 改为整句剥离（到 `.` `;` 换行 `|` 或 `, but/while/then`，单句最多 12 词）。已知取舍：同一句里 "no sound effects, and she says hello" 的后半会被吃掉，因为该函数只用于禁止项检测，宁可少报。
+3. **景别／机位**：`close` 与 `detail` 互通；`tilt/sweep/swing` 归入 `pan`；`push` 增加 `zoom in/approach`；静态机位不得运动的规则不变。
+4. **脚本阶段自洽规则** `camera_motion_consistency`：保守词表，仅当运动描述恰好推断出一个镜头运动类别且与 `camera` 不同时才违规，反馈通过现有纠错循环发回脚本模型；仰拍／俯拍属 `pan`。
+5. **保留说明放宽**（`c107ebd`）：Subject 条目括号内容不再强制 `appears in [Shot 1]`（允许 `does not appear in [Shot 1]`、`absent`、`appears in []`），官方规范允许的 `<Picture N>` 条目不再判错且不计数；Subject 编号必须与定义一一对应、不得重复，关系标记与 ` - ` 分隔仍严格。
+
+### 重放对照（同批镜头，每轮 12 次）
+
+| | 修复前 | 第 1、2 层修复后 | 再加保留说明放宽 |
+| --- | --- | --- | --- |
+| 通过 | 2 | 8 | **11** |
+| 角色／景别机位／对白规则失败 | 8 | 0 | 0 |
+| 保留说明语法失败 | 1 | 3 | 1（模型漏写了 Subject 2 一行，真失败） |
+| 60 秒超时 | 0 | 0 | 0 |
+
+样本小，且全是此前失败过的难例，绝对成功率只代表这批镜头；误差在 ±2 次内不视为变化。
+
+### 一处更正
+
+发布前我曾说"`retention_analysis` 只用于校验和缓存，不会进入视频内容"，**不对**：`renderSections` 会把 Ref2VA 的六个字段（含 `retention_analysis`）拼进最终发给视频模型的提示词。因此放宽之后视频模型可能看到 `(does not appear in [Shot 1])` 这类官方规范里没有的写法。语义准确，但对视频质量的影响**未测量**，只能靠人工审核片段观察。
+
+### 发布
+
+| 节点 | 发布目录 | 源码 | 数据库备份（UTC） | 切换 |
+| --- | --- | --- | --- | --- |
+| Spark | `validator-fixes-20261011-d84f995`，随后 `retention-tolerance-20261011-c107ebd` | `d84f995` → `c107ebd` | `…pre-validator-fixes-…T074741Z`；`…pre-retention-tolerance-…T080504Z` | 07:47；08:05 |
+| GX10 | 同上 | 同上 | `…T074924Z`；`…T080549Z` | 07:49；08:05 |
+
+无迁移、无前端改动；节点上 1119／1128 项测试 0 失败；两节点服务 active、重启 0、健康 `ok`、近 3 分钟日志无错误；`STEPFUN_MODEL` 仍为 `step-3.5-flash`。drop-in 新文件名自动比现有多一个前导 `z`。
+
+回退：删除对应 drop-in（最新的 `…zzzzzzzzzzzzzz-retention-tolerance-20261011.conf`）后 `daemon-reload` 并重启，回到上一版；不恢复数据库。
+
+### 仍待跟进
+
+- 视频质量是否受保留说明新写法影响：待人工审核真实片段。
+- 剩余少量失败：模型漏写 Subject 行、`timeline must end at …`、`one continuous Shot 1`，没有足够原文。可考虑对格式类失败允许一次自动再试（模型输出随机，现在是终止性失败）。
+- 产品层面：是否对没有人的镜头不再带人物参考图（会改变视频直出的参考图策略）。
+- ADR-0011 仍写"LLM 单次上限 60 秒"。
