@@ -27,7 +27,7 @@ test("classifyH3Failure maps writer errors to the shared diagnostic code", () =>
   expect(blocked).toMatchObject({ code: "content_blocked", outcome: "content_blocked", retryable: false });
   const invalid = new H3FormatError("private", true, "some rule");
   invalid.corrected = true;
-  expect(classifyH3Failure(invalid)).toMatchObject({ code: "prompt_format_invalid", outcome: "prompt_format_invalid", rule: "some rule", corrected: true, retryable: false });
+  expect(classifyH3Failure(invalid)).toMatchObject({ code: "prompt_format_invalid", outcome: "prompt_format_invalid", rule: "some rule", corrected: true, retryable: true });
   expect(classifyH3Failure(new Error("H3 prompt rewrite timed out"))).toMatchObject({ code: "prompt_rewrite_timeout", outcome: "prompt_rewrite_timeout", retryable: true });
   expect(classifyH3Failure(new Error("H3 rewrite HTTP 500"))).toMatchObject({ code: "prompt_rewrite_failed", outcome: "prompt_rewrite_failed", retryable: true });
   expect(classifyH3Failure("weird")).toMatchObject({ code: "prompt_rewrite_failed" });

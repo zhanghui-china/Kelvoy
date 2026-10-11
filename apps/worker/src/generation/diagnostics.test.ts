@@ -18,7 +18,7 @@ test("format correction exhaustion has a safe prompt rewrite diagnostic and is r
 });
 
 test("content blocks stay terminal", async () => {
-  const writer = observeH3Rewrite({ async write() { throw new ContentBlockedError("blocked"); } }, { task_id: "tk_1", attempt: 1 });
+  const writer = observeH3Rewrite({ async write() { throw new ContentBlockedError([{ field: "x", term: "y", category: "test" }]); } }, { task_id: "tk_1", attempt: 1 });
   const failure = await writer.write({} as Parameters<H3PromptWriter["write"]>[0])
     .then(() => { throw new Error("expected failure"); }, (e: unknown) => e as GenerationError);
   expect(failure.retryable).toBe(false);
