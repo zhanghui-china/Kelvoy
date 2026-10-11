@@ -346,6 +346,32 @@ test("trace carries the correction message and failed outcome with rule but no f
   expect(failed.correction_message).toBeDefined();
 });
 
+test("a rejected attempt keeps the last raw model output; success and blocked output carry none", async () => {
+  // Two rejected rounds with different raw text: the entry must hold the one that decided the failure.
+  let calls = 0;
+  const raws: string[] = [];
+  const bad = tracing((async () => {
+    calls++;
+    const value = calls === 1 ? { summary: "first rejected output" } : { summary: "second rejected output" };
+    raws.push(JSON.stringify(value));
+    return response(value);
+  }) as unknown as typeof fetch);
+  await expect(bad.writer.write({ episode_id: "e1", context: { ...context(), beat: "rejected output input" } }))
+    .rejects.toBeInstanceOf(H3FormatError);
+  const failed = h3(bad.entries[0]);
+  expect(failed.final_prompt).toBeUndefined();
+  expect(failed.rejected_output).toBe(raws[1]);
+
+  const ok = tracing((async () => response(sections())) as unknown as typeof fetch);
+  await ok.writer.write({ episode_id: "e1", context: { ...context(), beat: "accepted output input" } });
+  expect(h3(ok.entries[0]).rejected_output).toBeUndefined();
+
+  // Moderation blocks are not stored: blocked text must not be copied into another table.
+  const blocked = tracing((async () => response({ ...sections(), summary: "爆炸物" })) as unknown as typeof fetch);
+  await expect(blocked.writer.write({ episode_id: "e1", context: { ...context(), beat: "blocked output input" } })).rejects.toThrow("内容审核");
+  expect(h3(blocked.entries[0]).rejected_output).toBeUndefined();
+});
+
 test("trace marks timeouts and blocked output with the shared outcome", async () => {
   const hang = ((_: string, init: RequestInit) => new Promise((_resolve, reject) => {
     init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true });

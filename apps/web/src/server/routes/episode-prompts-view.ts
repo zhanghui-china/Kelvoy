@@ -45,6 +45,31 @@ export function redactVideoUserMessage(raw: string): string {
   return JSON.stringify({ ...parsed, references: parsed.references.map(redactReference) });
 }
 
+const LONG_HEX = /[0-9a-f]{32,}/gi;
+
+/**
+ * Rejected output is model text, not user input, so it normally holds no storage key. It is still
+ * scrubbed against the keys listed in the same row's user_message (the only place they exist) and
+ * against long hex runs (content hashes). If those keys cannot be determined the whole text is
+ * replaced rather than passed through.
+ */
+export function redactRejectedOutput(raw: string, userMessage: string): string {
+  let parsed: unknown;
+  try { parsed = JSON.parse(userMessage); } catch { return UNAVAILABLE; }
+  if (!isPlainObject(parsed)) return UNAVAILABLE;
+  const keys: string[] = [];
+  if ("references" in parsed) {
+    if (!Array.isArray(parsed.references)) return UNAVAILABLE;
+    for (const ref of parsed.references) {
+      if (isPlainObject(ref) && typeof ref.key === "string" && ref.key !== "") keys.push(ref.key);
+    }
+  }
+  let text = raw;
+  // Longest first so a key that is a prefix of another cannot leave a fragment behind.
+  for (const key of keys.sort((a, b) => b.length - a.length)) text = text.split(key).join(REFERENCE);
+  return text.replace(LONG_HEX, "[hash]");
+}
+
 export function toPromptTraceView(row: PromptTraceRow): PromptTraceItem {
   const video = row.kind === "h3_rewrite";
   return {
@@ -64,8 +89,9 @@ export function toPromptTraceView(row: PromptTraceRow): PromptTraceItem {
     user_message: video ? redactVideoUserMessage(row.user_message) : row.user_message,
     correction_message: row.correction_message ?? null,
     final_prompt: row.final_prompt ?? null,
+    rejected_output: video && row.rejected_output != null ? redactRejectedOutput(row.rejected_output, row.user_message) : null,
     input_hash: row.input_hash ? row.input_hash.slice(0, HASH_PREFIX_LENGTH) : null,
-    truncated: row.truncated !== 0,
+    truncated: row.truncated !== 0 || (row.rejected_truncated ?? 0) !== 0,
     created_at: row.created_at,
   };
 }

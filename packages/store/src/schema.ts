@@ -181,6 +181,17 @@ create table if not exists prompt_traces (
   primary key (task_id, attempt, seq)
 );
 create index if not exists idx_prompt_traces_episode on prompt_traces(episode_id, kind, shot_id);
+
+-- ADR-0012 补充（prompt_traces_v2）：校验失败时被拒绝的模型原文。独立加性新表，不给已有的
+-- prompt_traces 加列（部署闸门只放行新表）；与主表同主键，读取时左连接。
+create table if not exists prompt_trace_rejections (
+  task_id text not null, attempt integer not null, seq integer not null,
+  episode_id text not null, owner_id text not null,
+  rejected_output text not null, truncated integer not null default 0,
+  created_at text not null default (datetime('now')),
+  primary key (task_id, attempt, seq)
+);
+create index if not exists idx_prompt_trace_rejections_episode on prompt_trace_rejections(episode_id);
 `;
 
 /**

@@ -168,6 +168,34 @@ test("failed video attempts are marked not validated and carry the rule", async 
   expect(item.final_prompt).toBeNull();
 });
 
+test("rejected model output is shown to the owner, redacted, and null when there is none", async () => {
+  const { owner, get } = await setup();
+  const leaked = `The scene is ${KEY_B} hashed ${FULL_HASH} and 中文 text`;
+  put("e_p1", "t1", [
+    video({ outcome: "prompt_format_invalid", rule: "rewrite must be English", final_prompt: undefined,
+      rejected_output: leaked }),
+    video({ outcome: "ok" }),
+  ]);
+  const res = await get(owner.cookie, "?kind=video");
+  const text = await res.text();
+  for (const secret of [KEY_A, KEY_B, "SENTINEL_REF_KEY", FULL_HASH]) expect(text).not.toContain(secret);
+  const items = JSON.parse(text).items as { outcome: string; rejected_output: string | null; final_prompt: string | null }[];
+  const failed = items.find((i) => i.outcome === "prompt_format_invalid")!;
+  expect(failed.rejected_output).toContain("中文 text");
+  expect(failed.rejected_output).toContain("[reference]");
+  expect(failed.final_prompt).toBeNull();
+  expect(items.find((i) => i.outcome === "ok")!.rejected_output).toBeNull();
+});
+
+test("rejected output fails closed when the user message cannot be parsed", async () => {
+  const { owner, get } = await setup();
+  put("e_p1", "t1", [video({ outcome: "prompt_format_invalid", final_prompt: undefined, user_message: "NOT JSON",
+    rejected_output: "SENTINEL_RAW_OUTPUT persona/SENTINEL_PATH.png" })]);
+  const text = await (await get(owner.cookie, "?kind=video")).text();
+  expect(text).not.toContain("SENTINEL_");
+  expect(JSON.parse(text).items[0].rejected_output).toBe("[unavailable]");
+});
+
 test("malformed user_message never leaks the original and never 500s", async () => {
   const { owner, get } = await setup();
   const cases = [
@@ -250,7 +278,8 @@ test("write methods are not accepted", async () => {
 
 test("episode detail does not carry trace content", async () => {
   const { owner, app } = await setup();
-  put("e_p1", "t1", [script({ user_message: "SENTINEL_TRACE_BODY" }), video({ final_prompt: "SENTINEL_TRACE_FINAL" })]);
+  put("e_p1", "t1", [script({ user_message: "SENTINEL_TRACE_BODY" }), video({ final_prompt: "SENTINEL_TRACE_FINAL" }),
+    video({ outcome: "prompt_format_invalid", final_prompt: undefined, rejected_output: "SENTINEL_TRACE_REJECTED" })]);
   const res = await app.request("/api/episodes/e_p1", { headers: { cookie: owner.cookie } });
   expect(res.status).toBe(200);
   const text = await res.text();

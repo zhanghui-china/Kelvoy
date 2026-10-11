@@ -71,10 +71,13 @@ test("legacy database without prompt_traces upgrades additively and idempotently
       const names = db.query<{ name: string }, []>("select name from sqlite_master").all().map((r) => r.name);
       expect(names).toContain("prompt_traces");
       expect(names).toContain("idx_prompt_traces_episode");
+      expect(names).toContain("prompt_trace_rejections");
       for (const name of before) expect(names).toContain(name);
       expect(db.query("select count(*) as n from episodes").get()).toEqual({ n: 1 });
       expect(db.query("select count(*) as n from tasks").get()).toEqual({ n: 1 });
       expect(db.query("select count(*) as n from schema_migrations where migration_id = 'prompt_traces_v1'").get())
+        .toEqual({ n: 1 });
+      expect(db.query("select count(*) as n from schema_migrations where migration_id = 'prompt_traces_v2'").get())
         .toEqual({ n: 1 });
       close();
     }
@@ -282,4 +285,49 @@ test("a failing trace insert rolls the whole settlement back instead of being sw
   expect(() => failTaskWithCredits(t, true, undefined, undefined, [trace()])).toThrow("trace boom");
   expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
     .get(t.task_id)?.status).toBe("processing");
+});
+
+// ADR-0012 addendum: rejected model output lives in its own additive table, joined at read time.
+const rejections = () => getDb().query<Record<string, unknown>, []>(
+  "select * from prompt_trace_rejections order by rowid").all();
+
+test("rejected output is stored beside its trace row, scoped by owner, and is optional", async () => {
+  await insertEpisode(episode());
+  const t = await claimBrief();
+  failTaskWithCredits(t, true, undefined, undefined, [
+    trace({ kind: "h3_rewrite", shot_id: "sh_1", outcome: "prompt_format_invalid", rule: "rewrite must be English",
+      user_message: "u1", rejected_output: "raw rejected text" }),
+    trace({ kind: "h3_rewrite", shot_id: "sh_1", outcome: "ok", user_message: "u2", final_prompt: "good" }),
+  ]);
+  expect(rejections()).toHaveLength(1);
+  expect(rejections()[0]).toMatchObject({ task_id: t.task_id, attempt: 1, seq: 0, episode_id: "e_trace",
+    owner_id: ownerId, rejected_output: "raw rejected text", truncated: 0 });
+  // The primary row is unchanged: no new column, final_prompt stays absent on failure.
+  expect(rows()[0]).toMatchObject({ final_prompt: null, outcome: "prompt_format_invalid" });
+
+  const listed = await listPromptTraces({ episodeId: "e_trace", ownerId, kind: "video", limit: 10 });
+  expect(listed.items.map((r) => [r.user_message, r.rejected_output ?? null])).toEqual([["u2", null], ["u1", "raw rejected text"]]);
+  const stranger = await listPromptTraces({ episodeId: "e_trace", ownerId: "someone-else", kind: "video", limit: 10 });
+  expect(stranger.items).toEqual([]);
+});
+
+test("rejected output is cut at 64KB, flags truncation, is idempotent and purged with the episode", async () => {
+  await insertEpisode(episode());
+  const t = await claimBrief();
+  const big = "中".repeat(30000);
+  const input = trace({ kind: "h3_rewrite", shot_id: "sh_1", outcome: "prompt_format_invalid", user_message: "u", rejected_output: big });
+  failTaskWithCredits(t, true, undefined, undefined, [input]);
+  const stored = rejections()[0]!;
+  expect(Buffer.byteLength(stored.rejected_output as string)).toBeLessThanOrEqual(65536);
+  expect(stored.rejected_output).toBe("中".repeat((stored.rejected_output as string).length));
+  expect(stored.truncated).toBe(1);
+  const listed = await listPromptTraces({ episodeId: "e_trace", ownerId, kind: "video", limit: 10 });
+  expect(listed.items[0]!.rejected_truncated).toBe(1);
+
+  // Same (task, attempt, seq) again: duplicate primary key is a no-op, not an error.
+  expect(() => getDb().transaction(() => insertPromptTraces(getDb(), t, [input])).immediate()).not.toThrow();
+  expect(rejections()).toHaveLength(1);
+
+  expect(await deleteEpisode("e_trace", ownerId)).toMatchObject({ ok: true });
+  expect(rejections()).toHaveLength(0);
 });
