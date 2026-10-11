@@ -245,10 +245,24 @@ test("a video retry records the llm rewrite, then its cache hit as a new version
 test("a failed rewrite keeps the attempt with its rule and no final prompt, without leaking elsewhere", async () => {
   const { shotId, task } = await setupVideo("e_video_bad");
   stubH3Fetch("bad");
+  const status = () => (getDb().query("select status, attempt from tasks where task_id = ?").get(task.task_id)) as
+    { status: string; attempt: number };
+  // Attempt 1: format failure is requeued (model output is random), the attempt's trace is still kept.
   await handleTask(task, { video: clip });
+  expect(status()).toMatchObject({ status: "pending", attempt: 2 });
+  const first = await traces("e_video_bad", "video");
+  expect(first).toHaveLength(1);
+  expect(first[0]).toMatchObject({ shot_id: shotId, outcome: "prompt_format_invalid", rule: "section_fields", final_prompt: null });
+  expect(first[0]!.correction_message).not.toBeNull();
+
+  // Attempt 2: still invalid -> terminal, no further requeue.
+  const second = (await dequeueTask())!;
+  expect(second.task_id).toBe(task.task_id);
+  expect(second.attempt).toBe(2);
+  await handleTask(second, { video: clip });
+  expect(status().status).toBe("failed");
   const rows = await traces("e_video_bad", "video");
-  expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatchObject({ shot_id: shotId, outcome: "prompt_format_invalid", rule: "section_fields", final_prompt: null });
-  expect(rows[0]!.correction_message).not.toBeNull();
+  expect(rows).toHaveLength(2);
+  expect(rows.every((r) => r.outcome === "prompt_format_invalid")).toBe(true);
   assertNoSentinelOutsideTraces([task.task_id]);
 });

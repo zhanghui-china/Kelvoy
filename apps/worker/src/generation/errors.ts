@@ -23,7 +23,9 @@ export function classifyH3Failure(error: unknown): H3FailureClass {
   const timeout = error instanceof Error && /timed out|timeout/i.test(error.message);
   const code = blocked ? "content_blocked" : invalid ? "prompt_format_invalid"
     : timeout ? "prompt_rewrite_timeout" : "prompt_rewrite_failed";
-  return { code, outcome: code, blocked, invalid, retryable: !blocked && !invalid,
+  // Model output is stochastic, so a format/validation failure is not deterministic: it gets the same single
+  // local retry as timeouts (consumer MAX_LOCAL_ATTEMPTS). Only content blocks are terminal here.
+  return { code, outcome: code, blocked, invalid, retryable: !blocked,
     ...(invalid ? { rule: error.rule, corrected: error.corrected } : {}) };
 }
 
