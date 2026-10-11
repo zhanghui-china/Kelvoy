@@ -82,6 +82,13 @@ export interface Shot {
   landmark: string | null; // Landmark.id
   kf_prompt: string;
   motion_prompt: string;
+  /**
+   * Whether a person is in frame. Only an explicit `false` is stored; absent means visible, so existing
+   * episodes behave exactly as before. Set by the script stage; the storyboard editor does not expose it yet.
+   * When false the H3 rewrite is not forced to cite the person reference picture (the picture is still
+   * supplied to the video model, which requires two references).
+   */
+  person_visible?: boolean;
   duration_s: number; // target; actual cut length is beat-aligned within 0.8–2.0 s (FR-07)
   candidates: string[];
   kf_selected: string | null;

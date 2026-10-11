@@ -136,6 +136,7 @@ export function validateShot(input: unknown): ValidationResult<Shot> {
   }
   if (typeof s.kf_prompt !== "string") errors.push("kf_prompt: 必须是字符串");
   if (typeof s.motion_prompt !== "string") errors.push("motion_prompt: 必须是字符串");
+  if (s.person_visible !== undefined && !isBoolean(s.person_visible)) errors.push("person_visible: 必须是布尔值");
   if (!isFiniteNumber(s.duration_s) || s.duration_s <= 0) {
     errors.push("duration_s: 必须是正数");
   }

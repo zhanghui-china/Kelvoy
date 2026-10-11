@@ -60,6 +60,7 @@ export async function deleteEpisode(episodeId: string, ownerId: string): Promise
     db.query("delete from episodes where episode_id = ?").run(episodeId);
     // ADR-0012: traces live and die with the episode; late commits cannot re-insert (no episodes row).
     db.query("delete from prompt_traces where episode_id = ?").run(episodeId);
+    db.query("delete from prompt_trace_rejections where episode_id = ?").run(episodeId);
     return { ok: true, cleanup_status: "pending", refunded_credits: actions.reduce((sum, action) => sum + action.price, 0) } as const;
   }).immediate();
 }

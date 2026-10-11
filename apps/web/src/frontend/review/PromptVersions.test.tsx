@@ -8,7 +8,7 @@ function item(over: Partial<PromptTraceItem> & { id: string }): PromptTraceItem 
   return {
     kind: "h3_rewrite", shot_id: "s1", round: null, attempt: 1, source: "llm", outcome: "ok",
     validated: true, rule: null, model: null, skill_version: null, writer_version: null, h3_mode: null,
-    user_message: `user ${over.id}`, correction_message: null, final_prompt: `final ${over.id}`,
+    user_message: `user ${over.id}`, correction_message: null, final_prompt: `final ${over.id}`, rejected_output: null,
     input_hash: null, truncated: false, created_at: "2026-10-11T08:00:00Z", ...over,
   };
 }
@@ -91,6 +91,15 @@ test("blocks are labelled, optional blocks are omitted, truncated is flagged", (
   expect(full).toContain("最终发给视频模型的提示词");
   expect(full).toContain("内容过长，已截断");
   expect(plain).not.toContain("内容过长，已截断");
+});
+
+test("a rejected model output gets its own block, only when present", () => {
+  const none = render(ready([item({ id: "1" })]));
+  expect(none).not.toContain("被校验拒绝的模型输出");
+  const html = render(ready([item({ id: "1", final_prompt: null, validated: false, rejected_output: "raw rejected text" })]));
+  expect(html).toContain("被校验拒绝的模型输出");
+  expect(html).toContain("raw rejected text");
+  expect(html).toContain('aria-label="复制第 1 版 被校验拒绝的模型输出"');
 });
 
 test("copy buttons carry version and block name, text is a readonly selectable control", () => {

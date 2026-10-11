@@ -25,6 +25,12 @@ export type PromptTraceEntry =
       correction_message?: string;
       /** Absent when the rewrite failed. */
       final_prompt?: string;
+      /**
+       * Raw model output of the last attempt that failed format validation, so a rule such as
+       * "rewrite must be English" can be inspected afterwards. Never set for moderation blocks,
+       * timeouts or successful rewrites. Model text: same handling as `final_prompt`.
+       */
+      rejected_output?: string;
       outcome: string;
       /** Fixed `H3FormatError.rule` identifier, never model output. */
       rule?: string;

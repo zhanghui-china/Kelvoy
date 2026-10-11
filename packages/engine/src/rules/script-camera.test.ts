@@ -48,4 +48,21 @@ describe("camera_motion_consistency", () => {
   test("character motion is not mistaken for camera motion", () => {
     expect(cameraViolations(shot("static", "人物向右缓慢走过，镜头固定"))).toEqual([]);
   });
+
+  test("push contradicted by camera lift (production case e_0a0d9f4d shot 3)", () => {
+    const v = cameraViolations(shot("push", "镜头缓慢向上抬升，展现整条街区灯火与水面倒影的全貌"));
+    expect(v).toHaveLength(1);
+    expect(v[0]!.message).toContain("镜头升降");
+  });
+
+  test("camera lift is classed as pan, so a pan shot is consistent", () => {
+    expect(cameraViolations(shot("pan", "镜头平稳向上升起，俯瞰整条街区"))).toEqual([]);
+    expect(cameraViolations(shot("pan", "镜头缓缓下降，贴近水面"))).toEqual([]);
+  });
+
+  test("scene objects rising are not mistaken for camera lift", () => {
+    expect(cameraViolations(shot("push", "灯火逐一升起，镜头缓慢推进"))).toEqual([]);
+    expect(cameraViolations(shot("push", "镜头对准缓缓升起的月亮，缓慢推进"))).toEqual([]);
+    expect(cameraViolations(shot("static", "炊烟向上升起，固定镜头"))).toEqual([]);
+  });
 });

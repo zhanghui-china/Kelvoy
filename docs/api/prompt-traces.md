@@ -40,6 +40,7 @@
       "user_message": "...",
       "correction_message": null,
       "final_prompt": "...",
+      "rejected_output": null,
       "input_hash": "0123456789ab",
       "truncated": false,
       "created_at": "2026-10-11T00:00:00Z"
@@ -56,7 +57,8 @@
 - `id`、`next_before`：字符串，客户端不得解析。
 - `input_hash`：仅前 12 位，库内完整值不返回。
 - `skill_version`：原样返回（指南内容哈希，非敏感）。
-- 可空字段（`shot_id`、`round`、`rule`、`model`、`skill_version`、`writer_version`、`h3_mode`、`correction_message`、`final_prompt`、`input_hash`）缺失时为 `null`。
+- 可空字段（`shot_id`、`round`、`rule`、`model`、`skill_version`、`writer_version`、`h3_mode`、`correction_message`、`final_prompt`、`rejected_output`、`input_hash`）缺失时为 `null`。
+- `rejected_output`：仅 `kind=h3_rewrite` 且该次尝试在格式校验阶段被拒绝时有值，为被拒绝的模型原文（已脱敏，见下）；通过的尝试、内容拦截、超时与调用失败为 `null`。界面在该版本中单独显示「被校验拒绝的模型输出」。
 - 本期不提供 `is_current`。
 - `truncated`：任一文本字段曾被截断（单字段 64KB）。
 - `legacy`：仅在第一页（无 `before`）且按当前过滤条件没有任何记录时给出说明，其余为 null。`kind=video` 且指定 `shot_id`、该镜作品文档里有非空 `model.video.prompt` 时为 `{"note":"final_only","final_prompt":"<model.video.prompt>"}`（界面「仅保留最终提示词」）；其余无记录情形（脚本、未指定 `shot_id` 的视频、该镜没有最终提示词）为 `{"note":"not_retained"}`（界面「上线前未保留」）。
@@ -67,8 +69,9 @@
 
 - 不返回 `task_id`、`owner_id`、`episode_id`、`seq` 等内部键，`id` 为不透明字符串。
 - 视频 `user_message` 先 `JSON.parse`，只处理已知路径字段 `references[].key`，替换为占位 `[reference: role=person, picture=1]`（role 为 `[A-Za-z0-9_-]{1,32}`、picture 为 0–999 整数，否则为 `[reference]`），再紧凑 `JSON.stringify`。元素非对象、`references` 非数组、整体非 JSON 对象或解析失败时，按 fail-closed 处理：非对象元素替换为 `{"key":"[reference]"}`，其余整条返回 `[unavailable]`，绝不回退原文。脚本 `user_message` 原样返回，不做路径扫描。
+- `rejected_output`：用同一条记录 `user_message` 里的 `references[].key` 逐个替换为 `[reference]`，32 位以上十六进制串替换为 `[hash]`；`user_message` 不是 JSON 对象、`references` 非数组或解析失败时整段返回 `[unavailable]`。
 - 完整 `input_hash` 不出库。
-- 不含系统提示词全文与原始 LLM 响应（本期不存）。
+- 不含系统提示词全文。原始 LLM 响应只在上述 `rejected_output`（格式校验被拒的视频改写）中保留，其余不存。
 
 ## 错误
 

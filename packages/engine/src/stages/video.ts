@@ -31,6 +31,8 @@ export async function runVideo(episode: Episode, shotNo?: number, context?: Stag
       kf_prompt: shot.kf_prompt, motion_prompt: shot.motion_prompt,
       scene: episode.scenes.find(item => item.id === shot.scene) ?? null,
       destination: context.destination?.name ?? null, landmark: landmark?.name ?? null,
+      // Only direct (Ref2VA) shots have a person reference to relax; absent keeps the cache key unchanged.
+      ...(direct && shot.person_visible === false ? { person_visible: false } : {}),
       references: direct ? refs!.map((key, index) => ({ key, role: index === 0 ? "person" as const : "scene" as const, picture: index + 1 }))
         : [{ key: `${episode.episode_id}/${shot.kf_selected!}`, role: "first_frame", picture: 1 }],
     }, ...(context.signal ? { signal: context.signal } : {}) });

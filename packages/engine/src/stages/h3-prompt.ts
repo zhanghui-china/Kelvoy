@@ -13,6 +13,8 @@ export interface H3PromptContext {
   scene: Scene | null;
   destination: string | null;
   landmark: string | null;
+  /** Set only to `false` for a no-person shot; absent means a person may be in frame (changes nothing). */
+  person_visible?: boolean;
   references: { key: string; role: "person" | "scene" | "first_frame"; picture: number }[];
 }
 export interface H3PromptResult {

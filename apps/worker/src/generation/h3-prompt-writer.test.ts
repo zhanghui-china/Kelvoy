@@ -346,6 +346,32 @@ test("trace carries the correction message and failed outcome with rule but no f
   expect(failed.correction_message).toBeDefined();
 });
 
+test("a rejected attempt keeps the last raw model output; success and blocked output carry none", async () => {
+  // Two rejected rounds with different raw text: the entry must hold the one that decided the failure.
+  let calls = 0;
+  const raws: string[] = [];
+  const bad = tracing((async () => {
+    calls++;
+    const value = calls === 1 ? { summary: "first rejected output" } : { summary: "second rejected output" };
+    raws.push(JSON.stringify(value));
+    return response(value);
+  }) as unknown as typeof fetch);
+  await expect(bad.writer.write({ episode_id: "e1", context: { ...context(), beat: "rejected output input" } }))
+    .rejects.toBeInstanceOf(H3FormatError);
+  const failed = h3(bad.entries[0]);
+  expect(failed.final_prompt).toBeUndefined();
+  expect(failed.rejected_output).toBe(raws[1]);
+
+  const ok = tracing((async () => response(sections())) as unknown as typeof fetch);
+  await ok.writer.write({ episode_id: "e1", context: { ...context(), beat: "accepted output input" } });
+  expect(h3(ok.entries[0]).rejected_output).toBeUndefined();
+
+  // Moderation blocks are not stored: blocked text must not be copied into another table.
+  const blocked = tracing((async () => response({ ...sections(), summary: "爆炸物" })) as unknown as typeof fetch);
+  await expect(blocked.writer.write({ episode_id: "e1", context: { ...context(), beat: "blocked output input" } })).rejects.toThrow("内容审核");
+  expect(h3(blocked.entries[0]).rejected_output).toBeUndefined();
+});
+
 test("trace marks timeouts and blocked output with the shared outcome", async () => {
   const hang = ((_: string, init: RequestInit) => new Promise((_resolve, reject) => {
     init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true });
@@ -443,4 +469,27 @@ test("rewrite timeout prefers the explicit override and otherwise follows the sh
     if (original === undefined) delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
     else process.env.KELVOY_LLM_TIMEOUT_SECONDS = original;
   }
+});
+
+test("system prompt tells the model the person is out of frame only when person_visible is false", async () => {
+  const prompts: string[] = [];
+  const fetcher = (async (_url: string, init: RequestInit) => {
+    prompts.push(JSON.parse(init!.body as string).messages[0].content);
+    return response(sections());
+  }) as unknown as typeof fetch;
+  await writer(fetcher).write({ episode_id: "e1", context: { ...context(), person_visible: false } });
+  await writer(fetcher).write({ episode_id: "e2", context: context() });
+  await writer(fetcher).write({ episode_id: "e3", context: { ...context(), person_visible: true } });
+  expect(prompts[0]).toContain("no person is visible in this shot");
+  expect(prompts[1]).not.toContain("no person is visible in this shot");
+  expect(prompts[2]).not.toContain("no person is visible in this shot");
+});
+
+test("person_visible changes the cache key only when it is false", async () => {
+  const hash = async (episode_id: string, extra: Partial<H3PromptContext>) =>
+    (await writer((async () => response(sections())) as unknown as typeof fetch)
+      .write({ episode_id, context: { ...context(), ...extra } })).provenance.input_hash;
+  const base = await hash("e1", {});
+  expect(await hash("e2", { person_visible: true })).toBe(base);
+  expect(await hash("e3", { person_visible: false })).not.toBe(base);
 });
