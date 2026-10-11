@@ -162,7 +162,7 @@ draft → scripting → script_review → assets → keyframing → kf_review
 | compose_ready | `ComposeSetup` | 标题 / 字幕 / 转场 / 配乐 / 片头片尾，保存后开始合成 |
 | composing / done | `DoneView` | 播放、下载、分享、重做镜头、重新合成 |
 
-顶部 `StageSteps` 恒显阶段进度条，按 `video_source` 区分两条路径（直出 5 步 / 传统 6 步），失败阶段单独标红。
+顶部 `StageSteps` 恒显阶段进度条，按 `video_source` 区分两条路径（关键帧 6 步为新建界面默认 / 直出 5 步为高级设置可选），失败阶段单独标红。
 
 ### 4.2 执行机制
 
