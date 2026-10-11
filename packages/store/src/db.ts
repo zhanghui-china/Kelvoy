@@ -31,6 +31,7 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
       select task_id, lease_token, episode_id, coalesce(lease_until, unixepoch('now') + 90)
       from tasks where status = 'processing' and lease_token is not null`);
     db!.query("insert or ignore into schema_migrations (migration_id) values (?)").run("episode_deletions_v1");
+    db!.query("insert or ignore into schema_migrations (migration_id) values (?)").run("prompt_traces_v1");
   }).immediate();
   migrateLegacyCatalogVersions(db);
   migrateShotIdentities(db);

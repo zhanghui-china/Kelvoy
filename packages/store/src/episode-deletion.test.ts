@@ -260,3 +260,15 @@ test.each(["draft", "failed", "done", "scripting", "clipping", "composing"] as c
     }).toEqual(before);
   },
 );
+
+test("deleting an episode removes only its prompt traces", async () => {
+  await insertEpisode(fixture("e_keep", owner));
+  const insert = getDb().query(`insert into prompt_traces (task_id, attempt, seq, episode_id, owner_id,
+    kind, source, outcome, user_message) values (?, 1, 0, ?, ?, 'script_generate', 'llm', 'ok', 'm')`);
+  insert.run("tk_a", "e_delete", owner);
+  insert.run("tk_b", "e_keep", owner);
+
+  await deleteEpisode("e_delete", owner);
+  expect(getDb().query<{ episode_id: string }, []>("select episode_id from prompt_traces").all())
+    .toEqual([{ episode_id: "e_keep" }]);
+});
