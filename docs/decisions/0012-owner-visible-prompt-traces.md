@@ -26,7 +26,7 @@
 - 分类：`kind` ∈ `script_generate` / `script_revision` / `h3_rewrite`；`shot_id`（仅视频）；`round`（脚本纠错轮次）；`source` ∈ `llm` / `cache`；`outcome`；`rule`（`H3FormatError.rule` 的固定标识）。
 - 版本引用：`model`、`skill_version`、`writer_version`、`h3_mode`。
 - 内容：`user_message`（脚本为整段 prompt；视频为 `JSON.stringify(context)`）、`correction_message`、`final_prompt`、`input_hash`、`truncated`、`created_at`。
-- 索引 `(episode_id, kind, shot_id, rowid)`，服务按作品、类别、镜头的时间序读取。
+- 索引 `(episode_id, kind, shot_id)`；SQLite 不允许在索引里显式列 `rowid`，它本就隐式追加在每个索引末尾，因此等价于 `(…, rowid)`，服务按作品、类别、镜头的时间序读取。
 - 限额：每个文本字段写入时截断为 64KB 并置 `truncated=1`；单次执行最多 16 条。
 
 为什么不放别处：
@@ -48,13 +48,15 @@ Worker 为每次任务执行持有一个收集器，并在已有的「租约校�
 
 ### 写入失败是否影响结算
 
-选择：trace 写入与结算在同一个 SQLite 事务里，仅用 `insert or ignore`；若仍然失败则整个事务回滚，不吞错。
+选择：trace 写入与结算在同一个 SQLite 事务里，用 `on conflict (task_id, attempt, seq) do nothing` 只忽略主键重复；其他任何失败（含 CHECK／NOT NULL 违例）都抛出并让整个事务回滚，不吞错。
+
+注意不能用 `insert or ignore`：它会连 CHECK 与 NOT NULL 违例也静默丢弃（实测返回 0 行、不报错），即 Worker 运行时传入非法 `kind` 或缺失 `user_message` 时结算成功但记录悄悄缺失，正是本节要避免的情形。
 
 理由：
 
 - 吞错意味着任务成功、积分结算后得到一份「静默缺失」的记录，且无人知道。这违反「不得掩盖问题」。
 - 同事务回滚让任务按既有路径处理：租约仍有效，走现有的重试／提交冲突处理，不引入新的无边界重试，也不新增补写队列。
-- 失败面被压到很小：主键含 `attempt` 与 `seq`，`insert or ignore` 消除重复键；文本已被截断，行数限为 16；`owner_id`／`episode_id` 来自事务内已读到的 `episodes` 行。正常情况下该语句不会失败，只剩磁盘满、库损坏这类整个事务本来就会失败的情形。
+- 失败面被压到很小：主键含 `attempt` 与 `seq`，`on conflict do nothing` 消除重复键；文本已被截断，行数限为 16；`owner_id`／`episode_id` 来自事务内已读到的 `episodes` 行。正常情况下该语句不会失败，只剩磁盘满、库损坏这类整个事务本来就会失败的情形。
 - 代价：极端故障下 trace 的故障会拖住一次结算。接受这个代价，因为这些故障本身已让结算不可靠。
 
 ## 读取
