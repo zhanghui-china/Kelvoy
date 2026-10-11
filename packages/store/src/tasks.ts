@@ -30,8 +30,9 @@ export type RetryableFailure = {
   task_id: string; stage: StageName; shot_no: number | null; shot_id: string | null; generation_id: string | null;
 };
 
-/** The same eligibility rule powers the retry mutation and the detail summary. */
-export function findRetryableFailedTask(episode: Episode): RetryableFailure | null {
+/** The same eligibility rule powers the retry mutation and the detail summary.
+ * Returns every retryable failure, one per stage+shot (latest first). */
+export function listRetryableFailedTasks(episode: Episode): RetryableFailure[] {
   episode = { ...episode, shots: episode.shots.map((shot, i) => ({ ...shot, shot_id: shot.shot_id ?? `sh_${episode.episode_id}_active_${i}_${shot.no}` })) };
   const failures = getDb().query<RetryableFailure, [string]>(
     `select failed.task_id, failed.stage, failed.shot_no, failed.shot_id, failed.generation_id
@@ -43,7 +44,15 @@ export function findRetryableFailedTask(episode: Episode): RetryableFailure | nu
            and active.status in ('pending', 'processing', 'held'))
      order by failed.updated_at desc, failed.rowid desc`,
   ).all(episode.episode_id);
-  return failures.find((item) => {
+  const seen = new Set<string>();
+  return failures.filter((item) => {
+    const key = `${item.stage}:${item.shot_id ?? `no_${item.shot_no}`}`;
+    if (seen.has(key)) return false;
+    const eligible = isRetryable(item);
+    if (eligible) seen.add(key);
+    return eligible;
+  });
+  function isRetryable(item: RetryableFailure): boolean {
     if (item.stage === "keyframe" || item.stage === "video") {
       const shot = episode.shots.find((candidate) => item.shot_id ? candidate.shot_id === item.shot_id : candidate.no === item.shot_no);
       return !!shot && (shot.status === "failed" ||
@@ -51,7 +60,11 @@ export function findRetryableFailedTask(episode: Episode): RetryableFailure | nu
           (item.stage === "keyframe" ? "generating_kf" : "generating_clip")));
     }
     return episode.status === "failed";
-  }) ?? null;
+  }
+}
+
+export function findRetryableFailedTask(episode: Episode): RetryableFailure | null {
+  return listRetryableFailedTasks(episode)[0] ?? null;
 }
 
 export async function getLatestFailedTask(episode: Episode): Promise<Pick<RetryableFailure, "stage" | "shot_no"> | null> {

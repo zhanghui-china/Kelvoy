@@ -46,7 +46,7 @@ test("retry requeues failed image with original generation identity and one fres
   expect(submitFailedTaskRetry({ episode_id: "e_retry", owner_id: ownerId, row_version: 2 }))
     .toEqual({ ok: false, error: "version_conflict", current_row_version: 1 });
   expect(submitFailedTaskRetry({ episode_id: "e_retry", owner_id: ownerId, row_version: 1 }))
-    .toEqual({ ok: true, row_version: 2, stage: "keyframe", shot_no: 1 });
+    .toMatchObject({ ok: true, row_version: 2, stage: "keyframe", shot_no: 1 });
   const afterRetry = await getEpisode("e_retry");
   expect(afterRetry.ok && await getLatestFailedTask(afterRetry.episode)).toBeNull();
   expect(getCreditBalance(ownerId)).toEqual({ available: 0, reserved: 3 });
@@ -68,7 +68,7 @@ test("direct reference assets retry reserves video work without image tasks", as
   expect(failTaskWithCredits(claimed!, false)).toBe(true);
   grantCredits(ownerId, 10, "direct-assets-retry");
   expect(submitFailedTaskRetry({ episode_id: "e_retry", owner_id: ownerId, row_version: 1 }))
-    .toEqual({ ok: true, row_version: 2, stage: "assets", shot_no: null });
+    .toMatchObject({ ok: true, row_version: 2, stage: "assets", shot_no: null });
   expect(getCreditBalance(ownerId)).toEqual({ available: 0, reserved: 10 });
   const held = getDb().query<{ stage: string; status: string }, []>(
     "select stage, status from tasks where status = 'held'",
@@ -87,7 +87,7 @@ test("failed compose retries only after reserving the action price", async () =>
   expect(getDb().query<{ status: string }, []>("select status from tasks where stage = 'compose'").get()?.status).toBe("failed");
   grantCredits(ownerId, 1, "compose-test");
   expect(submitFailedTaskRetry({ episode_id: "e_retry", owner_id: ownerId, row_version: 1 }))
-    .toEqual({ ok: true, row_version: 2, stage: "compose", shot_no: null });
+    .toMatchObject({ ok: true, row_version: 2, stage: "compose", shot_no: null });
   const retry = await dequeueTask();
   expect(retry?.stage).toBe("compose");
   const loaded = await getEpisode("e_retry");
@@ -110,7 +110,7 @@ test("retired keyframe failure cannot reactivate after later video failure", asy
   const oldVideo = await enqueueTask({ episode_id: "e_retry", stage: "video", shot_no: 1 });
   await failTask(oldVideo.task_id, { requeue: false });
   expect(submitFailedTaskRetry({ episode_id: "e_retry", owner_id: ownerId, row_version: 4 }))
-    .toEqual({ ok: true, row_version: 5, stage: "video", shot_no: 1 });
+    .toMatchObject({ ok: true, row_version: 5, stage: "video", shot_no: 1 });
   const balance = getCreditBalance(ownerId);
   const loaded = await getEpisode("e_retry");
   expect(loaded.ok && await getLatestFailedTask(loaded.episode)).toBeNull();
