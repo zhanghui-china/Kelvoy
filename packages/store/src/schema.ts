@@ -164,6 +164,23 @@ create table if not exists credit_prices (
 
 insert or ignore into credit_prices (kind, price) values
   ('script', 1), ('image', 1), ('video', 10), ('compose', 1);
+
+-- ADR-0012：作品所有者可见的提示词记录，只追加。owner_id 在写入时由 episodes 行取得。
+-- 索引不能显式列 rowid（SQLite 报 no such column）；rowid 本就隐式追加在每个索引末尾，等价于 ADR 的 (…, rowid)。
+create table if not exists prompt_traces (
+  task_id text not null, attempt integer not null, seq integer not null,
+  episode_id text not null, owner_id text not null,
+  kind text not null check (kind in ('script_generate','script_revision','h3_rewrite')),
+  shot_id text, round integer,
+  source text not null check (source in ('llm','cache')),
+  outcome text not null, rule text,
+  model text, skill_version text, writer_version text, h3_mode text,
+  user_message text not null, correction_message text, final_prompt text,
+  input_hash text, truncated integer not null default 0,
+  created_at text not null default (datetime('now')),
+  primary key (task_id, attempt, seq)
+);
+create index if not exists idx_prompt_traces_episode on prompt_traces(episode_id, kind, shot_id);
 `;
 
 /**

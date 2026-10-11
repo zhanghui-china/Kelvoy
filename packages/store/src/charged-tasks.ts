@@ -5,6 +5,7 @@ import { finalizeCredits, getCreditAction, getCreditBalance, getCreditPrice, res
 import { getDb } from "./db";
 import { decodeEpisode } from "./episode-codec";
 
+import { insertPromptTraces, type PromptTraceInput } from "./prompt-traces";
 import type { TaskDiagnostic } from "./task-diagnostics";
 
 type LeaseRow = { status: string; lease_token: string | null; lease_until: number | null };
@@ -189,7 +190,8 @@ export function submitShotRegeneration(input: {
 }
 
 /** Episode write, task completion and credit settlement share one commit. */
-export function completeTaskWithEpisode(task: Task, rowVersion: number, updated: Episode, started?: Episode):
+export function completeTaskWithEpisode(task: Task, rowVersion: number, updated: Episode, started?: Episode,
+  traces?: PromptTraceInput[]):
   { ok: true; row_version: number } | { ok: false; error: "not_found" | "version_conflict" | "illegal_transition" | "lease_lost" } {
   return getDb().transaction(() => {
     const taskRow = getDb().query<LeaseRow, [string]>(
@@ -230,6 +232,7 @@ export function completeTaskWithEpisode(task: Task, rowVersion: number, updated:
     finalizeCredits(task.task_id, "settled");
     getDb().query(`update tasks set status = 'done', error = null, lease_token = null, lease_until = null,
       updated_at = datetime('now') where task_id = ?`).run(task.task_id);
+    insertPromptTraces(getDb(), task, traces);
     if (task.stage === "brief" && committed.status === "scripting") {
       getDb().query(`insert or ignore into tasks (task_id, episode_id, stage, attempt, status)
         values (?, ?, 'script', 1, 'pending')`)
@@ -267,12 +270,14 @@ export function requeueTaskAfterCommitConflict(task: Task): boolean {
   return result.changes === 1;
 }
 
-export function failTaskWithCredits(task: Task, requeue: boolean, failureReason?: string, diagnostic?: TaskDiagnostic): boolean {
+export function failTaskWithCredits(task: Task, requeue: boolean, failureReason?: string, diagnostic?: TaskDiagnostic,
+  traces?: PromptTraceInput[]): boolean {
   return getDb().transaction(() => {
     const row = getDb().query<LeaseRow, [string]>(
       "select status, lease_token, lease_until from tasks where task_id = ?",
     ).get(task.task_id);
     if (!ownsLiveLease(row, task)) return false;
+    insertPromptTraces(getDb(), task, traces);
     if (diagnostic) getDb().query("update tasks set error = ? where task_id = ?")
       .run(JSON.stringify(diagnostic), task.task_id);
     if (requeue) {
