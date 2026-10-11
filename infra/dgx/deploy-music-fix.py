@@ -17,6 +17,13 @@ SERVICES = ('kelvoy-web', 'kelvoy-worker')
 TRACKS = ('calm_morning', 'city_walk', 'bright_travel', 'night_neon', 'wide_nature')
 
 
+def has_live_work(database):
+    if ops.has_tasks(database, ("pending", "processing")):
+        return True
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+        return connection.execute("select 1 from task_executions where exited=0 and lease_until>unixepoch('now') limit 1").fetchone() is not None
+
+
 def deploy(release, data_root):
     os.umask(0o077)
     release, data_root = release.resolve(strict=True), data_root.resolve(strict=True)
@@ -51,7 +58,7 @@ def deploy(release, data_root):
         record('freeze_admission_and_drain')
         ops.systemctl('stop', 'kelvoy-web')
         deadline = time.monotonic() + 1000
-        while ops.has_tasks(database, ('pending', 'processing')):
+        while has_live_work(database):
             if not initial['kelvoy-worker'] or time.monotonic() > deadline:
                 raise RuntimeError('Task drain incomplete; no release switched')
             time.sleep(2)
@@ -146,7 +153,7 @@ def deploy(release, data_root):
         # Restore code configuration only. Never restore online DB/media or delete audits.
         ops.systemctl('stop', 'kelvoy-web')
         if not worker_stopped:
-            if ops.has_tasks(database, ('pending', 'processing')):
+            if has_live_work(database):
                 if created:
                     report['status'] = 'rollback_deferred_busy'
                     record('worker_has_active_tasks_code_retained')
