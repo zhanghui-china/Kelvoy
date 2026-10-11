@@ -106,7 +106,12 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   if (pictures.some(n => !context.references.some(ref => ref.picture === n))) fail("unprovided picture reference");
   let retentionSyntaxInvalid = false;
   if (context.mode === "Ref2VA") {
-    if (context.references.some(ref => !pictures.includes(ref.picture))) fail("all supplied pictures must be referenced");
+    // A shot the script marked person_visible=false does not have to cite the person picture: the picture is
+    // still supplied (the video model needs two references) but nobody is in frame, so a model that leaves it
+    // out is right. Everything else stays strict: the scene picture must be cited, a person Subject must still
+    // be defined, and if it does cite a picture that must be Picture 1.
+    const optional = (ref: H3PromptContext["references"][number]) => context.person_visible === false && ref.role === "person";
+    if (context.references.some(ref => !optional(ref) && !pictures.includes(ref.picture))) fail("all supplied pictures must be referenced");
     const definitions = [...value.subject_definitions!.matchAll(/<Subject (\d+)>\s+(?:is|represents|refers to)/g)].map(match => match[1]);
     const subjects = [...all.matchAll(/<Subject (\d+)>/g)].map(match => match[1]);
     if (!value.summary!.startsWith("[reference generation]")) fail("summary must start with [reference generation]");
@@ -132,10 +137,12 @@ export function validateSections(value: Record<string, string>, context: H3Promp
       const line = value.subject_definitions!.match(new RegExp(`<Subject ${ref.picture}>(?:(?!<Subject )[^\\n])*`))?.[0] ?? "";
       const hitsPerson = PERSON_WORDS.test(line), hitsScene = SCENE_WORDS.test(line);
       if (definition && (ref.role === "person" ? hitsScene && !hitsPerson : hitsPerson && !hitsScene)) fail("subject role does not match supplied reference");
-      if (Number(definition?.[1]) !== ref.picture) fail("subject mapped to wrong picture");
+      // An optional person Subject that cites no picture at all is fine; one that cites a picture must cite its own.
+      // `line` is bounded by the next <Subject, so another subject's label on the same row is not mistaken for it.
+      if (!(optional(ref) && !/<Picture \d+>/.test(line)) && Number(definition?.[1]) !== ref.picture) fail("subject mapped to wrong picture");
     }
     if (!definitions.length || subjects.some(n => !definitions.includes(n))) fail("undefined subject reference");
-    if (context.references.some(ref => !value.subject_definitions!.includes(`<Picture ${ref.picture}>`))) fail("subject definitions must cite actual sources");
+    if (context.references.some(ref => !optional(ref) && !value.subject_definitions!.includes(`<Picture ${ref.picture}>`))) fail("subject definitions must cite actual sources");
   } else if (/<Subject \d+>/.test(all)) fail("I2VA must use base format");
   if (/<d>|<l>|\(S\d+\)|\b(?:dialogue|speaks?|says?|narration|narrator|captions?|subtitles?|on-screen text|lyrics?|sings?|singing|sung|vocals?|voices?|voice.over|spoken words|speech)\b/i.test(output)) fail("dialogue and text are not requested");
   if (/\b(?:sign|label|banner|screen|poster|notice|billboard|lettering|text)\b[^.\n]*\b(?:reads?|says?|displays?|shows?|spells?|written)\b/i.test(output)) fail("visible text is not requested");
