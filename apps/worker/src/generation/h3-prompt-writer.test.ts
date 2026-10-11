@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { H3PromptContext } from "@kelvoy/engine";
 import { createH3PromptWriter } from "./h3-prompt-writer";
+import { H3FormatError } from "./h3-prompt-format";
 import { close, deleteEpisode, insertEpisode, open } from "@kelvoy/store";
 import { deletionEpisodeFixture } from "../queue/deletion-test-fixture";
 let root: string;
@@ -275,4 +276,29 @@ test("retention grammar still invalid after correction stops after two requests"
   await expect(writer((async () => { calls++; return response({ ...sections(), retention_analysis: "bad format", detailed_description: sections().detailed_description + " The camera pans." }); }) as unknown as typeof fetch)
     .write({ episode_id: "e1", context: context() })).rejects.toThrow("static camera cannot move");
   expect(calls).toBe(1);
+});
+
+async function writeError(value: unknown) {
+  const fetcher = (async () => response(value)) as unknown as typeof fetch;
+  return await writer(fetcher).write({ episode_id: "e1", context: context() })
+    .then(() => { throw new Error("expected rewrite failure"); }, (e: unknown) => e as H3FormatError);
+}
+
+test("constraint failures expose a stable rule and were not corrected", async () => {
+  const error = await writeError({ ...sections(), detailed_description: sections().detailed_description + " The camera pans." });
+  expect(error).toBeInstanceOf(H3FormatError);
+  expect(error.rule).toBe("static camera cannot move");
+  expect(error.corrected).toBe(false);
+});
+
+test("retention grammar failure after correction records its rule and that correction ran", async () => {
+  const error = await writeError({ ...sections(), retention_analysis: "invalid format" });
+  expect(error.rule).toBe("invalid visible retention syntax");
+  expect(error.corrected).toBe(true);
+});
+
+test("malformed section JSON records the structural rule", async () => {
+  const error = await writeError({ summary: "only one field" });
+  expect(error.rule).toBe("section_fields");
+  expect(error.corrected).toBe(true);
 });

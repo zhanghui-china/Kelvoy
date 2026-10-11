@@ -8,6 +8,8 @@ export interface GenerationDiagnostic {
   elapsed_seconds: number;
   budget_seconds: number;
   cancellation: "confirmed" | "unconfirmed" | "failed" | "not_needed";
+  /** Fixed validation rule identifier for prompt_rewrite failures; never model output. */
+  rule?: string;
 }
 
 export class GenerationError extends Error {

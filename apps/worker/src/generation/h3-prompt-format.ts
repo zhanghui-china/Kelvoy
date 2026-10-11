@@ -4,7 +4,12 @@ export const FIRST_FRAME_INSTRUCTION = "For the target video, at 0.00 seconds in
 export const BASE_FIELDS = ["integrated_multimodal_description", "overall_soundscape", "non_diegetic_music"];
 export const REF_FIELDS = ["subject_definitions", "summary", "retention_analysis", "detailed_description", "overall_soundscape", "non_diegetic_music"];
 export class H3FormatError extends Error {
-  constructor(message: string, public correctable = true) { super(message); }
+  /**
+   * `rule` is a fixed identifier chosen at the throw site, never derived from model output, so it is
+   * safe to persist and log. `corrected` is set by the writer once a format correction request ran.
+   */
+  corrected = false;
+  constructor(message: string, public correctable = true, public rule?: string) { super(message); }
 }
 
 function removeNegativeConstraints(text: string): string {
@@ -15,12 +20,12 @@ function removeNegativeConstraints(text: string): string {
 
 export function parseSections(content: string, context: H3PromptContext): Record<string, string> {
   let value: unknown;
-  try { value = JSON.parse(content); } catch { throw new H3FormatError("H3 format: expected JSON object"); }
+  try { value = JSON.parse(content); } catch { throw new H3FormatError("H3 format: expected JSON object", true, "json_object"); }
   const fields = context.mode === "Ref2VA" ? REF_FIELDS : BASE_FIELDS;
   if (!value || typeof value !== "object" || Array.isArray(value) ||
     Object.keys(value).length !== fields.length || fields.some(field =>
       typeof (value as Record<string, unknown>)[field] !== "string" || !(value as Record<string, string>)[field]?.trim())) {
-    throw new H3FormatError(`H3 format: expected nonempty strings for ${fields.join(", ")}`);
+    throw new H3FormatError(`H3 format: expected nonempty strings for ${fields.join(", ")}`, true, "section_fields");
   }
   return value as Record<string, string>;
 }
@@ -32,7 +37,7 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   // Negative production constraints are allowed; only described actions are checked below.
   const actions = removeNegativeConstraints(timeline);
   const output = removeNegativeConstraints(all);
-  const fail = (reason: string): never => { throw new H3FormatError(`H3 constraint: ${reason}`, reason === "invalid visible retention syntax"); };
+  const fail = (reason: string): never => { throw new H3FormatError(`H3 constraint: ${reason}`, reason === "invalid visible retention syntax", reason); };
   if (/[\u3400-\u9fff]/.test(all)) fail("rewrite must be English");
   if (/\b(?:I (?:see|observe)|I have (?:seen|viewed)|observed in|the (?:reference )?(?:image|picture|photo) shows)\b/i.test(all)) fail("must not claim image observation");
   if (value.non_diegetic_music !== "N/A") fail("background music must be N/A");

@@ -137,6 +137,8 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
           validateSections(sections, context);
         }
         catch (error) {
+          // Attempt 1 only runs after a correction request was sent for attempt 0.
+          if (error instanceof H3FormatError && attempt === 1) error.corrected = true;
           if (!(error instanceof H3FormatError) || !error.correctable || attempt === 1) throw error;
           messages.push({ role: "assistant", content }, { role: "user", content: `${error.message}. Fix JSON and section formatting only; do not alter actions, timing, references or constraints.` });
           continue;

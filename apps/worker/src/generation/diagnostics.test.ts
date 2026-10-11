@@ -21,3 +21,24 @@ test("semantic H3 constraints are terminal format failures", async () => {
   expect(() => validateSections({ integrated_multimodal_description: "中文", non_diegetic_music: "N/A" },
     { mode: "I2VA", duration_s: 4 } as Parameters<typeof validateSections>[1])).toThrow(H3FormatError);
 });
+
+test("diagnostic carries only the declared rule and distinguishes corrected failures", async () => {
+  async function fail(error: H3FormatError) {
+    const writer = observeH3Rewrite({ async write() { throw error; } }, { task_id: "tk_1", attempt: 1 });
+    return await writer.write({} as Parameters<H3PromptWriter["write"]>[0])
+      .then(() => { throw new Error("expected rewrite failure"); }, (e: unknown) => e as GenerationError);
+  }
+  const constraint = new H3FormatError("H3 constraint: preserve shot size and camera", false, "preserve shot size and camera");
+  const first = await fail(constraint);
+  expect(first.diagnostic.rule).toBe("preserve shot size and camera");
+  expect(first.diagnostic.message).not.toContain("校正后");
+
+  const corrected = new H3FormatError("H3 constraint: invalid visible retention syntax", true, "invalid visible retention syntax");
+  corrected.corrected = true;
+  const second = await fail(corrected);
+  expect(second.diagnostic.message).toContain("校正后仍无效");
+
+  const undeclared = await fail(new H3FormatError("private model output"));
+  expect(undeclared.diagnostic.rule).toBeUndefined();
+  expect(JSON.stringify(undeclared.diagnostic)).not.toContain("private");
+});

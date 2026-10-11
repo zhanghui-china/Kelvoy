@@ -10,6 +10,8 @@ export interface GenerationTaskDiagnostic {
   elapsed_seconds: number;
   budget_seconds: number;
   cancellation: "confirmed" | "unconfirmed" | "failed" | "not_needed";
+  /** Fixed validation rule identifier (prompt_rewrite only); internal diagnostics, not shown to users. */
+  rule?: string;
 }
 
 export interface CompositionTaskDiagnostic {
