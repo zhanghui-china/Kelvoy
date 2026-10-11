@@ -1,3 +1,5 @@
+2026-10-11 H3 改写修复与型号回退：两个节点已回退 `STEPFUN_MODEL=step-3.5-flash`，并发布参考图标签规范化与可配置的 LLM 超时（`549ed2b`，无迁移）。那期 7 镜失败的原因分析、两个型号的同镜头对照与回退见 [H3 改写修复发布记录](h3-fixes-deployment-20261011.md)。
+
 2026-10-11 提示词记录（ADR-0012）已按 Spark → GX10 发布（`573aa90`／`6946b27`，带加性数据库迁移 `prompt_traces`），并将两个节点的 `STEPFUN_MODEL` 切换为 `step-5-preview`。迁移预演、闸门修复、drop-in 排序问题、隔离验收与回退见 [提示词记录发布与 LLM 型号切换](prompt-traces-deployment-20261011.md)。
 
 2026-10-11 提示词校验规则诊断 `c94c9df` 已按 Spark → GX10 仅更新 Web／Worker 代码（不涉及素材与数据库）：视频提示词校验失败现在在任务错误和日志里记录具体规则，并区分「校正后仍无效」与「未通过规则校验」。变更包、备份与回退见 [规则诊断部署记录](rule-diagnostics-deployment-20261011.md)。

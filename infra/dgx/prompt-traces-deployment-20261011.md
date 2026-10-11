@@ -29,7 +29,9 @@
 
 先确认无生成任务，在对应节点：删除 `kelvoy-{web,worker}.service.d/zzzzzzzzzzz-prompt-traces-20261011.conf`，`daemon-reload` 后重启 Web／Worker，回到 `share-projection-20261011-1d41910`（`1d41910`）。新表与迁移记录保留，旧版本忽略它；不恢复数据库，避免覆盖上线后的新数据和删除审计。备份仅用于核对和人工恢复。
 
-## 二、LLM 型号切换到 `step-5-preview`
+## 二、LLM 型号切换到 `step-5-preview`（**已回退，见 [H3 改写修复发布记录](h3-fixes-deployment-20261011.md)**）
+
+> 本节的"可用性验证"只用了不带 H3 系统提示词的小负载，据此得出的"更快"结论在真实负载下不成立：同样 4 个镜头对照，`step-5-preview` 成功 1/14、60 秒超时 7/14，`step-3.5-flash` 成功 6/11、超时 1/11。两个节点已于 06:27 UTC 回退到 `step-3.5-flash`。下面保留原始记录。
 
 此前两个节点都没有设置 `STEPFUN_MODEL`，使用代码默认值 `step-3.5-flash`。脚本生成、脚本优化与 H3 视频提示词改写读同一个变量（`packages/engine/src/providers/stepfun-llm.ts`、`apps/worker/src/generation/h3-prompt-writer.ts`），Web 不调用 StepFun。模型名已纳入 H3 缓存的 `input_hash`，换型号不会沿用旧缓存。
 
