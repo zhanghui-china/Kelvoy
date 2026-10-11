@@ -1,5 +1,31 @@
+import { ContentBlockedError } from "@kelvoy/engine";
 import type { InferenceError } from "../inference-client";
 import { videoTimeoutSeconds } from "../inference-client";
+import { H3FormatError } from "./h3-prompt-format";
+
+export interface H3FailureClass {
+  /** Diagnostic code (tasks.error / log line). */
+  code: "content_blocked" | "prompt_format_invalid" | "prompt_rewrite_timeout" | "prompt_rewrite_failed";
+  /** Same vocabulary, stored on prompt traces so the two views never drift apart. */
+  outcome: string;
+  blocked: boolean;
+  invalid: boolean;
+  /** Only the fixed H3FormatError identifiers, never the message. */
+  rule?: string;
+  corrected?: boolean;
+  retryable: boolean;
+}
+
+/** Shared by the diagnostics wrapper and the prompt writer's trace: one place decides what a failure is called. */
+export function classifyH3Failure(error: unknown): H3FailureClass {
+  const blocked = error instanceof ContentBlockedError;
+  const invalid = error instanceof H3FormatError;
+  const timeout = error instanceof Error && /timed out|timeout/i.test(error.message);
+  const code = blocked ? "content_blocked" : invalid ? "prompt_format_invalid"
+    : timeout ? "prompt_rewrite_timeout" : "prompt_rewrite_failed";
+  return { code, outcome: code, blocked, invalid, retryable: !blocked && !invalid,
+    ...(invalid ? { rule: error.rule, corrected: error.corrected } : {}) };
+}
 
 export interface GenerationDiagnostic {
   stage: string;

@@ -1,5 +1,6 @@
 import type { Destination, Episode, EpisodeBrief, Persona, Scene, Shot } from "../schema";
 import type { ShotCut } from "../rules/beat";
+import type { PromptTraceSink } from "./prompt-trace";
 
 export interface ScriptProvider {
   generateShots(input: {
@@ -8,6 +9,10 @@ export interface ScriptProvider {
     destination: Destination;
     instruction?: string;
     previousShots?: Shot[];
+    /** ADR-0012: write-only report of each round's prompt. Omitted = no reporting. */
+    trace?: PromptTraceSink;
+    /** Labels trace entries; has no effect on generation. */
+    operation?: "generate" | "revision";
   }): Promise<{ shots: Shot[]; scenes: Scene[] }>;
 }
 

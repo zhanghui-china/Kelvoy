@@ -4,6 +4,7 @@ import {
   type Episode,
   type ShotStatus,
   type StageContext,
+  type PromptTraceSink,
   type StageName,
   type Task,
   runStage,
@@ -31,6 +32,7 @@ import { compositionFailure } from "../compose/errors";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders, snapshotGenerationBackend, type GenerationBackend } from "../generation/local";
 import { createH3PromptWriter } from "../generation/h3-prompt-writer";
+import { createPromptTraceCollector } from "../generation/prompt-trace-collector";
 import { handleStoryboardSuggestion } from "../generation/storyboard-suggestion";
 import { executeLeasedTask } from "./execution";
 
@@ -81,7 +83,7 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
  * Script needs the destination; generation gets worker-owned HTTP/file
  * adapters; compose gets the worker-owned ffmpeg backend.
  */
-export async function buildStageContext(stage: StageName, episode: Episode, task?: Task, backend?: GenerationBackend): Promise<StageContext> {
+export async function buildStageContext(stage: StageName, episode: Episode, task?: Task, backend?: GenerationBackend, trace?: PromptTraceSink): Promise<StageContext> {
   const frozenBackend = backend ?? snapshotGenerationBackend(await getSystemConfig());
   const [destination, persona] = await Promise.all([
     getDestinationVersion(episode.destination_id, episode.destination_version),
@@ -92,7 +94,8 @@ export async function buildStageContext(stage: StageName, episode: Episode, task
   if (task?.shot_id) context.shot_id = task.shot_id;
   if (destination) context.destination = destination;
   if (persona) context.persona = persona;
-  if (stage === "video") context.h3PromptWriter = createH3PromptWriter();
+  if (stage === "script" && trace) context.promptTrace = trace;
+  if (stage === "video") context.h3PromptWriter = createH3PromptWriter({ trace });
   if (stage === "compose") context.compose = ffmpegComposeProvider;
   if ((stage === "keyframe" || stage === "video") && task) {
     Object.assign(context, createLocalGenerationProviders(undefined, frozenBackend, { task_id: task.task_id, shot_id: task.shot_id, attempt: task.attempt }), {
@@ -159,6 +162,9 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
 
   let current = result;
   const started = performance.now();
+  // ADR-0012: created before `try` so the catch path can commit what was sent before the failure.
+  // Lease-loss / cancel returns below never drain it; the collector is simply dropped.
+  const traces = createPromptTraceCollector(task);
   try {
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const prepared = await prepareShot(task, current.row_version, current.episode);
@@ -173,7 +179,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
     if (prepared.kind === "lease_lost") return;
     current = { ok: true, episode: prepared.episode, row_version: prepared.row_version };
     overrides.signal?.throwIfAborted();
-    const context = { ...await buildStageContext(task.stage, current.episode, task, backend), ...overrides };
+    const context = { ...await buildStageContext(task.stage, current.episode, task, backend, traces.sink), ...overrides };
     if (task.stage === "video" && context.h3PromptWriter) {
       context.h3PromptWriter = observeH3Rewrite(context.h3PromptWriter, { task_id: task.task_id, shot_id: task.shot_id, attempt: task.attempt });
     }
@@ -185,7 +191,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
     );
     if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
-    const written = completeTaskWithEpisode(task, current.row_version, updated, current.episode);
+    const written = completeTaskWithEpisode(task, current.row_version, updated, current.episode, traces.drain());
     if (!written.ok) {
       if (written.error === "version_conflict") requeueTaskAfterCommitConflict(task);
       else if (written.error === "illegal_transition") {
@@ -214,13 +220,13 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       return;
     }
     if (err instanceof ContentBlockedError || err instanceof CompositionConstraintError) {
-      failTaskWithCredits(task, false, failureReason(err));
+      failTaskWithCredits(task, false, failureReason(err), undefined, traces.drain());
       return;
     }
     const retry = task.attempt < MAX_LOCAL_ATTEMPTS && !(err instanceof H3FormatError) &&
       (!(err instanceof GenerationError) || err.retryable);
     const diagnostic = err instanceof GenerationError ? err.diagnostic : undefined;
-    failTaskWithCredits(task, retry, diagnostic?.message ?? (retry ? undefined : failureReason(err)), diagnostic);
+    failTaskWithCredits(task, retry, diagnostic?.message ?? (retry ? undefined : failureReason(err)), diagnostic, traces.drain());
   }
 }
 
@@ -235,12 +241,13 @@ async function handleScriptActionTask(task: Task, overrides: Partial<StageContex
     completeTaskWithoutEpisode(task); // already applied or cancelled
     return;
   }
+  const traces = createPromptTraceCollector(task);
   try {
-    const context = { ...await buildStageContext("script", current.episode, task), ...overrides };
+    const context = { ...await buildStageContext("script", current.episode, task, undefined, traces.sink), ...overrides };
     const updated = await runScriptRevision(current.episode, task.instruction ?? "", context);
     if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
-    const written = completeTaskWithEpisode(task, current.row_version, updated);
+    const written = completeTaskWithEpisode(task, current.row_version, updated, undefined, traces.drain());
     if (!written.ok) {
       if (written.error === "version_conflict") requeueTaskAfterCommitConflict(task);
       else if (written.error === "illegal_transition" || written.error === "not_found") {
@@ -253,9 +260,9 @@ async function handleScriptActionTask(task: Task, overrides: Partial<StageContex
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const retry = !(error instanceof ContentBlockedError) && task.attempt < MAX_LOCAL_ATTEMPTS;
     if (retry) {
-      failTaskWithCredits(task, true);
+      failTaskWithCredits(task, true, undefined, undefined, traces.drain());
       return;
     }
-    failTaskWithCredits(task, false);
+    failTaskWithCredits(task, false, undefined, undefined, traces.drain());
   }
 }

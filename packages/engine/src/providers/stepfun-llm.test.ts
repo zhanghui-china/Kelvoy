@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Destination } from "../schema/destination";
 import type { EpisodeBrief } from "../schema/episode";
 import { ContentBlockedError } from "../rules/content";
+import type { PromptTraceEntry } from "./prompt-trace";
 import { stepfunScriptProvider } from "./stepfun-llm";
 
 const destination: Destination = {
@@ -228,4 +229,69 @@ test("long optimization preserves new durations while changing the shot count", 
   expect(result.shots).toHaveLength(11);
   expect(result.shots.every(s => s.duration_s === 3.5)).toBe(true);
   expect(prompt).not.toContain("保持当前镜数");
+});
+
+// ADR-0012: prompt trace sink
+function collect() {
+  const entries: PromptTraceEntry[] = [];
+  return { entries, sink: (entry: PromptTraceEntry) => { entries.push(entry); } };
+}
+function scriptEntries(entries: PromptTraceEntry[]) {
+  return entries.map((entry) => {
+    if (entry.kind !== "script") throw new Error("unexpected entry kind");
+    return entry;
+  });
+}
+
+test("trace reports every correction round with its exact prompt and outcome", async () => {
+  const invalid = buildValidRawShots(10).map((s) => ({ ...s, landmark: "unknown" }));
+  const dirty = buildValidRawShots(26).map((s, i) => (i === 0 ? { ...s, kf_prompt: "色情场景" } : s));
+  const valid = buildValidRawShots(26);
+  const responses = [invalid, dirty, valid];
+  const sent: string[] = [];
+  let call = 0;
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    sent.push(JSON.parse(init!.body as string).messages[0].content);
+    return Response.json({ choices: [{ message: { content: JSON.stringify(responses[call++]) } }] });
+  }) as unknown as typeof fetch;
+  const { entries, sink } = collect();
+
+  await stepfunScriptProvider.generateShots({ brief, destination, trace: sink });
+
+  const script = scriptEntries(entries);
+  expect(script.map((e) => e.outcome)).toEqual(["rule_violation", "content_blocked", "accepted"]);
+  expect(script.map((e) => e.round)).toEqual([1, 2, 3]);
+  expect(script.map((e) => e.operation)).toEqual(["generate", "generate", "generate"]);
+  expect(script.map((e) => e.prompt)).toEqual(sent);
+  expect(script[1]!.prompt).toContain("上一轮生成有以下问题");
+  expect(script[0]!.prompt).not.toContain("上一轮生成有以下问题");
+});
+
+test("trace marks http failures as call_failed without echoing the error text", async () => {
+  globalThis.fetch = (async () => new Response("echo of the prompt", { status: 500 })) as unknown as typeof fetch;
+  const { entries, sink } = collect();
+  await expect(stepfunScriptProvider.generateShots({ brief, destination, trace: sink })).rejects.toThrow();
+  expect(scriptEntries(entries).map((e) => e.outcome)).toEqual(["call_failed"]);
+  expect(JSON.stringify(entries)).not.toContain("echo of the prompt");
+});
+
+test("trace marks unparsable output as parse_error", async () => {
+  mockFetchOnce("没有数组");
+  const { entries, sink } = collect();
+  await expect(stepfunScriptProvider.generateShots({ brief, destination, trace: sink })).rejects.toThrow();
+  expect(scriptEntries(entries).map((e) => e.outcome)).toEqual(["parse_error"]);
+});
+
+test("trace marks exhausted content violations as content_blocked on every round", async () => {
+  mockFetchOnce(JSON.stringify(buildValidRawShots(26).map((s, i) => (i === 0 ? { ...s, kf_prompt: "色情场景" } : s))));
+  const { entries, sink } = collect();
+  await expect(stepfunScriptProvider.generateShots({ brief, destination, trace: sink })).rejects.toBeInstanceOf(ContentBlockedError);
+  expect(scriptEntries(entries).map((e) => e.outcome)).toEqual(["content_blocked", "content_blocked", "content_blocked"]);
+});
+
+test("operation can be set to revision", async () => {
+  mockFetchOnce(JSON.stringify(buildValidRawShots(26)));
+  const { entries, sink } = collect();
+  await stepfunScriptProvider.generateShots({ brief, destination, trace: sink, operation: "revision" });
+  expect(scriptEntries(entries)[0]!.operation).toBe("revision");
 });

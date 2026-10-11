@@ -40,6 +40,8 @@ export async function runScript(episode: Episode, _shotNo?: number, context?: St
     brief: episode.brief,
     cutPolicy: episode.cut_policy,
     destination: context.destination,
+    trace: context.promptTrace,
+    operation: "generate",
   });
   const nextStatus = transitionEpisode(episode.status, { type: "advance" });
   return {
@@ -63,6 +65,8 @@ export async function runScriptRevision(episode: Episode, instruction: string, c
     destination: context.destination,
     instruction,
     previousShots: episode.shots,
+    trace: context.promptTrace,
+    operation: "revision",
   });
   return {
     ...episode,
