@@ -62,7 +62,7 @@ draft → scripting → script_review → assets → (keyframing → kf_review �
 | 某镜成品要重做 | `/regen`，明确 `regen_stage`；用已有 prompt |
 | 某镜视频明显坏了 | `/report-bad`（每镜第一次免费），不额外收积分 |
 | 返工同时要改 prompt，且在 `clip_review`／`done` | 改不了。`keyframe` 模式：先对该镜 `regen_stage=keyframe` 回到 `kf_review`，在那里改 prompt 再继续。`references` 模式：只能用已有 prompt 重做，如实告知 |
-| 某镜或某阶段 `failed` | 读 `failed_task`，告诉用户是哪一步，用户决定后 `/retry`（期级，不分镜） |
+| 某镜或某阶段 `failed` | 读 `failed_tasks`（`failed_task` 为其中最近一个），告诉用户是哪几镜哪一步，用户决定后 `/retry`；不带参数只重试最近一个，`shot_no` 指定单镜，`all` 一次重试当前阶段全部失败镜头 |
 | 仍在生成 | 只观察，不叠加任务 |
 | 成片要重剪 | 在 `done` 用 `/recompose`；合成失败用 `/retry` |
 | 旧期（无 `cut_policy=fixed_1s`）想用新剪辑 | 向用户说明所有镜要重审，用户同意才 `/convert-cuts` |
