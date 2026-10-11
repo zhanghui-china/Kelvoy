@@ -53,12 +53,18 @@ function clamp(value: string | undefined): { text: string | null; truncated: boo
  */
 export function insertPromptTraces(db: Database, task: Task, traces: PromptTraceInput[] | undefined): void {
   if (!traces?.length) return;
-  const stmt = db.query(`insert or ignore into prompt_traces
+  // `on conflict (pk) do nothing`, not `insert or ignore`: OR IGNORE would also silently drop
+  // CHECK / NOT NULL violations (illegal kind/source, missing user_message), leaving a silent gap
+  // while settlement succeeds. Only a duplicate primary key is idempotent; anything else throws
+  // and rolls the caller's transaction back. The WHERE clause also avoids the INSERT..SELECT
+  // vs. ON CONFLICT parse ambiguity.
+  const stmt = db.query(`insert into prompt_traces
     (task_id, attempt, seq, episode_id, owner_id, kind, shot_id, round, source, outcome, rule,
      model, skill_version, writer_version, h3_mode, user_message, correction_message, final_prompt,
      input_hash, truncated)
     select ?, ?, ?, e.episode_id, e.owner_id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-    from episodes e where e.episode_id = ?`);
+    from episodes e where e.episode_id = ?
+    on conflict (task_id, attempt, seq) do nothing`);
   traces.slice(0, PROMPT_TRACE_MAX_ROWS).forEach((trace, seq) => {
     const user = clamp(trace.user_message);
     const correction = clamp(trace.correction_message);

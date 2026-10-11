@@ -248,6 +248,27 @@ test("listPromptTraces maps kinds, filters shot, pages newest first and isolates
   expect((await listPromptTraces({ episodeId: "e_other", ownerId, kind: "video", limit: 10 })).items).toEqual([]);
 });
 
+test("runtime-invalid trace values throw and roll the settlement back instead of being dropped", async () => {
+  await insertEpisode(episode());
+  const t = await claimBrief();
+  const done = { ...episode(), status: "scripting" as const };
+  const bad: [string, unknown][] = [
+    ["kind", trace({ kind: "bogus" as never })],
+    ["source", trace({ source: "web" as never })],
+    ["user_message", trace({ user_message: undefined as never })],
+  ];
+  for (const [, row] of bad) {
+    expect(() => getDb().transaction(() => insertPromptTraces(getDb(), t, [row as PromptTraceInput])).immediate())
+      .toThrow();
+    expect(() => completeTaskWithEpisode(t, 1, done, undefined, [row as PromptTraceInput])).toThrow();
+    expect(() => failTaskWithCredits(t, false, undefined, undefined, [row as PromptTraceInput])).toThrow();
+    expect(getDb().query<{ status: string }, [string]>("select status from tasks where task_id = ?")
+      .get(t.task_id)?.status).toBe("processing");
+    expect(getDb().query<{ row_version: number }, []>("select row_version from episodes").get()?.row_version).toBe(1);
+  }
+  expect(rows()).toHaveLength(0);
+});
+
 test("a failing trace insert rolls the whole settlement back instead of being swallowed", async () => {
   await insertEpisode(episode());
   const t = await claimBrief();
