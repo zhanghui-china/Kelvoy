@@ -45,8 +45,19 @@ review.post("/:id/retry", async (c) => {
   const body = await c.req.json().catch(() => null);
   const rowVersion = parseRowVersion(body);
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
+  // shot_no / all 可选且互斥；类型或取值非法一律 invalid_target（与老调用兼容：都不传即旧行为）。
+  const raw = body as Record<string, unknown>;
+  const shotNo = raw.shot_no;
+  const all = raw.all;
+  const shotNoValid = shotNo === undefined || (typeof shotNo === "number" && Number.isInteger(shotNo) && shotNo > 0);
+  const allValid = all === undefined || typeof all === "boolean";
+  if (!shotNoValid || !allValid || (shotNo !== undefined && all !== undefined)) {
+    return c.json({ ok: false, error: "invalid_target" }, 400);
+  }
   const result = submitFailedTaskRetry({ episode_id: loaded.episode.episode_id,
-    owner_id: c.get("ownerId"), row_version: rowVersion });
+    owner_id: c.get("ownerId"), row_version: rowVersion,
+    ...(shotNo !== undefined ? { shot_no: shotNo as number } : {}),
+    ...(all !== undefined ? { all: all as boolean } : {}) });
   if (!result.ok) return c.json(result, result.error === "insufficient_credits" ? 402 :
     result.error === "version_conflict" ? 409 : result.error === "not_found" ? 404 : 400);
   return c.json(result);
