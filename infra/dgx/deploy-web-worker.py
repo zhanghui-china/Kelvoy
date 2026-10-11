@@ -33,8 +33,28 @@ def has_live_work(database):
         return connection.execute("select 1 from task_executions where exited=0 and lease_until>unixepoch('now') limit 1").fetchone() is not None
 
 
+def dropin_filename(directory, name):
+    """systemd merges drop-ins in lexicographic order and the later one wins. Earlier releases used a fixed
+    `zzzzzzzzzz-<name>.conf`, so a release whose name sorts alphabetically earlier than an existing one
+    (prompt-traces < rule-diag < share-projection) was silently overridden by the old drop-in. Use one more
+    leading `z` than any existing drop-in so the new file always sorts last."""
+    existing = [path.name for path in directory.glob('*.conf')] if directory.is_dir() else []
+    depth = max([len(item) - len(item.lstrip('z')) for item in existing] + [10]) + (1 if existing else 0)
+    return f"{'z' * depth}-{name}.conf"
+
+
+def describe_directory(service, expected):
+    """Diagnostic text for a working-directory mismatch: paths and a PID only, nothing user-related."""
+    try:
+        pid = int(ops.property_value(service, 'MainPID'))
+        cwd = Path(f'/proc/{pid}/cwd').resolve(strict=True) if pid else None
+        return (f'{service}: expected={expected} MainPID={pid} property={ops.property_value(service, "WorkingDirectory")} '
+                f'cwd={cwd} active={ops.service_active(service)}')
+    except (OSError, ValueError) as error:
+        return f'{service}: expected={expected} (could not inspect: {type(error).__name__})'
+
+
 def deploy(release, data_root, name, *, allow_new_tables=(), allow_migrations=(), expect_empty_new_tables=False, verify_dist=True):
-    DROPIN = f'zzzzzzzzzz-{name}.conf'
     os.umask(0o077)
     release, data_root = release.resolve(strict=True), data_root.resolve(strict=True)
     database, projects = (data_root / 'data/kelvoy.db').resolve(strict=True), (data_root / 'projects').resolve(strict=True)
@@ -51,7 +71,8 @@ def deploy(release, data_root, name, *, allow_new_tables=(), allow_migrations=()
     for path in (release, database, projects):
         if any(character in str(path) for character in ('"', '\n', '%', '\\')) or any(character.isspace() for character in str(path)):
             raise RuntimeError('Unrepresentable service path')
-    paths = {service: Path.home() / '.config/systemd/user' / f'{service}.service.d' / DROPIN for service in SERVICES}
+    paths = {service: Path.home() / '.config/systemd/user' / f'{service}.service.d' / dropin_filename(
+        Path.home() / '.config/systemd/user' / f'{service}.service.d', name) for service in SERVICES}
     if any(path.exists() for path in paths.values()):
         raise RuntimeError('Release drop-in already exists')
     initial = {service: ops.service_active(service) for service in SERVICES}
@@ -106,7 +127,7 @@ def deploy(release, data_root, name, *, allow_new_tables=(), allow_migrations=()
         ops.systemctl('start', 'kelvoy-web')
         ops.wait_healthy('kelvoy-web', 'http://127.0.0.1:8888/api/health')
         if not ops.directory_matches('kelvoy-web', release / 'apps/web'):
-            raise RuntimeError('Web working directory mismatch')
+            raise RuntimeError('Web working directory mismatch: ' + describe_directory('kelvoy-web', release / 'apps/web'))
         if allow_new_tables or allow_migrations or expect_empty_new_tables:
             # Web's open() ran the additive migration. The backup equals the pre-start database
             # (verified above), so it is the "before" side; any other change aborts and rolls back.
@@ -122,7 +143,7 @@ def deploy(release, data_root, name, *, allow_new_tables=(), allow_migrations=()
         worker_stopped = False
         time.sleep(2)
         if not ops.service_active('kelvoy-worker') or not ops.directory_matches('kelvoy-worker', release):
-            raise RuntimeError('Worker working directory mismatch')
+            raise RuntimeError('Worker working directory mismatch: ' + describe_directory('kelvoy-worker', release))
         for service in SERVICES:
             environment = ops.live_environment(service)
             if environment.get('KELVOY_DB_PATH') != str(database) or environment.get('KELVOY_PROJECTS_ROOT') != str(projects):
