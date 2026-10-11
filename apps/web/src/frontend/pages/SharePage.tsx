@@ -6,7 +6,7 @@ import { getShare, shareFinalVideoUrl, type SharedEpisode } from "../api/client"
 export function ShareVideo({ slug, episode }: { slug: string; episode: SharedEpisode }) {
   const { width, height } = episode.final ?? {};
   const aspectRatio = width && height && width > 0 && height > 0 ? `${width}/${height}` : "9/16";
-  return <video className="k-media k-share-video" style={{ aspectRatio }} src={shareFinalVideoUrl(slug)} controls aria-label={episode.render.title || episode.episode_id} />;
+  return <video className="k-media k-share-video" style={{ aspectRatio }} src={shareFinalVideoUrl(slug)} controls aria-label={episode.title || episode.episode_id} />;
 }
 
 /**
@@ -48,8 +48,8 @@ export default function SharePage() {
     <main className="k-share-page">
       <Link to="/" className="k-nav-brand">Kelvoy · 可旅</Link>
       <ShareVideo slug={slug} episode={episode} />
-      <h1>{episode.render.title || episode.episode_id}</h1>
-      <p className="k-card-meta">{episode.shots.length} 镜 · AI 生成 · 虚构角色 · 真实目的地</p>
+      <h1>{episode.title || episode.episode_id}</h1>
+      <p className="k-card-meta">{episode.shot_count} 镜 · AI 生成 · 虚构角色 · 真实目的地</p>
       {episode.final && <p className="k-card-meta">{episode.final.duration_s.toFixed(1)} 秒 · {episode.final.width}×{episode.final.height}</p>}
       <p className="k-card-meta">持有此链接的人可观看并下载视频；作品拥有者可随时关闭分享。</p>
       <a className="k-btn k-btn-primary" href={shareFinalVideoUrl(slug)} download>下载视频</a>

@@ -31,7 +31,7 @@ test.each(['keyframe', 'references'] as const)('completed storyboard insert/reor
   const insert=await request('/storyboard',{row_version:1,after_shot_id:'sh_keep_1',shot:draft});expect(insert.status).toBe(200);
   const fresh=(await current()).episode.shots[1]!.shot_id!;
   expect((await current()).episode.final_needs_recompose).toBe(true);
-  const publicBefore=await app.request('/api/share/flow-public');expect((await publicBefore.json()).episode.shots).toHaveLength(2);
+  const publicBefore=await app.request('/api/share/flow-public');expect((await publicBefore.json()).episode.shot_count).toBe(2);
   expect(await (await request('/files/final/old.mp4',undefined,'GET')).text()).toBe('old');
   let snapshot=await current();expect((await request('/storyboard/reorder',{row_version:snapshot.row_version,order:['sh_keep_2',fresh,'sh_keep_1']})).status).toBe(200);
   snapshot=await current();expect((await request('/storyboard/sh_keep_2/remove',{row_version:snapshot.row_version})).status).toBe(200);
@@ -55,5 +55,5 @@ test.each(['keyframe', 'references'] as const)('completed storyboard insert/reor
   const composition=await dequeueTask();expect(composition?.stage).toBe('compose');await handleTask(composition!,{compose:{compose:async({plan})=>{await writeFile(join(root,'e_flow',plan.output_key),'new');return {output_key:plan.output_key,probe:{duration_s:2,width:1080,height:1920,fps:30,size_bytes:3}};}}});
   snapshot=await current();expect(snapshot.episode.status).toBe('done');expect(snapshot.episode.final_needs_recompose).toBe(false);expect(snapshot.episode.shared_storyboard).toBeUndefined();expect(snapshot.episode.shots[1]?.clip).toBe('clip/keep_1.mp4');
   expect(images).toBe(video_source === "keyframe" ? 1 : 0);expect(videos).toBe(1);expect(getCreditBalance(owner).available).toBe(video_source === "keyframe" ? 8 : 9); // image1 + video10 + compose1
-  const publicAfter=await app.request('/api/share/flow-public');expect((await publicAfter.json()).episode.shots.map((s:Shot)=>s.shot_id)).toEqual([fresh,'sh_keep_1']);
+  const publicAfter=await app.request('/api/share/flow-public');expect((await publicAfter.json()).episode.shot_count).toBe(2);
 });

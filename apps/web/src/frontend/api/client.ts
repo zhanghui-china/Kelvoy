@@ -199,8 +199,14 @@ export function deleteEpisode(episodeId: string) {
   );
 }
 
-/** FR-12 分享页看到的字段——服务端只挑这几个，见 share.ts，不含账号信息。 */
-export type SharedEpisode = Pick<Episode, "episode_id" | "status" | "scenes" | "shots" | "music" | "render" | "final">;
+/** FR-12 分享页视图模型——与 share.ts 的 toSharedEpisode 白名单一一对应，不是 Episode 的子集。 */
+export interface SharedEpisode {
+  episode_id: string;
+  status: "done";
+  title: string;
+  shot_count: number;
+  final: { duration_s: number; width: number; height: number } | null;
+}
 
 /** 公开路由，不带 cookie 也能拿到——分享页不要求登录。 */
 export function getShare(slug: string) {

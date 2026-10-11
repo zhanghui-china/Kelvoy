@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { close, insertEpisode, open } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { Episode } from "@kelvoy/engine";
+import type { Episode, Shot, ShotModelRecord } from "@kelvoy/engine";
 import { Hono } from "hono";
 import share from "./share";
 
@@ -60,18 +60,86 @@ test("returns the film + shot-table fields with no login required, and no accoun
   const res = await app.request("/api/share/abc123");
   expect(res.status).toBe(200);
   const body = (await res.json()) as { ok: boolean; episode: Record<string, unknown> };
-  expect(body.episode.render).toEqual({
-    res: "1080x1920",
-    fps: 30,
-    title: "无锡三日",
-    intro: null,
-    outro: null,
-    ai_label: true,
-  });
+  expect(body.episode.title).toBe("无锡三日");
   expect(body.episode.owner_id).toBeUndefined();
   expect(body.episode.credits_used).toBeUndefined();
   expect(body.episode.brief).toBeUndefined();
   expect(body.episode.template_id).toBeUndefined();
+});
+
+const SENTINELS = [
+  "SENTINEL_KF_PROMPT", "SENTINEL_MOTION_PROMPT", "SENTINEL_VIDEO_PROMPT",
+  "SENTINEL_H3_MODEL", "SENTINEL_IMAGE_PROMPT", "SENTINEL_CANDIDATE",
+  "SENTINEL_KF_SELECTED", "SENTINEL_CLIP", "SENTINEL_MUSIC_FILE", "SENTINEL_FINAL_KEY",
+];
+
+function leakyShot(no: number, tag: string): Shot {
+  const record = (prompt: string): ShotModelRecord => ({
+    provider: "mock" as ShotModelRecord["provider"], model: "m", version: "1", seed: 1,
+    prompt, ref_hashes: [], attempts: 1, cost_usd: 0,
+  });
+  return {
+    no, shot_id: `sh_${tag}_${no}`, scene: "s1", size: "wide", beat: "漫步",
+    camera: "static", landmark: null,
+    kf_prompt: `SENTINEL_KF_PROMPT_${tag}`, motion_prompt: `SENTINEL_MOTION_PROMPT_${tag}`,
+    duration_s: 1, candidates: [`SENTINEL_CANDIDATE_${tag}.png`],
+    kf_selected: `SENTINEL_KF_SELECTED_${tag}.png`, clip: `SENTINEL_CLIP_${tag}.mp4`,
+    trim_start_s: 0, status: "approved", regen_stage: null, bad_shot_reported: false,
+    model: {
+      image: record(`SENTINEL_IMAGE_PROMPT_${tag}`),
+      video: {
+        ...record(`SENTINEL_VIDEO_PROMPT_${tag}`),
+        h3_prompt: {
+          skill_version: "v", writer_version: "v", model: `SENTINEL_H3_MODEL_${tag}`,
+          input_hash: "a".repeat(64), ref_hashes: [], mode: "I2VA", duration_s: 4,
+        },
+      },
+    },
+  };
+}
+
+function leakyFinal(): NonNullable<Episode["final"]> {
+  return { version: 1, key: "final/SENTINEL_FINAL_KEY.mp4", duration_s: 12.5,
+    width: 1080, height: 1920, fps: 30, size_bytes: 9, completed_at: "2026-09-26T00:00:00Z" };
+}
+
+function expectNoLeak(text: string) {
+  for (const sentinel of SENTINELS) expect(text).not.toContain(sentinel);
+}
+
+test("shared episode is an explicit whitelist: no prompts, asset paths, or music/final keys", async () => {
+  const episode = fixture("e_1", true, "abc123");
+  episode.shots = [1, 2, 3].map((no) => leakyShot(no, "cur"));
+  episode.music = { file: "music/SENTINEL_MUSIC_FILE.mp3", bpm: 120, license: "cc0" };
+  episode.final = leakyFinal();
+  await insertEpisode(episode);
+
+  const res = await buildApp().request("/api/share/abc123");
+  expect(res.status).toBe(200);
+  const text = await res.text();
+  expectNoLeak(text);
+  const body = JSON.parse(text) as { episode: Record<string, unknown> };
+  expect(Object.keys(body.episode).sort()).toEqual(
+    ["episode_id", "final", "shot_count", "status", "title"]);
+  expect(body.episode.shot_count).toBe(3);
+  expect(body.episode.final).toEqual({ duration_s: 12.5, width: 1080, height: 1920 });
+});
+
+test("shared episode counts the delivered storyboard and hides its prompts too", async () => {
+  const episode = fixture("e_1", true, "abc123");
+  episode.shots = [1, 2, 3].map((no) => leakyShot(no, "cur"));
+  episode.shared_storyboard = {
+    scenes: episode.scenes,
+    shots: [1, 2].map((no) => leakyShot(no, "shared")),
+  };
+  episode.final = leakyFinal();
+  await insertEpisode(episode);
+
+  const res = await buildApp().request("/api/share/abc123");
+  const text = await res.text();
+  expectNoLeak(text);
+  const body = JSON.parse(text) as { episode: { shot_count: number } };
+  expect(body.episode.shot_count).toBe(2);
 });
 
 test("404s when share.enabled is false", async () => {
