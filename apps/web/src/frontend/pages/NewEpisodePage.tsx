@@ -94,7 +94,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   const [name, setName] = useState(initialDraft.current?.name ?? "");
   const [requirements, setRequirements] = useState(initialDraft.current?.requirements ?? "");
   const [aspect, setAspect] = useState<EpisodeAspect>(initialDraft.current?.aspect ?? "9:16");
-  const [videoSource, setVideoSource] = useState<VideoSource>(initialDraft.current?.videoSource ?? "references");
+  const [videoSource, setVideoSource] = useState<VideoSource>(initialDraft.current?.videoSource ?? "keyframe");
 
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<string[] | null>(null);
@@ -276,7 +276,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
       <div className="k-eyebrow">创作工作台 / 新建一期</div>
       <h1>创建新的旅行故事</h1>
       <p className="k-page-intro">选择角色与目的地，再写下这趟旅程希望呈现的内容。</p>
-      <GuideTip section="create">先选出镜角色与目的地。推荐人物图＋场景图直出视频，省去每镜图片生成；创建前核对实时积分预估。默认目标约 30 秒，每镜 3–6 秒；初始 7–8 镜只是起点，生成后可自由增删分镜。</GuideTip>
+      <GuideTip section="create">先选出镜角色与目的地。默认先为每镜生成关键帧候选、逐镜选图再做视频，也可在高级设置改为人物图＋场景图直出视频；创建前核对实时积分预估。默认目标约 30 秒，每镜 3–6 秒；初始 7–8 镜只是起点，生成后可自由增删分镜。</GuideTip>
       <form onSubmit={handleSubmit} className="k-create-layout">
         <div className="k-card k-create-form-panel">
           <div className="k-create-panel-heading"><span className="k-create-step">01</span><div><h2>本期内容</h2><p>为这期作品设定目的地与创作方向</p></div></div>
@@ -289,7 +289,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
               <select value={destinationId} onChange={(e) => { const next = destinations.find((d) => d.destination_id === e.target.value); setDestinationId(e.target.value); setSeason(seasonAfterDestinationChange(seasonMode, season, next?.season_best ?? [])); const match = templates.find((t) => t.skeleton === next?.type); if (match) setTemplateId(match.template_id); }}>
                 {destinations.map((d) => <option key={d.destination_id} value={d.destination_id}>{d.city} · {d.name}（{DESTINATION_TYPE_LABELS[d.type]}）</option>)}
               </select>
-              <span className="k-card-meta">直出视频会把选中角色的参考图与每镜地标实景图一起交给模型。</span>
+              <span className="k-card-meta">关键帧会以选中角色的参考图与每镜地标实景图为依据生成候选；选择直出时，二者会直接交给视频模型。</span>
             </label>
             {selectedDestination?.landmarks[0]?.refs[0] && <div className="k-create-scene-preview">
               <img src={`/api/assets/${selectedDestination.landmarks[0].refs[0]}`} alt={`${selectedDestination.name}场景参考`} />
@@ -328,10 +328,10 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
             <div className="k-create-fields">
               <label className="k-field">视频生成方式
                 <select value={videoSource} onChange={(e) => setVideoSource(e.target.value as VideoSource)}>
-                  <option value="references">人物＋场景直出视频（推荐）</option>
-                  <option value="keyframe">先生成关键帧候选，再做视频</option>
+                  <option value="keyframe">先生成关键帧候选，再做视频（推荐）</option>
+                  <option value="references">人物＋场景直出视频</option>
                 </select>
-                <span className="k-card-meta">直出流程跳过图片生成和关键帧审核；视频生成后直接逐镜检查片段。</span>
+                <span className="k-card-meta">关键帧流程先逐镜选图再生成视频，可控性更高但会产生图片积分；直出跳过图片生成和关键帧审核，视频生成后直接逐镜检查片段。</span>
               </label>
               <label className="k-field">模板
                 <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
