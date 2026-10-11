@@ -110,6 +110,12 @@ describe("validateShot", () => {
     const shot = { ...validShot(), landmark: null };
     expect(validateShot(shot).valid).toBe(true);
   });
+
+  test("person_visible is optional and must be a boolean", () => {
+    expect(validateShot({ ...validShot(), person_visible: false }).valid).toBe(true);
+    expect(validateShot({ ...validShot(), person_visible: true }).valid).toBe(true);
+    expect(validateShot({ ...validShot(), person_visible: "false" }).valid).toBe(false);
+  });
 });
 
 describe("validateEpisode", () => {

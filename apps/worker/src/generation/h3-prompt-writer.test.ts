@@ -444,3 +444,26 @@ test("rewrite timeout prefers the explicit override and otherwise follows the sh
     else process.env.KELVOY_LLM_TIMEOUT_SECONDS = original;
   }
 });
+
+test("system prompt tells the model the person is out of frame only when person_visible is false", async () => {
+  const prompts: string[] = [];
+  const fetcher = (async (_url: string, init: RequestInit) => {
+    prompts.push(JSON.parse(init!.body as string).messages[0].content);
+    return response(sections());
+  }) as unknown as typeof fetch;
+  await writer(fetcher).write({ episode_id: "e1", context: { ...context(), person_visible: false } });
+  await writer(fetcher).write({ episode_id: "e2", context: context() });
+  await writer(fetcher).write({ episode_id: "e3", context: { ...context(), person_visible: true } });
+  expect(prompts[0]).toContain("no person is visible in this shot");
+  expect(prompts[1]).not.toContain("no person is visible in this shot");
+  expect(prompts[2]).not.toContain("no person is visible in this shot");
+});
+
+test("person_visible changes the cache key only when it is false", async () => {
+  const hash = async (episode_id: string, extra: Partial<H3PromptContext>) =>
+    (await writer((async () => response(sections())) as unknown as typeof fetch)
+      .write({ episode_id, context: { ...context(), ...extra } })).provenance.input_hash;
+  const base = await hash("e1", {});
+  expect(await hash("e2", { person_visible: true })).toBe(base);
+  expect(await hash("e3", { person_visible: false })).not.toBe(base);
+});

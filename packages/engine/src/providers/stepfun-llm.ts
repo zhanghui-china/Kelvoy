@@ -33,6 +33,8 @@ interface RawShot {
   landmark: string | null;
   kf_prompt: string;
   motion_prompt: string;
+  /** Only an explicit `false` is kept; the script stage never stores `true` (absent = visible). */
+  person_visible?: false;
 }
 
 function buildPrompt(input: {
@@ -84,7 +86,8 @@ ${input.cutPolicy === "long_3_6" ? `- 每镜建议时长 duration_s 必须为 3�
 - 不得出现政治、色情、暴力、违法、歧视内容及他人商标
 - scene 字段填这一镜所属的段落名（同一段落内的镜头用完全相同的字符串，用于后续分组）
 
-每个元素字段：${input.cutPolicy === "long_3_6" ? "duration_s, " : ""}scene, time, size, beat, caption, camera, landmark, kf_prompt, motion_prompt。
+每个元素字段：${input.cutPolicy === "long_3_6" ? "duration_s, " : ""}scene, time, size, beat, caption, camera, landmark, kf_prompt, motion_prompt, person_visible。
+person_visible 是布尔值：这一镜画面里有没有出现人物（含手、背影）。纯空镜、景物、环境镜头填 false，kf_prompt 同时写明"无人物出镜"；有人物入镜填 true。拿不准填 true。
 caption 是可以直接烧录到成片的一句简短中文字幕，不能重复冗长镜头描述。
 kf_prompt 是关键帧图片生成的描述（中文，一句话，含光线/机位/动作，不含角色外貌细节）。
 motion_prompt 是给视频阶段的运动提示（中文，一句话，只描述一个动作）。
@@ -127,6 +130,8 @@ function parseRawShots(data: unknown, cutPolicy?: Episode["cut_policy"]): RawSho
       landmark: (r.landmark as string | null) ?? null,
       kf_prompt: r.kf_prompt,
       motion_prompt: r.motion_prompt,
+      // Missing, true or any non-boolean value falls back to "visible" so a sloppy model never relaxes a rule.
+      ...(r.person_visible === false ? { person_visible: false as const } : {}),
     };
   });
 }
@@ -164,6 +169,7 @@ function buildScenesAndShots(raw: RawShot[], durationTotal: number): { shots: Sh
     landmark: r.landmark,
     kf_prompt: r.kf_prompt,
     motion_prompt: r.motion_prompt,
+    ...(r.person_visible === false ? { person_visible: false } : {}),
     duration_s: r.duration_s ?? durationPerShot,
     candidates: [],
     kf_selected: null,

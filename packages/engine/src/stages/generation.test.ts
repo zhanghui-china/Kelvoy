@@ -202,3 +202,19 @@ test("video JSON rewrite context keeps source composition, actions and ordered r
     expect(result.shots[0]!.kf_prompt).toBe(original.kf_prompt);
   }
 });
+
+test("video rewrite context carries person_visible=false only for a no-person shot", async () => {
+  for (const [personVisible, expected] of [[false, false], [undefined, undefined]] as const) {
+    let seen: Parameters<H3PromptWriter["write"]>[0] | undefined;
+    const original = shot({ status: "generating_clip", duration_s: 4, ...(personVisible === undefined ? {} : { person_visible: personVisible }) });
+    const context: StageContext = {
+      generation_id: "g", persona, destination,
+      h3PromptWriter: { async write(input) { seen = input; return mockH3PromptWriter.write(input); } },
+      video: { async generate(input) { return { key: "clip/a.mp4", model: "H3", version: "1", seed: input.seed, seconds: 1, ref_hashes: [] }; } },
+    };
+    await runVideo(episode({ video_source: "references", status: "clipping", shots: [original] }), 1, context);
+    expect(seen!.context.person_visible).toBe(expected);
+    // The person reference is always still supplied.
+    expect(seen!.context.references.map(ref => ref.role)).toEqual(["person", "scene"]);
+  }
+});

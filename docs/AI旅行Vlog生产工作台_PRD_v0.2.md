@@ -277,6 +277,8 @@ flowchart LR
 
 期的 `music.file` 允许空字符串，表示合成时按 `brief.tone` 从授权曲库自动选曲；此时新期默认 `bpm=0`、`license=""`。`scenes[].id` 与 `shots[].no` 在各自数组内必须唯一，每镜 `scene` 必须引用本期已有场景。导入和写入入口应遵守这些结构约束，避免同镜编号批量覆盖。
 
+`shots[].person_visible` 为可选布尔值，表示该镜画面里是否有人物（含手、背影）。缺失等同 `true`，旧期行为完全不变；只存显式 `false`。脚本阶段由 LLM 为纯空镜、景物与环境镜头输出 `false`，拿不准或字段缺失、类型不对一律按 `true` 处理。`false` 的镜头在直出（`references`）路径里仍按两张参考图（人物图、地标图）送入视频模型，但 H3 提示词校验不再强制提示词引用人物图，场景图仍必须引用，人物主体仍须在主体定义中出现；改写指令同时要求不在画面中描述人物。分镜编辑界面暂不提供该字段的修改入口，手工改写 `kf_prompt` 不会自动更新它。
+
 `shot.model.*.provider` ∈ `local` / `kling` / `jimeng` / …；`attempts` 含本地重试与溢出总次数；复现键 = (episode_id, shot_no, stage, provider, model, version, seed, prompt 哈希, ref_hashes)。
 
 ## 7. 模型与工具适配层
