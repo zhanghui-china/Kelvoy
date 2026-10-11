@@ -402,3 +402,39 @@
 .k-playback-candidate { cursor: default; margin: 0; }
 .k-playback .k-desk-table { min-width: 960px; }
 [data-episode-operations][hidden] { display: none; }
+
+/* 提示词记录（ADR-0012）：默认折叠，长文本只在自身内滚动，不撑宽页面。 */
+.k-prompt-trace { margin: 0.5rem 0; min-width: 0; }
+.k-prompt-trace > summary { cursor: pointer; color: var(--color-accent-dark); font-size: 0.875rem; }
+.k-prompt-versions { display: grid; gap: 0.5rem; margin-top: 0.5rem; min-width: 0; }
+.k-prompt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.k-prompt-run { margin: 0.25rem 0; font-size: 0.8rem; font-weight: 600; color: var(--color-ink-soft); }
+.k-prompt-version {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-card);
+  min-width: 0;
+}
+.k-prompt-version > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.k-prompt-version-title { font-weight: 600; margin: 0; }
+.k-prompt-version-body { display: grid; gap: 0.5rem; margin-top: 0.5rem; min-width: 0; }
+.k-prompt-block { display: grid; gap: 0.25rem; min-width: 0; }
+.k-prompt-block-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.k-prompt-text {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 24rem;
+  resize: vertical;
+  overflow: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  background: var(--color-panel);
+  color: var(--color-ink);
+  font: 0.8125rem/1.5 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.k-prompt-feedback { margin: 0; min-height: 1.2em; }
+.k-prompt-legacy { display: grid; gap: 0.35rem; }

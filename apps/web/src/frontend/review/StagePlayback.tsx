@@ -3,6 +3,8 @@ import { useState } from "react";
 import type { Destination, Episode, Persona } from "@kelvoy/engine";
 import { assetUrl, episodeFileUrl } from "../api/client";
 import { DESTINATION_TYPE_LABELS, SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS, SHOT_STATUS_LABELS } from "../labels";
+import PromptTrace from "./PromptTrace";
+import { videoPromptRefreshKey } from "./prompt-trace-key";
 import { downloadScriptCsv } from "./scriptExport";
 import type { StageId } from "./StageSteps";
 
@@ -49,6 +51,8 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
       <thead><tr>{["镜号", "场景", "景别", "动作 beat", "字幕", "机位", "画面描述", "运动描述"].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{episode.shots.map(s => <tr key={s.shot_id ?? s.no}><td>{s.no}</td><td>{episode.scenes.find(scene => scene.id === s.scene)?.name ?? s.scene}</td><td>{SHOT_SIZE_LABELS[s.size]}</td><td>{s.beat}</td><td>{s.caption || "—"}</td><td>{SHOT_CAMERA_LABELS[s.camera]}</td><td>{s.kf_prompt || "—"}</td><td>{s.motion_prompt || "—"}</td></tr>)}</tbody>
     </table></div>}
+    {episode.shots.length > 0 && <PromptTrace episodeId={episode.episode_id} kind="script"
+      refreshKey={`${episode.script_pending_task_id ?? ""}:${episode.shots.length}`} />}
   </section>;
   if (stage === "keyframes") return <section className="k-desk-main"><h2>已保存的关键帧</h2>
     {episode.grid_refs.length > 0 && <details><summary>查看策划稿</summary><div className="k-desk-candidates">{episode.grid_refs.map(ref => <SavedMedia key={ref} src={file(ref)} label="网格策划稿" />)}</div></details>}
@@ -67,6 +71,9 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
     {shot ? <article className="k-card"><h3>第 {shot.no} 镜 · {shot.beat}</h3>
       <p className="k-card-meta">已保存的截取起点：{shot.trim_start_s === null ? "未保存（默认 0 秒）" : `${shot.trim_start_s.toFixed(2)} 秒`} · 审核状态：{SHOT_STATUS_LABELS[shot.status]}</p>
       <p className="k-card-meta">{episode.cut_policy === "long_3_6" ? "建议长度（最终按素材分配）" : "截取长度"}：{episode.cut_policy === "fixed_1s" ? 1 : shot.duration_s} 秒</p>
+      {shot.shot_id && <PromptTrace key={shot.shot_id} episodeId={episode.episode_id} kind="video" shotId={shot.shot_id} shotNo={shot.no}
+        refreshKey={videoPromptRefreshKey(shot)}
+        fallbackPrompt={shot.model?.video?.prompt ?? null} />}
       {shot.clip ? <SavedMedia key={`${shot.no}:${shot.clip}`} src={file(shot.clip)} label={`第 ${shot.no} 镜视频`} video /> : <p className="k-empty">暂无已保存的视频</p>}
     </article> : <p className="k-empty">暂无已保存的视频</p>}
   </section>;
