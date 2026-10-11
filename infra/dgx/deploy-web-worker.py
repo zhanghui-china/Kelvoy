@@ -1,12 +1,12 @@
-"""Web/Worker code-only release cutover (no migration, no media change). Retains online data and
-existing deletion audit on rollback. Derived from deploy-music-fix.py without the music install step."""
+"""Web/Worker code-only release cutover: no migration, media is neither backed up nor touched.
+Only the database gets a consistent backup as a safety net. RELEASE.json lists just the files changed
+since the base release. Retains online data and existing deletion audit on rollback."""
 import argparse
 import importlib.util
 import json
 import os
 import shutil
 import sqlite3
-import tarfile
 import time
 from pathlib import Path
 
@@ -63,7 +63,7 @@ def deploy(release, data_root, name):
             time.sleep(2)
         ops.systemctl('stop', 'kelvoy-worker')
         worker_stopped = True
-        record('backup_configuration_database_media')
+        record('backup_configuration_database')
         configuration = {}
         for service in SERVICES:
             (backup / f'{service}.service.txt').write_text(ops.systemctl('cat', service))
@@ -81,15 +81,7 @@ def deploy(release, data_root, name):
             source.backup(target)
         if ops.database_snapshot(backup / 'kelvoy-cutover.db') != before_database:
             raise RuntimeError('Database backup mismatch')
-        before_media = ops.media_snapshot(projects)
-        with tarfile.open(backup / 'projects-cutover.tar', 'w') as archive:
-            archive.add(projects, arcname='projects')
-        with tarfile.open(backup / 'projects-cutover.tar') as archive:
-            import hashlib
-            archived = {str(Path(member.name).relative_to('projects')): hashlib.file_digest(archive.extractfile(member), 'sha256').hexdigest() for member in archive.getmembers() if member.isfile()}
-        if archived != before_media:
-            raise RuntimeError('Media backup mismatch')
-        report.update(database_snapshot=before_database, media_sha256=before_media, configuration_sha256=configuration)
+        report.update(database_snapshot=before_database, configuration_sha256=configuration)
         record('switch_web_worker')
         bun = Path.home() / '.bun/bin/bun'
         for service, directory, entry in (('kelvoy-web', release / 'apps/web', 'src/server/index.ts'), ('kelvoy-worker', release, 'apps/worker/src/index.ts')):
@@ -105,8 +97,6 @@ def deploy(release, data_root, name):
             raise RuntimeError('Web working directory mismatch')
         if ops.database_snapshot(database) != before_database:
             raise RuntimeError('Paused database changed')
-        if ops.media_snapshot(projects) != before_media:
-            raise RuntimeError('Existing media changed')
         if any(ops.digest(Path(path)) != digest for path, digest in configuration.items()):
             raise RuntimeError('Original configuration changed')
         record('resume_worker')
