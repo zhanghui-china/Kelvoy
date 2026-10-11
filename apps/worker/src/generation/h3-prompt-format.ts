@@ -30,6 +30,31 @@ export function parseSections(content: string, context: H3PromptContext): Record
   return value as Record<string, string>;
 }
 
+/**
+ * Models sometimes write a reference label without angle brackets ("Picture 1"). That is a pure label
+ * syntax slip, so it is rewritten to `<Picture 1>` before validation. Only numbers of supplied
+ * pictures are touched; anything else is left for `validateSections` to reject as before. It never
+ * changes keys, field count or any non-label text, and a second pass is a no-op.
+ */
+export function normalizePictureLabels(
+  value: Record<string, string>, context: H3PromptContext,
+): { sections: Record<string, string>; normalized: number } {
+  const provided = new Set(context.references.map(ref => ref.picture));
+  let normalized = 0;
+  // Not preceded by `<` or a word char; whole number (no "1st", "1.5"); `Picture`/`picture` only, so
+  // "pictures" and "Picture perfect" never match. `[ \t]+` keeps the match on one line.
+  const bare = /(?<![<\w])[Pp]icture[ \t]+([1-9]\d*)(?![\w>]|\.\d)/g;
+  const sections: Record<string, string> = {};
+  for (const [key, text] of Object.entries(value)) {
+    sections[key] = text.replace(bare, (match, digits: string) => {
+      if (!provided.has(Number(digits))) return match;
+      normalized++;
+      return `<Picture ${digits}>`;
+    });
+  }
+  return { sections, normalized };
+}
+
 /** Semantic failures are terminal: a format correction must never repair unsafe content. */
 export function validateSections(value: Record<string, string>, context: H3PromptContext): void {
   const all = Object.values(value).join("\n");

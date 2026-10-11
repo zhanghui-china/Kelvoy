@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { checkContent, ContentBlockedError, type H3PromptContext, type H3PromptResult, type H3PromptWriter, type PromptTraceSink } from "@kelvoy/engine";
 import { classifyH3Failure } from "./errors";
 import { artifactPath, assertEpisodePublicationAllowed, sharedAssetPath } from "../storage/artifacts";
-import { BASE_FIELDS, REF_FIELDS, H3FormatError, parseSections, validateSections, renderSections } from "./h3-prompt-format";
+import { BASE_FIELDS, REF_FIELDS, H3FormatError, normalizePictureLabels, parseSections, validateSections, renderSections } from "./h3-prompt-format";
 
 const WRITER_VERSION = "h3-writer-v1";
 interface Options {
@@ -100,12 +100,13 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
     };
     // ADR-0012: the trace is a side channel. It reports after the outcome is decided and can neither
     // change it nor block it; prompt text goes to the sink only, never into an Error or a log.
-    const state: { source: "llm" | "cache"; correction?: string } = { source: "llm" };
+    const state: { source: "llm" | "cache"; correction?: string; normalized?: number } = { source: "llm" };
     const report = (outcome: string, extra: { final_prompt?: string; rule?: string } = {}) => {
       if (!options.trace || input.signal?.aborted) return;
       try {
         options.trace({ kind: "h3_rewrite", source: state.source, user_message: JSON.stringify(context),
           ...(state.correction === undefined ? {} : { correction_message: state.correction }),
+          ...(state.normalized ? { normalized_labels: state.normalized } : {}),
           ...extra, outcome, model, skill_version, writer_version: WRITER_VERSION, mode: context.mode, input_hash });
       } catch { /* a failing sink must not alter the rewrite result */ }
     };
@@ -147,7 +148,9 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
           moderate(content, "h3_output");
           let sections: Record<string, string>;
           try {
-            sections = parseSections(content, context);
+            const parsed = normalizePictureLabels(parseSections(content, context), context);
+            sections = parsed.sections;
+            state.normalized = parsed.normalized;
             moderate(JSON.stringify(sections), "h3_output");
             validateSections(sections, context);
           }
