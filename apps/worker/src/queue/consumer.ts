@@ -27,7 +27,6 @@ import {
 } from "@kelvoy/store";
 import { observeH3Rewrite } from "../generation/diagnostics";
 import { GenerationError } from "../generation/errors";
-import { H3FormatError } from "../generation/h3-prompt-format";
 import { compositionFailure } from "../compose/errors";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders, snapshotGenerationBackend, type GenerationBackend } from "../generation/local";
@@ -223,7 +222,9 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
       failTaskWithCredits(task, false, failureReason(err), undefined, traces.drain());
       return;
     }
-    const retry = task.attempt < MAX_LOCAL_ATTEMPTS && !(err instanceof H3FormatError) &&
+    // H3 format failures arrive here as GenerationError(prompt_format_invalid, retryable=true) via
+    // observeH3Rewrite; model output is random, so they get the same one local retry as other transient errors.
+    const retry = task.attempt < MAX_LOCAL_ATTEMPTS &&
       (!(err instanceof GenerationError) || err.retryable);
     const diagnostic = err instanceof GenerationError ? err.diagnostic : undefined;
     failTaskWithCredits(task, retry, diagnostic?.message ?? (retry ? undefined : failureReason(err)), diagnostic, traces.drain());

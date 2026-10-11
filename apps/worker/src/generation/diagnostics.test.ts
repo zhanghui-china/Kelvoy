@@ -1,19 +1,28 @@
 import { expect, test } from "bun:test";
-import type { H3PromptWriter } from "@kelvoy/engine";
+import { ContentBlockedError, type H3PromptWriter } from "@kelvoy/engine";
 import { observeH3Rewrite } from "./diagnostics";
 import { H3FormatError } from "./h3-prompt-format";
 import { GenerationError } from "./errors";
 
-test("format correction exhaustion has a safe prompt rewrite diagnostic and does not retry", async () => {
+test("format correction exhaustion has a safe prompt rewrite diagnostic and is retryable once by the consumer", async () => {
   const writer = observeH3Rewrite({ async write() { throw new H3FormatError("private model output"); } }, { task_id: "tk_1", attempt: 1 });
   try { await writer.write({} as Parameters<H3PromptWriter["write"]>[0]); throw new Error("expected failure"); }
   catch (error) {
     expect(error).toBeInstanceOf(GenerationError);
     const failure = error as GenerationError;
-    expect(failure.retryable).toBe(false);
+    expect(failure.retryable).toBe(true);
+    expect(failure.diagnostic.code).toBe("prompt_format_invalid");
     expect(failure.diagnostic.stage).toBe("prompt_rewrite");
     expect(failure.diagnostic.message).not.toContain("private");
   }
+});
+
+test("content blocks stay terminal", async () => {
+  const writer = observeH3Rewrite({ async write() { throw new ContentBlockedError("blocked"); } }, { task_id: "tk_1", attempt: 1 });
+  const failure = await writer.write({} as Parameters<H3PromptWriter["write"]>[0])
+    .then(() => { throw new Error("expected failure"); }, (e: unknown) => e as GenerationError);
+  expect(failure.retryable).toBe(false);
+  expect(failure.diagnostic.code).toBe("content_blocked");
 });
 
 test("semantic H3 constraints are terminal format failures", async () => {
