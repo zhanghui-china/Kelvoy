@@ -105,6 +105,9 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
       </p>}
       <StageSteps status={episode.status} failedTask={failedTask} videoSource={episode.video_source}
         stages={stages} selectedStage={selectedStage ?? currentStage} onSelect={selectStage} />
+      {episode.video_source === "references" && <p className="k-card-meta">
+        本期为直出模式，无关键帧审核；如需选图，请新建时选择关键帧方式。
+      </p>}
       {replaying && <section className="k-playback" aria-label="只读阶段回看">
         <div className="k-desk-toolbar k-playback-banner">
           <p role="status">正在回看：{stages.find(stage => stage.id === selectedStage)?.label.slice(2)} · 只读</p>
