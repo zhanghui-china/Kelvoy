@@ -55,6 +55,9 @@ export function normalizePictureLabels(
   return { sections, normalized };
 }
 
+const PERSON_WORDS = /\b(?:person|persona|human|character|woman|man|girl|boy|lady|traveler|traveller|tourist|visitor|protagonist|figure|individual|hands?|identity|appearance)\b/i;
+const SCENE_WORDS = /\b(?:scene|scenery|scenic|environment|location|landscape|setting|background|interior|exterior|area|space|place|site|spot|street|view|vista|surroundings|destination|landmark|attraction)\b/i;
+
 /** Semantic failures are terminal: a format correction must never repair unsafe content. */
 export function validateSections(value: Record<string, string>, context: H3PromptContext): void {
   const all = Object.values(value).join("\n");
@@ -94,9 +97,10 @@ export function validateSections(value: Record<string, string>, context: H3Promp
     if (definitions.length !== context.references.length || definitions.some((n, index) => Number(n) !== index + 1)) fail("subject order must match actual pictures");
     for (const ref of context.references) {
       const definition = value.subject_definitions!.match(new RegExp(`<Subject ${ref.picture}>\\s+(?:is|represents|refers to)\\s+[^\\n]*?<Picture (\\d+)>`));
-      const definedRole = definition?.[0] ?? "";
-      const expectedRole = ref.role === "person" ? /\b(?:person|human|character|woman|man|hands?|identity|appearance)\b/i : /\b(?:scene|environment|location|landscape|setting|background)\b/i;
-      if (!expectedRole.test(definedRole)) fail("subject role does not match supplied reference");
+      // Fail only on a clear mismatch: the whole definition line hits one role's vocabulary and none of the other's.
+      const line = value.subject_definitions!.match(new RegExp(`<Subject ${ref.picture}>(?:(?!<Subject )[^\\n])*`))?.[0] ?? "";
+      const hitsPerson = PERSON_WORDS.test(line), hitsScene = SCENE_WORDS.test(line);
+      if (definition && (ref.role === "person" ? hitsScene && !hitsPerson : hitsPerson && !hitsScene)) fail("subject role does not match supplied reference");
       if (Number(definition?.[1]) !== ref.picture) fail("subject mapped to wrong picture");
     }
     if (!definitions.length || subjects.some(n => !definitions.includes(n))) fail("undefined subject reference");
