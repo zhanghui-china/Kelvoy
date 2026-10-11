@@ -51,7 +51,7 @@ test("credit summary distinguishes spendable, reserved, and recorded transaction
 });
 
 test("share player uses recorded portrait and landscape dimensions", () => {
-  const episode = { episode_id: "e1", render: { title: "旅行" }, final: { width: 1080, height: 1920 } } as SharedEpisode;
+  const episode = { episode_id: "e1", title: "旅行", final: { width: 1080, height: 1920 } } as SharedEpisode;
   const portrait = render(<ShareVideo slug="public" episode={episode} />);
   expect(portrait).toContain("aspect-ratio:1080/1920");
   const landscape = render(<ShareVideo slug="public" episode={{ ...episode, final: { ...episode.final!, width: 1920, height: 1080 } }} />);

@@ -1,11 +1,25 @@
+import type { Episode } from "@kelvoy/engine";
 import { getEpisodeBySlug } from "@kelvoy/store";
 import { Hono } from "hono";
 import { resolveArtifactPath } from "./episodes";
 
-// FR-12: 分享页，不需要登录，响应体只挑成片+分镜表相关字段，不含账号信息。
+// FR-12: 分享页，不需要登录。响应体是显式白名单（见 toSharedEpisode），
+// 新增字段前必须评估是否对未登录访问者可见——提示词、素材路径、配乐文件、
+// 成片 key 都不能出现在这里。
 // 找不到 slug 和 share.enabled=false 都返回同样的 404，不泄露"这个 slug
 // 存在但没开分享"。
 const share = new Hono();
+
+function toSharedEpisode(episode: Episode) {
+  const { final } = episode;
+  return {
+    episode_id: episode.episode_id,
+    status: "done" as const,
+    title: episode.render.title,
+    shot_count: (episode.shared_storyboard?.shots ?? episode.shots).length,
+    final: final ? { duration_s: final.duration_s, width: final.width, height: final.height } : null,
+  };
+}
 
 share.get("/:slug", async (c) => {
   const episode = await getEpisodeBySlug(c.req.param("slug"));
@@ -13,18 +27,7 @@ share.get("/:slug", async (c) => {
     return c.json({ ok: false, error: "not_found" }, 404);
   }
 
-  return c.json({
-    ok: true,
-    episode: {
-      episode_id: episode.episode_id,
-      status: "done",
-      scenes: episode.shared_storyboard?.scenes ?? episode.scenes,
-      shots: episode.shared_storyboard?.shots ?? episode.shots,
-      music: episode.music,
-      render: episode.render,
-      final: episode.final ?? null,
-    },
-  });
+  return c.json({ ok: true, episode: toSharedEpisode(episode) });
 });
 
 // 成片文件名约定和 DoneView.tsx 的 finalKey() 保持一致，见那边的注释——
