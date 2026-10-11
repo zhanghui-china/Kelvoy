@@ -54,3 +54,18 @@ test("episode detail passes failed shot summary into the progress view", () => {
   expect(html).toContain("失败阶段：视频片段 · 第 5 镜");
   expect(html).toContain("重新执行失败任务");
 });
+
+test.each([
+  ["references", true],
+  ["keyframe", false],
+  [undefined, false],
+] as const)("direct-mode hint for video_source=%s: shown=%s", (videoSource, shown) => {
+  const base = { ...fixture("e_direct_hint", "u_1"), status: "script_review" as const, shots: [shotFixture(1, {})] };
+  const { video_source: _omit, ...rest } = base;
+  const episode = (videoSource === undefined ? rest : { ...rest, video_source: videoSource }) as typeof base;
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_direct_hint">
+    <EpisodeDetailContent episode={episode} destination={null} persona={null} mutation={mutation} />
+  </StaticRouter>);
+  const hint = "本期为直出模式，无关键帧审核；如需选图，请新建时选择关键帧方式。";
+  expect(html.split(hint).length - 1).toBe(shown ? 1 : 0);
+});
