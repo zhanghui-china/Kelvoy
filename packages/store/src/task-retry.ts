@@ -132,7 +132,7 @@ export function submitFailedTaskRetry(input: {
       const shot = episode.shots.find((s) => s.no === input.shot_no);
       const own = failures.filter((f) => (f.stage === "keyframe" || f.stage === "video") && shot && shotOf(episode, f) === shot);
       const failed = own.find((f) => statusFor(episode, f.stage)) ?? own[0] ?? null;
-      if (failed) items = [{ stage: failed.stage, failed, shot }];
+      if (failed) items = [{ stage: failed.stage, failed, shot: shot ?? null }];
       else if (shot && shot.status === "failed") {
         const stage = reissueStage(episode, shot);
         if (hasActiveTask(episode.episode_id, stage, shot)) return { ok: false, error: "no_failed_task" } as const;
