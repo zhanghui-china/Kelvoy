@@ -1,9 +1,9 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { close, insertEpisode, open } from "@kelvoy/store";
+import { close, getDb, insertEpisode, insertPromptTraces, open } from "@kelvoy/store";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { Episode, Shot, ShotModelRecord } from "@kelvoy/engine";
+import type { Episode, Shot, ShotModelRecord, Task } from "@kelvoy/engine";
 import { Hono } from "hono";
 import share from "./share";
 
@@ -201,6 +201,24 @@ test("share temporarily hides an old film while a shot is being regenerated", as
   const app = buildApp();
   expect((await app.request("/api/share/abc123")).status).toBe(404);
   expect((await app.request("/api/share/abc123/final.mp4")).status).toBe(404);
+});
+
+test("shared episode never carries ADR-0012 prompt traces", async () => {
+  await insertEpisode(fixture("e_1", true, "abc123"));
+  insertPromptTraces(getDb(), { task_id: "t_trace", attempt: 1, episode_id: "e_1" } as Task, [
+    { kind: "script_generate", source: "llm", outcome: "accepted", user_message: "SENTINEL_TRACE_USER" },
+    { kind: "h3_rewrite", source: "llm", outcome: "ok", shot_id: "sh_1", final_prompt: "SENTINEL_TRACE_FINAL",
+      input_hash: "f".repeat(64),
+      user_message: JSON.stringify({ references: [{ key: "persona/SENTINEL_TRACE_KEY.png", role: "person", picture: 1 }] }) },
+  ]);
+
+  const res = await buildApp().request("/api/share/abc123");
+  expect(res.status).toBe(200);
+  const text = await res.text();
+  expect(text).not.toContain("SENTINEL_TRACE");
+  expect(text).not.toContain("f".repeat(64));
+  const body = JSON.parse(text) as { episode: Record<string, unknown> };
+  expect(Object.keys(body.episode).sort()).toEqual(["episode_id", "final", "shot_count", "status", "title"]);
 });
 
 test("GET /:slug/final.mp4 404s when composing hasn't produced the file yet", async () => {

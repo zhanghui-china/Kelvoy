@@ -36,6 +36,7 @@ import { Hono } from "hono";
 import { requireOwner } from "../middleware/auth";
 import { loadOwnedEpisode, patchErrorResponse } from "./episode-common";
 import { staysOnDiskPath } from "./file-path";
+import prompts from "./episode-prompts";
 import review from "./episode-review";
 import storyboard from "./episode-storyboard";
 import suggestions from "./episode-storyboard-suggestions";
@@ -366,6 +367,7 @@ episodes.get("/:id/files/:path{.+}", async (c) => {
 // 挂在具体路由都注册完之后，不影响上面 "/estimate" 先于 "/:id" 的顺序。
 episodes.route("/", storyboard);
 episodes.route("/", suggestions);
+episodes.route("/", prompts);
 episodes.route("/", review);
 
 export default episodes;
