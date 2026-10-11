@@ -7,7 +7,7 @@ function item(id: string): PromptTraceItem {
   return {
     id, kind: "h3_rewrite", shot_id: "s1", round: null, attempt: 1, source: "llm", outcome: "ok",
     validated: true, rule: null, model: null, skill_version: null, writer_version: null, h3_mode: null,
-    user_message: `msg ${id}`, correction_message: null, final_prompt: `final ${id}`, input_hash: null,
+    user_message: `msg ${id}`, correction_message: null, final_prompt: `final ${id}`, rejected_output: null, input_hash: null,
     truncated: false, created_at: "2026-10-11T00:00:00Z",
   };
 }

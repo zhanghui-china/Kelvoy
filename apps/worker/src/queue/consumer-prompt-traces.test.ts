@@ -254,6 +254,8 @@ test("a failed rewrite keeps the attempt with its rule and no final prompt, with
   expect(first).toHaveLength(1);
   expect(first[0]).toMatchObject({ shot_id: shotId, outcome: "prompt_format_invalid", rule: "section_fields", final_prompt: null });
   expect(first[0]!.correction_message).not.toBeNull();
+  // The rejected model text travels with the same settlement and is readable through the owner-scoped list.
+  expect(first[0]!.rejected_output).toBe(JSON.stringify({ summary: "only one field" }));
 
   // Attempt 2: still invalid -> terminal, no further requeue.
   const second = (await dequeueTask())!;
@@ -264,5 +266,6 @@ test("a failed rewrite keeps the attempt with its rule and no final prompt, with
   const rows = await traces("e_video_bad", "video");
   expect(rows).toHaveLength(2);
   expect(rows.every((r) => r.outcome === "prompt_format_invalid")).toBe(true);
+  expect(rows.every((r) => typeof r.rejected_output === "string")).toBe(true);
   assertNoSentinelOutsideTraces([task.task_id]);
 });

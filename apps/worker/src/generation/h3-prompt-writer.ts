@@ -108,8 +108,8 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
     };
     // ADR-0012: the trace is a side channel. It reports after the outcome is decided and can neither
     // change it nor block it; prompt text goes to the sink only, never into an Error or a log.
-    const state: { source: "llm" | "cache"; correction?: string; normalized?: number } = { source: "llm" };
-    const report = (outcome: string, extra: { final_prompt?: string; rule?: string } = {}) => {
+    const state: { source: "llm" | "cache"; correction?: string; normalized?: number; rejected?: string } = { source: "llm" };
+    const report = (outcome: string, extra: { final_prompt?: string; rule?: string; rejected_output?: string } = {}) => {
       if (!options.trace || input.signal?.aborted) return;
       try {
         options.trace({ kind: "h3_rewrite", source: state.source, user_message: JSON.stringify(context),
@@ -163,6 +163,8 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
             validateSections(sections, context);
           }
           catch (error) {
+            // Only format rejections keep the text: moderation blocks must not be copied into traces.
+            if (error instanceof H3FormatError) state.rejected = content;
             // Attempt 1 only runs after a correction request was sent for attempt 0.
             if (error instanceof H3FormatError && attempt === 1) error.corrected = true;
             if (!(error instanceof H3FormatError) || !error.correctable || attempt === 1) throw error;
@@ -192,7 +194,10 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
       return result;
     } catch (error) {
       const failure = classifyH3Failure(error);
-      report(failure.outcome, failure.rule ? { rule: failure.rule } : {});
+      report(failure.outcome, {
+        ...(failure.rule ? { rule: failure.rule } : {}),
+        ...(state.rejected !== undefined && error instanceof H3FormatError ? { rejected_output: state.rejected } : {}),
+      });
       throw error;
     }
   } };

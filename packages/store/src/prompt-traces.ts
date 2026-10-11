@@ -18,12 +18,16 @@ export type PromptTraceInput = {
   outcome: string; rule?: string;
   model?: string; skill_version?: string; writer_version?: string; h3_mode?: string;
   user_message: string; correction_message?: string; final_prompt?: string;
+  /** Raw model text that failed validation; stored in prompt_trace_rejections, not in this table. */
+  rejected_output?: string;
   input_hash?: string;
 };
 
-export type PromptTraceRow = PromptTraceInput & {
+export type PromptTraceRow = Omit<PromptTraceInput, "rejected_output"> & {
   task_id: string; attempt: number; seq: number; episode_id: string; owner_id: string;
   truncated: number; created_at: string; rowid: number;
+  /** Joined from prompt_trace_rejections; null when the attempt had none. */
+  rejected_output: string | null; rejected_truncated: number | null;
 };
 
 /** Per-field cap, in UTF-8 bytes (matches what the column actually stores on disk). */
@@ -65,6 +69,12 @@ export function insertPromptTraces(db: Database, task: Task, traces: PromptTrace
     select ?, ?, ?, e.episode_id, e.owner_id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     from episodes e where e.episode_id = ?
     on conflict (task_id, attempt, seq) do nothing`);
+  // Same primary key as the trace row; owner/episode are copied from the same episodes row, so the
+  // two tables cannot disagree. A trace without rejected output never touches this statement.
+  const rejection = db.query(`insert into prompt_trace_rejections
+    (task_id, attempt, seq, episode_id, owner_id, rejected_output, truncated)
+    select ?, ?, ?, e.episode_id, e.owner_id, ?, ? from episodes e where e.episode_id = ?
+    on conflict (task_id, attempt, seq) do nothing`);
   traces.slice(0, PROMPT_TRACE_MAX_ROWS).forEach((trace, seq) => {
     const user = clamp(trace.user_message);
     const correction = clamp(trace.correction_message);
@@ -74,6 +84,10 @@ export function insertPromptTraces(db: Database, task: Task, traces: PromptTrace
       trace.writer_version ?? null, trace.h3_mode ?? null, user.text, correction.text, final.text,
       trace.input_hash ?? null, user.truncated || correction.truncated || final.truncated ? 1 : 0,
       task.episode_id);
+    const rejected = clamp(trace.rejected_output);
+    if (rejected.text !== null) {
+      rejection.run(task.task_id, task.attempt, seq, rejected.text, rejected.truncated ? 1 : 0, task.episode_id);
+    }
   });
 }
 
@@ -89,12 +103,15 @@ export async function listPromptTraces(query: {
 }): Promise<{ items: PromptTraceRow[]; next_before: number | null }> {
   const limit = Math.max(1, Math.min(Math.trunc(query.limit) || 1, 50));
   const kinds = KINDS[query.kind];
-  const conditions = ["episode_id = ?", "owner_id = ?", `kind in (${kinds.map(() => "?").join(",")})`];
+  const conditions = ["p.episode_id = ?", "p.owner_id = ?", `p.kind in (${kinds.map(() => "?").join(",")})`];
   const params: (string | number)[] = [query.episodeId, query.ownerId, ...kinds];
-  if (query.shotId !== undefined) { conditions.push("shot_id = ?"); params.push(query.shotId); }
-  if (query.before !== undefined) { conditions.push("rowid < ?"); params.push(query.before); }
+  if (query.shotId !== undefined) { conditions.push("p.shot_id = ?"); params.push(query.shotId); }
+  if (query.before !== undefined) { conditions.push("p.rowid < ?"); params.push(query.before); }
   const found = getDb().query<PromptTraceRow, (string | number)[]>(
-    `select rowid, * from prompt_traces where ${conditions.join(" and ")} order by rowid desc limit ?`,
+    `select p.rowid as rowid, p.*, r.rejected_output as rejected_output, r.truncated as rejected_truncated
+     from prompt_traces p
+     left join prompt_trace_rejections r on r.task_id = p.task_id and r.attempt = p.attempt and r.seq = p.seq
+     where ${conditions.join(" and ")} order by p.rowid desc limit ?`,
   ).all(...params, limit + 1);
   const items = found.slice(0, limit);
   return { items, next_before: found.length > limit ? items[items.length - 1]!.rowid : null };

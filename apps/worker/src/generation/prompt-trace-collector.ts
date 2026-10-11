@@ -20,7 +20,8 @@ function toRow(entry: PromptTraceEntry, task: Task): PromptTraceInput {
   // `entry.normalized_labels` is deliberately not mapped: persisting it needs a new store column
   // (out of scope for the label-normalization fix). The count stays visible to sinks via the entry.
   return { kind: "h3_rewrite", shot_id: task.shot_id, source: entry.source, user_message: entry.user_message,
-    correction_message: entry.correction_message, final_prompt: entry.final_prompt, outcome: entry.outcome,
+    correction_message: entry.correction_message, final_prompt: entry.final_prompt,
+    rejected_output: entry.rejected_output, outcome: entry.outcome,
     rule: entry.rule, model: entry.model, skill_version: entry.skill_version, writer_version: entry.writer_version,
     h3_mode: entry.mode, input_hash: entry.input_hash };
 }

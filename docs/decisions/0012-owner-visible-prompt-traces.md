@@ -86,6 +86,17 @@ Worker 为每次任务执行持有一个收集器，并在已有的「租约校�
 
 为什么是有边界的修订：产品需要的是所有者可审阅「实际发出了什么」。这需要持久化用户消息与最终提示词，但不需要响应原文和系统提示词。放宽范围只到需求为止；诊断、日志等运维面的纪律不变。同步修改的注释位于 `packages/store/src/task-diagnostics.ts` 与 `apps/worker/src/generation/diagnostics.ts`，只改措辞。
 
+## 补充：保留校验失败时被拒绝的模型原文（2026-10-11，`prompt_traces_v2`）
+
+触发：线上作品 `e_0a0d9f4d` 第 2 镜首次尝试因 `rewrite must be English` 失败，记录里没有最终提示词，也看不到模型到底输出了什么，无法判断是模型问题还是规则误判。
+
+- **放宽范围**：仅保留「视频改写在格式校验阶段被拒绝的最后一次模型输出」。内容审核拦截、超时、调用失败、成功的改写不写入；系统提示词全文仍不入库；脚本阶段不变。
+- **存储**：新增加性表 `prompt_trace_rejections`（主键与 `prompt_traces` 相同 `(task_id, attempt, seq)`，另存 `episode_id`、`owner_id`、`rejected_output`、`truncated`、`created_at`），读取时左连接。没有给 `prompt_traces` 加列：部署闸门（`infra/dgx/schema_compat.py`）只放行新表，已有表定义或行摘要变化会被判为非加性。
+- **限额与可见性**：同一 64KB 截断规则；写入与主记录在同一结算事务内；读取沿用「仅所有者」接口，不进入分享、作品详情、日志、`tasks.error`、诊断。
+- **脱敏**：返回前用同一行 `user_message` 中的 `references[].key` 逐个替换为 `[reference]`，并把 32 位以上十六进制串替换为 `[hash]`；`user_message` 无法解析时整段替换为 `[unavailable]`。
+- **生命周期**：随作品删除一并清理（`episode-deletion.ts`）。
+- **发布**：数据库侧只新增一张表、一个索引与迁移 `prompt_traces_v2`，用 `--allow-new-table prompt_trace_rejections --allow-migration prompt_traces_v2 --expect-empty-new-table`；回滚同本文「迁移与回滚」，旧版本忽略该表。
+
 ## 迁移与回滚
 
 - 加性迁移：`create table if not exists` / `create index if not exists`，由 `packages/store/src/db.ts` 每次打开数据库时随 SCHEMA（`schema.ts`）执行。可选记录 `schema_migrations('prompt_traces_v1')`。

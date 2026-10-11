@@ -23,6 +23,11 @@ export type PromptTraceItem = {
   user_message: string;
   correction_message: string | null;
   final_prompt: string | null;
+  /**
+   * Redacted raw model output that failed validation; null for accepted attempts and for
+   * failures that produced no format-checked text (timeouts, moderation blocks).
+   */
+  rejected_output: string | null;
   /** First 12 hex characters only. */
   input_hash: string | null;
   truncated: boolean;

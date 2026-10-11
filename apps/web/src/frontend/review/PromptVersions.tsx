@@ -33,6 +33,9 @@ function Version({ item, no, open, script }: { item: PromptTraceItem; no: number
         <PromptBlock title="发给模型的消息" text={item.user_message} copyName={`${name} 发给模型的消息`} />
         {item.correction_message !== null && item.correction_message !== "" &&
           <PromptBlock title="格式纠正消息" text={item.correction_message} copyName={`${name} 格式纠正消息`} />}
+        {item.rejected_output !== null && item.rejected_output !== "" &&
+          <PromptBlock title="被校验拒绝的模型输出" text={item.rejected_output}
+            copyName={`${name} 被校验拒绝的模型输出`} />}
         {item.final_prompt !== null && item.final_prompt !== "" &&
           <PromptBlock title="最终发给视频模型的提示词" text={item.final_prompt} lang="en"
             copyName={`${name} 最终发给视频模型的提示词`} />}
