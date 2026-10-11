@@ -3,7 +3,7 @@ import { getCreditAction } from "./credits";
 import { getDb } from "./db";
 
 /** Only safe provider messages belong here; raw prompts and responses never do. */
-export interface TaskDiagnostic {
+export interface GenerationTaskDiagnostic {
   stage: string;
   code: string;
   message: string;
@@ -12,21 +12,37 @@ export interface TaskDiagnostic {
   cancellation: "confirmed" | "unconfirmed" | "failed" | "not_needed";
 }
 
+export interface CompositionTaskDiagnostic {
+  stage: "compose";
+  code: "asset_missing" | "media_invalid" | "dependency_missing" | "duration_constraint" | "encoding_failed";
+  message: string;
+  elapsed_seconds: number;
+}
+
+export type TaskDiagnostic = GenerationTaskDiagnostic | CompositionTaskDiagnostic;
+
 export interface ShotFailure {
   shot_id: string;
   code: string;
   message: string;
 }
 
-function decodeDiagnostic(error: string | null): TaskDiagnostic | null {
+export function decodeTaskDiagnostic(error: string | null): TaskDiagnostic | null {
   if (!error) return null;
   try {
     const value: unknown = JSON.parse(error);
     if (!value || typeof value !== "object") return null;
-    const item = value as Partial<TaskDiagnostic>;
-    return typeof item.code === "string" && typeof item.message === "string" &&
-      typeof item.stage === "string" && typeof item.elapsed_seconds === "number" &&
-      typeof item.budget_seconds === "number" ? item as TaskDiagnostic : null;
+    const item = value as Record<string, unknown>;
+    if (typeof item.code !== "string" || typeof item.message !== "string" ||
+        typeof item.stage !== "string" || typeof item.elapsed_seconds !== "number" ||
+        !Number.isFinite(item.elapsed_seconds) || item.elapsed_seconds < 0) return null;
+    if (item.stage === "compose") {
+      return ["asset_missing", "media_invalid", "dependency_missing", "duration_constraint", "encoding_failed"].includes(item.code)
+        && item.budget_seconds === undefined && item.cancellation === undefined ? item as unknown as CompositionTaskDiagnostic : null;
+    }
+    return typeof item.budget_seconds === "number" && Number.isFinite(item.budget_seconds) && item.budget_seconds >= 0 &&
+      ["confirmed", "unconfirmed", "failed", "not_needed"].includes(String(item.cancellation))
+      ? item as unknown as GenerationTaskDiagnostic : null;
   } catch { return null; }
 }
 
@@ -47,7 +63,7 @@ export async function getShotFailures(episode: Episode): Promise<ShotFailure[]> 
     if (shot.status !== "failed" || !shot.shot_id) continue;
     const failure = failures.find(item => item.shot_id ? item.shot_id === shot.shot_id : item.shot_no === shot.no);
     if (!failure) continue;
-    const diagnostic = decodeDiagnostic(failure.error);
+    const diagnostic = decodeTaskDiagnostic(failure.error);
     const refunded = getCreditAction(failure.task_id)?.status === "released";
     result.push({ shot_id: shot.shot_id, code: diagnostic?.code ?? "unknown",
       message: (diagnostic?.message ?? "历史任务未记录具体原因") + (refunded ? "，积分已退回" : "") });

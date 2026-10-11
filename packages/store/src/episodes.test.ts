@@ -284,3 +284,14 @@ describe("setShare", () => {
     expect(result).toEqual({ ok: false, error: "version_conflict", current_row_version: 1 });
   });
 });
+
+
+test("legacy music PATCH without enabled retains a disabled switch", async () => {
+  const episode = fixtureEpisode("e_music_patch");
+  Object.assign(episode.music, {enabled:false});
+  await insertEpisode(episode);
+  expect((await patchEpisode(episode.episode_id,1,{music:{file:"music/new.mp3",bpm:100,license:"new"}})).ok).toBe(true);
+  const got = await getEpisode(episode.episode_id);
+  if (!got.ok) throw Error("missing");
+  expect(got.episode.music).toEqual({enabled:false,file:"music/new.mp3",bpm:100,license:"new"});
+});

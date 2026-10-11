@@ -53,6 +53,9 @@ for (const outputFailure of [false, true]) {
     expect(calls).toBe(outputFailure?1:0);
     expect(await dequeueTask()).toBeNull();
     expect(getCreditBalance("u_test")).toEqual({available:5,reserved:0});
+    const errorRow = getDb().query<{error:string}, [string]>("select error from tasks where task_id = ?").get(queued.task_id)!;
+    expect(JSON.parse(errorRow.error)).toMatchObject({stage:"compose",code:"duration_constraint"});
+    expect(JSON.parse(errorRow.error)).not.toHaveProperty("budget_seconds");
     const loaded=await getEpisode(episode.episode_id);
     if(!loaded.ok) throw Error("missing episode");
     expect(loaded.episode.status).toBe("failed");

@@ -462,3 +462,16 @@ test("video H3 provenance remains optional but validates new reproducibility rec
     expect(validateShot({ ...legacy, model: { video: { ...record, h3_prompt: { ...record.h3_prompt, ...patch } } } }).valid).toBe(false);
   }
 });
+
+
+test.each(["false", 0, null])("music.enabled rejects nonboolean %s in episodes and PATCH", enabled => {
+  const music = {...validEpisode().music, enabled};
+  expect(validateEpisode({...validEpisode(), music}).valid).toBe(false);
+  expect(validatePatchEpisodeRequest({row_version:1,patch:{music}}).valid).toBe(false);
+});
+
+test.each([undefined, true, false])("music.enabled accepts optional booleans %s", enabled => {
+  const music = {...validEpisode().music,enabled};
+  expect(validateEpisode({...validEpisode(),music}).valid).toBe(true);
+  expect(validatePatchEpisodeRequest({row_version:1,patch:{music}}).valid).toBe(true);
+});

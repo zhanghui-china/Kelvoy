@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ComposePlan } from "@kelvoy/engine";
+import type { ComposePlan, Episode } from "@kelvoy/engine";
 import { ffmpegComposeProvider, runCommand } from "./ffmpeg";
 
 test("a cancelled execution terminates its running child process", async () => {
@@ -155,7 +155,7 @@ test.skipIf(!HAS_FFMPEG)("ffmpegComposeProvider names the missing asset instead 
 
   const noMusic = planFixture();
   noMusic.music = { file_key: "music/nope.m4a", bpm: 120, license: "test" };
-  await expect(ffmpegComposeProvider.compose({ plan: noMusic })).rejects.toThrow("合成缺少配乐文件");
+  await expect(ffmpegComposeProvider.compose({ plan: noMusic })).rejects.toThrow("所选配乐素材不可用");
 });
 
 test.skipIf(!HAS_FFMPEG)("fixed cuts render exactly 30 frames per shot and reject tail overrun", async () => {
@@ -306,4 +306,49 @@ for (const res of [{ w: 360, h: 640 }, { w: 640, h: 360 }]) for (const bookends 
     const blankAt=(bookends?1:0)+plan.cuts[0]!.duration_s+0.5;
     expect(await captionPixels(enabledPath,blankAt,res.w,res.h)).toBe(0);
   },20000);
+}
+
+
+test.skipIf(!HAS_FFMPEG)("invalid music is reported safely before encoding", async () => {
+  await writeFile(join(projectsRoot, "music", "test.m4a"), "invalid private user text");
+  await expect(ffmpegComposeProvider.compose({plan:planFixture()})).rejects.toMatchObject({code:"media_invalid"});
+});
+
+test("missing executable is a dependency failure", async () => {
+  await expect(runCommand(["kelvoy-definitely-missing-command"])).rejects.toMatchObject({code:"dependency_missing"});
+});
+
+
+for (const policy of ["beat", "fixed_1s", "long_3_6"] as const) {
+  test.skipIf(!HAS_FFMPEG)(`disabled music composes ${policy} with an empty music directory and no audio`, async () => {
+    const { runStage } = await import("@kelvoy/engine");
+    await rm(join(projectsRoot, "music"), {recursive:true, force:true});
+    await mkdir(join(projectsRoot, "music"));
+    await makeColorClip(join(projectsRoot, "e_it", "clip", "01.mp4"), "blue", 4);
+    const episode: Episode = {
+      name:"无配乐验收", episode_id:"e_it", owner_id:"u_test", persona_id:"c_test",persona_version:1,
+      destination_id:"d_test",destination_version:1,series_id:"s",template_id:"t",status:"composing" as const,
+      mode:"per_shot" as const,candidate_count:2 as const,created_at:"2026-10-10",estimated_credits:0,credits_used:0,
+      share:{enabled:false,slug:""},brief:{season:"秋",aspect:"9:16" as const,requirements:"",duration_s:30,
+        tone:"",outfit_override:null,banned:[]},grid_refs:[],scenes:[],removed_shots:[],
+      ...(policy === "beat" ? {} : {cut_policy:policy}),
+      shots:Array.from({length:8}, (_,i) => ({no:i+1,scene:"s",size:"wide" as const,beat:"走过",camera:"static",
+        landmark:null,kf_prompt:"风景",motion_prompt:"走过",duration_s:4,candidates:[],kf_selected:null,
+        clip:"clip/01.mp4",trim_start_s:null,status:"approved" as const,regen_stage:null,bad_shot_reported:false,model:{}})),
+      music:{enabled:false,file:"music/missing-selected.m4a",bpm:120,license:"keep"},
+      render:{res:"180x320",fps:30,title:"",intro:null,outro:null,ai_label:false,subtitles_enabled:false},
+    };
+    const updated = await runStage("compose", episode, undefined, {compose:ffmpegComposeProvider,
+      persona:{persona_id:"c_test",owner_id:"u_test",version:1,name:"角色",desc:"",locked:[],default_outfit:"",refs:[],
+        style:{lut:"",title_style:"serif-center"}}});
+    const {stdout,code} = await runCommand(["ffprobe","-v","error","-select_streams","a",
+      "-show_entries","stream=index","-of","json",join(projectsRoot,"e_it",updated.final!.key)]);
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout).streams).toEqual([]);
+    expect(updated.music).toEqual(episode.music);
+    expect(updated.cut_policy).toBe(episode.cut_policy);
+    expect(updated.shots).toEqual(episode.shots);
+    expect(updated.final).toMatchObject({width:180,height:320,fps:30});
+    if (policy === "long_3_6") expect(updated.final!.duration_s).toBeCloseTo(30, 1);
+  });
 }

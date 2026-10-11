@@ -198,6 +198,7 @@ export function validateMusic(input: unknown, path = "music"): string[] {
     return errors;
   }
   const m = input as Partial<EpisodeMusic>;
+  if (m.enabled !== undefined && typeof m.enabled !== "boolean") errors.push(`${path}.enabled: 必须是布尔值`);
   if (m.file !== "" && !isNonEmptyString(m.file)) {
     errors.push(`${path}.file: 必须是非空路径或空字符串`);
   }

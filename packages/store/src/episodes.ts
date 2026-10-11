@@ -224,7 +224,10 @@ export async function patchEpisode(
     return { ok: false, error: "illegal_transition" };
   }
 
-  const updated: Episode = { ...episode, ...patch };
+  const updated: Episode = { ...episode, ...patch,
+    ...(patch.music ? { music: { ...episode.music, ...patch.music,
+      ...(patch.music.enabled === undefined && episode.music.enabled !== undefined
+        ? { enabled: episode.music.enabled } : {}) } } : {}) };
   return commit(episodeId, clientRowVersion, updated, row.row_version);
 }
 

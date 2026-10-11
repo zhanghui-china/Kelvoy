@@ -27,6 +27,7 @@ import {
 import { observeH3Rewrite } from "../generation/diagnostics";
 import { GenerationError } from "../generation/errors";
 import { H3FormatError } from "../generation/h3-prompt-format";
+import { compositionFailure } from "../compose/errors";
 import { ffmpegComposeProvider } from "../compose/ffmpeg";
 import { createLocalGenerationProviders, snapshotGenerationBackend, type GenerationBackend } from "../generation/local";
 import { createH3PromptWriter } from "../generation/h3-prompt-writer";
@@ -157,6 +158,7 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
   }
 
   let current = result;
+  const started = performance.now();
   try {
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
     const prepared = await prepareShot(task, current.row_version, current.episode);
@@ -204,6 +206,13 @@ export async function handleTask(task: Task, overrides: Partial<StageContext> = 
   } catch (err) {
     if (overrides.signal?.aborted) return;
     if (task.lease_token && !(await renewTaskLease(task.task_id, task.lease_token))) return;
+    if (task.stage === "compose") {
+      const { diagnostic, retryable, exitCode } = compositionFailure(err, (performance.now() - started) / 1000);
+      console.info(JSON.stringify({ task_id: task.task_id, stage: diagnostic.stage, code: diagnostic.code,
+        elapsed_seconds: diagnostic.elapsed_seconds, exit_code: exitCode }));
+      failTaskWithCredits(task, retryable && task.attempt < MAX_LOCAL_ATTEMPTS, diagnostic.message, diagnostic);
+      return;
+    }
     if (err instanceof ContentBlockedError || err instanceof CompositionConstraintError) {
       failTaskWithCredits(task, false, failureReason(err));
       return;

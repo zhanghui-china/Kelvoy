@@ -1,15 +1,20 @@
-import { useState } from "react";
-import { MUSIC_CATALOG, subtitlesEnabled, type Episode } from "@kelvoy/engine";
-import { continueEpisode, patchEpisode } from "../api/client";
+import { useRef, useState } from "react";
+import { subtitlesEnabled, type Episode } from "@kelvoy/engine";
+import { continueEpisode, patchEpisode, retryFailedTask } from "../api/client";
+import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
 import { GuideTip } from "../GuideTip";
 import { MutationError } from "./ShotHeader";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
 /** Settings gate between approving every clip and submitting the compose job. */
-export default function ComposeSetup({ episode, mutation }: { episode: Episode; mutation: EpisodeMutation }) {
+export default function ComposeSetup({ episode, mutation, retryFailed = false }: { episode: Episode; mutation: EpisodeMutation; retryFailed?: boolean }) {
   const [title, setTitle] = useState(episode.render.title);
   const [subtitles, setSubtitles] = useState(subtitlesEnabled(episode.render));
   const [transitions, setTransitions] = useState(episode.render.transitions_enabled === true);
+  const submitting = useRef(false);
+  const [queuedEpisode, setQueuedEpisode] = useState<Episode | null>(null);
+  const retryQueued = queuedEpisode === episode;
+  const [musicEnabled, setMusicEnabled] = useState(episode.music.enabled !== false);
   const [musicFile, setMusicFile] = useState(episode.music.file);
   const [intro, setIntro] = useState(episode.render.intro);
   const [outro, setOutro] = useState(episode.render.outro);
@@ -17,13 +22,39 @@ export default function ComposeSetup({ episode, mutation }: { episode: Episode; 
     subtitles !== subtitlesEnabled(episode.render) ||
     transitions !== (episode.render.transitions_enabled === true) ||
     musicFile !== episode.music.file ||
+    musicEnabled !== (episode.music.enabled !== false) ||
     intro !== episode.render.intro ||
     outro !== episode.render.outro;
   const fixed = episode.cut_policy === "fixed_1s";
   const long = episode.cut_policy === "long_3_6";
   const standardBookends = (!intro || intro === "intro/kelvoy_open.mp4") && (!outro || outro === "outro/kelvoy_close.mp4");
   const duration = fixed && standardBookends ? episode.shots.length + (intro ? 1.2 : 0) + (outro ? 1 : 0) : null;
-  const music = MUSIC_CATALOG.find((item) => item.file === musicFile);
+  async function save() {
+    if (submitting.current || mutation.pending || !settingsChanged || retryQueued || !title.trim()) return;
+    submitting.current = true;
+    try {
+      const result = await mutation.run(rowVersion => patchEpisode(episode.episode_id, rowVersion,
+        { render: { ...episode.render, title: title.trim(), subtitles_enabled: subtitles,
+            transitions_enabled: transitions, intro, outro },
+          ...((musicFile !== episode.music.file || musicEnabled !== (episode.music.enabled !== false))
+            ? { music: musicSettingsPatch(episode.music, musicEnabled, musicFile) } : {}) }));
+      if (result?.ok) setTitle(title.trim());
+    } finally {
+      submitting.current = false;
+    }
+  }
+  async function submit() {
+    if (submitting.current || mutation.pending || settingsChanged || retryQueued) return;
+    submitting.current = true;
+    try {
+      const result = await mutation.run(rowVersion => retryFailed
+        ? retryFailedTask(episode.episode_id, rowVersion)
+        : continueEpisode(episode.episode_id, rowVersion));
+      if (result?.ok) setQueuedEpisode(episode);
+    } finally {
+      submitting.current = false;
+    }
+  }
 
   return (
     <section className="k-card k-compose-setup">
@@ -46,32 +77,23 @@ export default function ComposeSetup({ episode, mutation }: { episode: Episode; 
         {fixed && <label><input type="checkbox" checked={transitions} onChange={(event) => setTransitions(event.target.checked)} /> 切点前后各 2 帧淡出淡入</label>}
       </div>
       <p className="k-card-meta">已填写字幕 {episode.shots.filter(shot => shot.caption?.trim()).length} / {episode.shots.length} 镜 · 空字幕不显示。{!subtitles && "本次成片不显示每镜字幕。"}</p>
-      <label className="k-field">配乐
-        <select value={musicFile} onChange={(event) => setMusicFile(event.target.value)}>
-          <option value="">按创作语气自动选曲</option>
-          {musicFile && !music && <option value={musicFile}>原有配乐 · {musicFile}</option>}
-          {MUSIC_CATALOG.map((track) => <option key={track.file} value={track.file}>
-            {track.file.split("/").pop()?.replace(".mp3", "").replaceAll("_", " ")} · {track.bpm} BPM
-          </option>)}
-        </select>
-      </label>
+      <MusicSettings enabled={musicEnabled} file={musicFile} disabled={mutation.pending || retryQueued}
+        onEnabledChange={setMusicEnabled} onFileChange={setMusicFile} />
       <div className="k-compose-options">
         <label><input type="checkbox" checked={intro !== null} onChange={(event) => setIntro(event.target.checked ? "intro/kelvoy_open.mp4" : null)} /> {intro && intro !== "intro/kelvoy_open.mp4" ? `原有片头 · ${intro}` : "Kelvoy 片头 · 1.2 秒"}</label>
         <label><input type="checkbox" checked={outro !== null} onChange={(event) => setOutro(event.target.checked ? "outro/kelvoy_close.mp4" : null)} /> {outro && outro !== "outro/kelvoy_close.mp4" ? `原有片尾 · ${outro}` : "Kelvoy 片尾 · 1 秒"}</label>
       </div>
       <MutationError error={mutation.error} />
+      {settingsChanged && <p role="status">合成设置尚未保存，请先保存设置，再{retryFailed ? "重试" : "开始合成"}。</p>}
+      {retryQueued && <p role="status">合成任务已提交，等待后台处理。</p>}
       <div className="k-desk-actions">
-        <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || !settingsChanged || !title.trim()}
-          onClick={() => void mutation.run((rowVersion) => patchEpisode(episode.episode_id, rowVersion,
-            { render: { ...episode.render, title: title.trim(), subtitles_enabled: subtitles,
-                transitions_enabled: transitions, intro, outro },
-              ...(musicFile !== episode.music.file ? { music: music ? { file: music.file, bpm: music.bpm, license: music.license }
-                : { file: "", bpm: 0, license: "" } } : {}) }))}>
+        <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || retryQueued || !settingsChanged || !title.trim()}
+          onClick={() => void save()}>
           保存设置
         </button>
-        <button type="button" className="k-btn k-btn-primary" disabled={mutation.pending || settingsChanged}
-          onClick={() => void mutation.run((rowVersion) => continueEpisode(episode.episode_id, rowVersion))}>
-          {mutation.pending ? "提交中…" : "开始合成"}
+        <button type="button" className="k-btn k-btn-primary" disabled={mutation.pending || settingsChanged || retryQueued}
+          onClick={() => void submit()}>
+          {mutation.pending ? "提交中…" : retryFailed ? "重新执行失败任务" : "开始合成"}
         </button>
       </div>
     </section>

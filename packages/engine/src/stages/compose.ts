@@ -42,7 +42,8 @@ function parseRes(res: string): { w: number; h: number } {
   return { w, h };
 }
 
-async function resolveMusic(episode: Episode): Promise<ComposePlanMusic> {
+async function resolveMusic(episode: Episode): Promise<ComposePlanMusic | null> {
+  if (episode.music.enabled === false) return null;
   // 用户在交付页换过曲（episode.music.file 非空）就沿用，不重选——重新合成
   // 不应该把人挑好的配乐换掉。
   if (episode.music.file !== "") {
@@ -77,11 +78,11 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
     media = await context.compose.probeMedia({ episode_id: episode.episode_id, clips,
       intro_key: episode.render.intro, outro_key: episode.render.outro, signal: context.signal });
     context.signal?.throwIfAborted();
-    cuts = planLongCuts(episode.shots, music.bpm, episode.brief.duration_s, media, episode.render.fps);
+    cuts = planLongCuts(episode.shots, music?.bpm ?? 0, episode.brief.duration_s, media, episode.render.fps);
   } else {
     cuts = episode.cut_policy === "fixed_1s"
       ? planFixedCuts(episode.shots, episode.render.fps)
-      : planCuts(episode.shots, music.bpm);
+      : planCuts(episode.shots, music?.bpm ?? 0);
   }
 
   return {
@@ -140,7 +141,7 @@ export async function runCompose(
     ...episode,
     status: transitionEpisode(episode.status, { type: "advance" }),
     music: plan.music
-      ? { file: plan.music.file_key, bpm: plan.music.bpm, license: plan.music.license }
+      ? { ...episode.music, file: plan.music.file_key, bpm: plan.music.bpm, license: plan.music.license }
       : episode.music,
     final: {
       version: (episode.final?.version ?? 0) + 1,

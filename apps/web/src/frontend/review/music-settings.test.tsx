@@ -1,0 +1,54 @@
+import { expect, test } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
+import { fixture } from "../../server/routes/episode-test-fixtures";
+import { musicSettingsPatch } from "./MusicSettings";
+import { MUSIC_CATALOG } from "@kelvoy/engine";
+import ComposeSetup from "./ComposeSetup";
+import DoneView from "./DoneView";
+import ProgressView from "./ProgressView";
+import { StaticRouter } from "react-router-dom/server";
+import type { EpisodeMutation } from "./useEpisodeMutation";
+
+const mutation: EpisodeMutation = { pending: false, error: null, clearError: () => {}, run: async () => null };
+const base = fixture("e_music", "u_music");
+const render = (component: React.ReactNode) => renderToStaticMarkup(<StaticRouter location="/episodes/e_music">{component}</StaticRouter>);
+
+test.each([undefined, true, false])("compose and delivery use the same music switch with enabled=%s", enabled => {
+  const episode = { ...base, music: { ...base.music, enabled, file: "music/old.mp3" } };
+  for (const component of [<ComposeSetup episode={episode} mutation={mutation} />, <DoneView episode={{ ...episode, status: "done" }} mutation={mutation} />]) {
+    const html = render(component);
+    expect(html).toContain("启用配乐");
+    expect(html).toContain('aria-label="启用配乐"');
+    expect(html).toContain(enabled === false ? 'aria-label="配乐曲目" disabled=""' : 'aria-label="配乐曲目"');
+    expect(html).toContain('value="music/old.mp3" selected=""');
+    if (enabled !== false) expect(html).toContain('aria-label="启用配乐" checked=""');
+    else expect(html).not.toContain('aria-label="启用配乐" checked=""');
+  }
+});
+
+test("compose failure offers settings and a single failed-task retry while preserving a concrete reason", () => {
+  const episode = { ...base, status: "failed" as const, failure_reason: "所选配乐素材不可用，请更换配乐或联系管理员" };
+  const html = render(<ProgressView episode={episode} mutation={mutation} failedTask={{ stage: "compose", shot_no: null }} />);
+  expect(html).toContain("调整合成设置");
+  expect(html).toContain("启用配乐");
+  expect(html).toContain("保存设置");
+  expect(html).toContain(episode.failure_reason);
+  expect(html.match(/>重新执行失败任务<\/button>/g)).toHaveLength(1);
+  expect(html).not.toContain("开始合成</button>");
+});
+
+
+test("switch-only save preserves track metadata, and selecting automatic music preserves disabled state", () => {
+  const current = { file: "music/old.mp3", bpm: 77, license: "legacy", enabled: true };
+  expect(musicSettingsPatch(current, false, current.file)).toEqual({ ...current, enabled: false });
+  expect(musicSettingsPatch(current, false, "")).toEqual({ file: "", bpm: 0, license: "", enabled: false });
+  const track = MUSIC_CATALOG[0]!;
+  expect(musicSettingsPatch(current, false, track.file)).toEqual({ file: track.file, bpm: track.bpm, license: track.license, enabled: false });
+});
+
+test("pending compose retry disables settings and submit", () => {
+  const html = render(<ComposeSetup episode={base} mutation={{ ...mutation, pending: true }} retryFailed />);
+  expect(html).toContain('aria-label="启用配乐" disabled=""');
+  expect(html).toContain('aria-label="配乐曲目" disabled=""');
+  expect(html).toContain('disabled="">提交中…</button>');
+});

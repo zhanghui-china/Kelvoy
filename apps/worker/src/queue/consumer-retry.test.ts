@@ -152,3 +152,50 @@ test.each(["generation_timeout", "backend_unavailable"])("video %s records diagn
   expect(JSON.parse(row.error)).toMatchObject(diagnostic);
   expect(row.attempt).toBe(code === "generation_timeout" ? 1 : 2);
 });
+
+
+test.each(["asset_missing", "media_invalid", "dependency_missing", "encoding_failed"] as const)("compose %s stores safe diagnostics and retries only encoding failures", async code => {
+  const { CompositionError } = await import("../compose/errors");
+  const ep: Episode = { ...fixtureEpisode("e_compose_failure"), status: "composing",
+    shots: [{ ...shotFixture(), status: "approved", clip: "clip/01.mp4" }] };
+  await insertEpisode(ep);
+  await insertPersona(personaFixture("c_test"));
+  await upsertDestination(destinationFixture("d_test"));
+  const task = await enqueueTask({ episode_id: ep.episode_id, stage: "compose" });
+  const context = { compose: { async compose() { throw new CompositionError(code, undefined, 7); } } };
+  await handleTask((await dequeueTask())!, context);
+  let row = getDb().query<{status:string;error:string;attempt:number}, [string]>("select status,error,attempt from tasks where task_id = ?").get(task.task_id)!;
+  expect(row.status).toBe(code === "encoding_failed" ? "pending" : "failed");
+  const diagnostic = JSON.parse(row.error);
+  expect(diagnostic).toMatchObject({ stage:"compose", code });
+  expect(diagnostic.elapsed_seconds).toBeGreaterThanOrEqual(0);
+  expect(diagnostic).not.toHaveProperty("budget_seconds");
+  expect(diagnostic).not.toHaveProperty("cancellation");
+  if (code === "encoding_failed") {
+    await handleTask((await dequeueTask())!, context);
+    row = getDb().query<typeof row, [string]>("select status,error,attempt from tasks where task_id = ?").get(task.task_id)!;
+    expect(row.status).toBe("failed");
+    expect(await dequeueTask()).toBeNull();
+  }
+});
+
+
+test("unknown compose failures do not expose command output or user text", async () => {
+  const ep: Episode = { ...fixtureEpisode("e_compose_private"), status:"composing",
+    shots:[{...shotFixture(), status:"approved", clip:"clip/01.mp4"}] };
+  await insertEpisode(ep);
+  await insertPersona(personaFixture("c_test"));
+  await upsertDestination(destinationFixture("d_test"));
+  const task = await enqueueTask({episode_id:ep.episode_id,stage:"compose"});
+  getDb().query("update tasks set attempt = 2 where task_id = ?").run(task.task_id);
+  await handleTask((await dequeueTask())!, {compose:{async compose() {
+    throw new Error("ffmpeg -i /private/secret/file.mp4 private user words");
+  }}});
+  const row = getDb().query<{error:string;status:string}, [string]>("select error,status from tasks where task_id = ?").get(task.task_id)!;
+  expect(row.status).toBe("failed");
+  expect(row.error).not.toContain("/private");
+  expect(row.error).not.toContain("private user words");
+  const current = await getEpisode(ep.episode_id);
+  if (!current.ok) throw new Error("missing");
+  expect(current.episode.failure_reason).toBe(JSON.parse(row.error).message);
+});

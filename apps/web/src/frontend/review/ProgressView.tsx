@@ -2,6 +2,7 @@ import type { Episode } from "@kelvoy/engine";
 import { useRef, useState } from "react";
 import { retryFailedTask } from "../api/client";
 import type { FailedTaskSummary, ShotFailureSummary } from "../api/client";
+import ComposeSetup from "./ComposeSetup";
 import { GuideTip } from "../GuideTip";
 import type { GuideSectionId } from "../guide";
 import { EPISODE_STATUS_LABELS } from "../labels";
@@ -90,7 +91,11 @@ export default function ProgressView({
       </div>
 
       <MutationError error={mutation.error} />
-      {canRetry && (
+      {canRetry && failedTask?.stage === "compose" && <details open>
+        <summary>调整合成设置</summary>
+        <ComposeSetup episode={episode} mutation={mutation} retryFailed />
+      </details>}
+      {canRetry && failedTask?.stage !== "compose" && (
         <div className="k-desk-actions">
           <button
             type="button"

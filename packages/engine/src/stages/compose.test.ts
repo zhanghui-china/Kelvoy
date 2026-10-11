@@ -259,3 +259,39 @@ test("long output outside duration tolerance cannot replace an old delivery", as
   await expect(runCompose(episode,undefined,{persona:personaFixture(),compose})).rejects.toThrow("成片实际");
   expect(episode.final).toEqual(old);
 });
+
+
+test.each([undefined, true])("music switch %s preserves automatic selection", async enabled => {
+  const episode = episodeFixture();
+  Object.assign(episode.music, { enabled });
+  expect((await buildComposePlan(episode, { persona: personaFixture() })).music?.file_key).toBe("music/calm_morning.mp3");
+});
+
+test.each(["beat_aligned", "fixed_1s", "long_3_6"] as const)("disabled music retains %s policy and uses no beat grid", async cut_policy => {
+  const episode = episodeFixture({ cut_policy,
+    shots: Array.from({length:7}, (_,i) => shotFixture(i+1, {duration_s:cut_policy === "long_3_6" ? 4 : 1.3})),
+    music: Object.assign({file:"music/missing.mp3",bpm:120,license:"old"}, {enabled:false}) });
+  const before = JSON.stringify(episode);
+  const compose: ComposeProvider = { ...fakeComposeProvider(), async probeMedia() {
+    return {clip_duration_s:Object.fromEntries(episode.shots.map(s=>[s.no,5])),intro_duration_s:1,outro_duration_s:1};
+  } };
+  const plan = await buildComposePlan(episode, {persona:personaFixture(),compose});
+  expect(plan.music).toBeNull();
+  expect(plan.cuts.map(c=>c.duration_s)).toEqual(Array(7).fill(cut_policy === "long_3_6" ? 4 : cut_policy === "fixed_1s" ? 1 : 1.3));
+  expect(JSON.stringify(episode)).toBe(before);
+});
+
+test("successful compose retains the explicitly enabled switch and selected fields", async () => {
+  const episode = episodeFixture();
+  Object.assign(episode.music, {enabled:true});
+  const updated = await runCompose(episode, undefined, {persona:personaFixture(),compose:fakeComposeProvider()});
+  expect(updated.music).toEqual({...episode.music,file:"music/calm_morning.mp3",bpm:84,license:"Kelvoy original"});
+});
+
+test.each(["", "music/unavailable.mp3"])("disabled music %s keeps the saved selection after success", async file => {
+  const episode = episodeFixture({ music: {enabled:false,file,bpm:120,license:"saved"} });
+  const provider = fakeComposeProvider();
+  const updated = await runCompose(episode, undefined, {persona:personaFixture(),compose:provider});
+  expect(provider.calls[0]?.music).toBeNull();
+  expect(updated.music).toEqual(episode.music);
+});

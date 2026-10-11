@@ -225,8 +225,10 @@ episodes.patch("/:id", async (c) => {
   if (!result.valid) return c.json({ ok: false, errors: result.errors }, 400);
   if (result.value.row_version !== loaded.row_version) return c.json({ ok: false,
     error: "version_conflict", current_row_version: loaded.row_version }, 409);
+  const failedCompose = loaded.episode.status === "failed" &&
+    (await getLatestFailedTask(loaded.episode))?.stage === "compose";
   if (Object.keys(result.value.patch).some((field) => field !== "render" && field !== "music") ||
-      (loaded.episode.status !== "compose_ready" && loaded.episode.status !== "done")) {
+      (loaded.episode.status !== "compose_ready" && loaded.episode.status !== "done" && !failedCompose)) {
     return c.json({ ok: false, error: "invalid_public_patch" }, 400);
   }
   const render = result.value.patch.render;
@@ -240,17 +242,22 @@ episodes.patch("/:id", async (c) => {
     return c.json({ ok: false, error: "content_blocked" }, 400);
   }
   const music = result.value.patch.music;
-  if (music && !(music.file === "" && music.bpm === 0 && music.license === "" ||
+  if (music && !(music.file === loaded.episode.music.file && music.bpm === loaded.episode.music.bpm &&
+      music.license === loaded.episode.music.license ||
+      music.file === "" && music.bpm === 0 && music.license === "" ||
       MUSIC_CATALOG.some((item) => item.file === music.file && item.bpm === music.bpm &&
         item.license === music.license))) {
     return c.json({ ok: false, error: "invalid_music_settings" }, 400);
   }
 
+  const musicChanged = music && ((music.enabled ?? loaded.episode.music.enabled ?? true) !==
+    (loaded.episode.music.enabled ?? true) || music.file !== loaded.episode.music.file ||
+    music.bpm !== loaded.episode.music.bpm || music.license !== loaded.episode.music.license);
   const patchResult = await patchEpisode(
     loaded.episode.episode_id,
     result.value.row_version,
     { ...result.value.patch,
-      ...(loaded.episode.final && render && subtitlesEnabled(render) !== subtitlesEnabled(loaded.episode.render)
+      ...(loaded.episode.final && (musicChanged || (render && subtitlesEnabled(render) !== subtitlesEnabled(loaded.episode.render)))
         ? { final_needs_recompose: true } : {}) },
   );
   if (!patchResult.ok) return patchErrorResponse(c, patchResult);

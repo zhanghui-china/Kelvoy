@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { subtitlesEnabled, type Episode } from "@kelvoy/engine";
 import { convertLegacyCuts, episodeFileUrl, patchEpisode, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
 import { GuideTip } from "../GuideTip";
+import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
 import ShareActions from "./ShareActions";
 import { MutationError } from "./ShotHeader";
 import { tally } from "./tally";
@@ -20,8 +21,35 @@ export default function DoneView({
   episode: Episode;
   mutation: EpisodeMutation;
 }) {
+  const submitting = useRef(false);
+  const [queuedEpisode, setQueuedEpisode] = useState<Episode | null>(null);
+  const composeQueued = queuedEpisode === episode;
   const [subtitles, setSubtitles] = useState(subtitlesEnabled(episode.render));
-  const settingsChanged = subtitles !== subtitlesEnabled(episode.render);
+  const [musicEnabled, setMusicEnabled] = useState(episode.music.enabled !== false);
+  const [musicFile, setMusicFile] = useState(episode.music.file);
+  const musicChanged = musicEnabled !== (episode.music.enabled !== false) || musicFile !== episode.music.file;
+  const settingsChanged = subtitles !== subtitlesEnabled(episode.render) || musicChanged;
+  async function save() {
+    if (submitting.current || mutation.pending || !settingsChanged || composeQueued) return;
+    submitting.current = true;
+    try {
+      await mutation.run(rowVersion => patchEpisode(episode.episode_id, rowVersion,
+        { render: { ...episode.render, subtitles_enabled: subtitles },
+          ...(musicChanged ? { music: musicSettingsPatch(episode.music, musicEnabled, musicFile) } : {}) }));
+    } finally {
+      submitting.current = false;
+    }
+  }
+  async function submitCompose() {
+    if (submitting.current || mutation.pending || settingsChanged || composeQueued) return;
+    submitting.current = true;
+    try {
+      const result = await mutation.run(rowVersion => recompose(episode.episode_id, rowVersion));
+      if (result?.ok) setQueuedEpisode(episode);
+    } finally {
+      submitting.current = false;
+    }
+  }
   const url = episodeFileUrl(episode.episode_id, finalKey(episode));
   const rows = tally(episode);
   const totalCost = rows.reduce((sum, row) => sum + row.costUsd, 0);
@@ -42,7 +70,7 @@ export default function DoneView({
     <section className="k-desk-main">
       <div className="k-card-title">成片 · {episode.render.title || episode.name}</div>
       {(episode as Episode & { final_needs_recompose?: boolean }).final_needs_recompose &&
-        <p role="status">分镜或字幕设置已修改，当前为上一版成片；下载与分享保留上一版，重新合成后更新。</p>}
+        <p role="status">分镜或合成设置已修改，当前为上一版成片；下载与分享保留上一版，重新合成后更新。</p>}
       <GuideTip section="deliver">先完整播放成片，再下载或开启分享链接。</GuideTip>
       <div className="k-delivery-preview">
         <video className="k-media k-desk-final" style={{ aspectRatio }} src={url} controls aria-label="成片" />
@@ -159,20 +187,22 @@ export default function DoneView({
         ))}
       </div>
       <div className="k-card">
-        <div className="k-card-title">字幕与重新合成</div>
-        <label><input type="checkbox" checked={subtitles} disabled={mutation.pending}
+        <div className="k-card-title">字幕、配乐与重新合成</div>
+        <label><input type="checkbox" checked={subtitles} disabled={mutation.pending || composeQueued}
           onChange={(event) => setSubtitles(event.target.checked)} /> 烧录每镜字幕</label>
         <p className="k-card-meta">已填写字幕 {episode.shots.filter(shot => shot.caption?.trim()).length} / {episode.shots.length} 镜 · 空字幕不显示。{!subtitles && "本次成片不显示每镜字幕。"}</p>
+        <MusicSettings enabled={musicEnabled} file={musicFile} disabled={mutation.pending || composeQueued}
+          onEnabledChange={setMusicEnabled} onFileChange={setMusicFile} />
         <p className="k-card-meta">保存后需合成／重新合成才会更新成片。</p>
-        {settingsChanged && <p role="status">字幕开关尚未保存，请先保存字幕设置，再重新合成。</p>}
+        {composeQueued && <p role="status">合成任务已提交，等待后台处理。</p>}
+        {settingsChanged && <p role="status">合成设置尚未保存，请先保存设置，再重新合成。</p>}
         <div className="k-desk-actions">
-          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || !settingsChanged}
-            onClick={() => void mutation.run((rowVersion) => patchEpisode(episode.episode_id, rowVersion,
-              { render: { ...episode.render, subtitles_enabled: subtitles } }))}>
-            保存字幕设置
+          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || !settingsChanged || composeQueued}
+            onClick={() => void save()}>
+            保存设置
           </button>
-          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || settingsChanged}
-            onClick={() => mutation.run((rowVersion) => recompose(episode.episode_id, rowVersion))}>
+          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || settingsChanged || composeQueued}
+            onClick={() => void submitCompose()}>
             重新合成
           </button>
           <span className="k-card-meta">重新合成只重跑合成，不动任何镜（FR-08）。</span>

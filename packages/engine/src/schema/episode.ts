@@ -109,6 +109,8 @@ export interface EpisodeShare {
 }
 
 export interface EpisodeMusic {
+  /** Missing enables legacy automatic selection; explicit false skips music. */
+  enabled?: boolean;
   file: string;
   bpm: number;
   license: string;

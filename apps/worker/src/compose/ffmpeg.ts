@@ -4,6 +4,7 @@ import type { ComposePlan, ComposeProvider } from "@kelvoy/engine";
 import { CompositionConstraintError } from "@kelvoy/engine";
 import { artifactPath, assertEpisodePublicationAllowed, sharedAssetPath } from "../storage/artifacts";
 import { buildFfmpegArgs, type ComposeInputPaths } from "./ffmpeg-args";
+import { CompositionError, encodingFailure, type CompositionAsset } from "./errors";
 import { buildAssOverlay, textOverlayEvents } from "./ass-overlay";
 
 /**
@@ -15,13 +16,9 @@ import { buildAssOverlay, textOverlayEvents } from "./ass-overlay";
  * 记录 provider/model/version" 的要求，把后端身份和 ffmpeg 版本写进成片元数据。
  */
 
-// 出错时带回的 stderr 尾部长度：够定位 filtergraph 报错，又不会把整段日志灌进
-// tasks 表。ffmpeg 的 stderr 不含密钥。
-const STDERR_TAIL_CHARS = 2000;
-
-async function requireFile(path: string, what: string): Promise<string> {
+async function requireFile(path: string, kind: CompositionAsset, shotNo?: number): Promise<string> {
   if (!(await Bun.file(path).exists())) {
-    throw new Error(`合成缺少${what}：${path}`);
+    throw new CompositionError("asset_missing", {kind, shotNo});
   }
   return path;
 }
@@ -30,7 +27,15 @@ export async function runCommand(cmd: string[], signal?: AbortSignal): Promise<{
   code: number; stdout: string; stderr: string;
 }> {
   signal?.throwIfAborted();
-  const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
+  let proc;
+  try { proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" }); }
+  catch (error) {
+    if (error && typeof error === "object" && "code" in error &&
+        ["ENOENT", "EACCES", "ENOEXEC"].includes(String(error.code))) {
+      throw new CompositionError("dependency_missing");
+    }
+    throw error;
+  }
   const onAbort = () => proc.kill();
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
@@ -49,7 +54,7 @@ export async function runCommand(cmd: string[], signal?: AbortSignal): Promise<{
 
 /** 片头片尾的时长是素材属性，engine 量不到——这里用 ffprobe 读。 */
 async function probeDurationS(path: string, signal?: AbortSignal): Promise<number> {
-  const { code, stdout, stderr } = await runCommand([
+  const { code, stdout } = await runCommand([
     "ffprobe",
     "-v",
     "error",
@@ -61,19 +66,19 @@ async function probeDurationS(path: string, signal?: AbortSignal): Promise<numbe
   ], signal);
   const seconds = Number(stdout.trim());
   if (code !== 0 || !Number.isFinite(seconds) || seconds <= 0) {
-    throw new Error(`ffprobe 读不出时长：${path}\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+    throw new CompositionError("media_invalid", undefined, code);
   }
   return seconds;
 }
 
 async function probeVideoDurationS(path: string, signal?: AbortSignal): Promise<number> {
-  const { code, stdout, stderr } = await runCommand([
+  const { code, stdout } = await runCommand([
     "ffprobe", "-v", "error", "-select_streams", "v:0",
     "-show_entries", "stream=duration", "-of", "default=noprint_wrappers=1:nokey=1", path,
   ], signal);
   const seconds = Number(stdout.trim());
   if (code !== 0 || !Number.isFinite(seconds) || seconds <= 0) {
-    throw new Error(`ffprobe 读不出视频时长：${path}\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+    throw new CompositionError("media_invalid", undefined, code);
   }
   return seconds;
 }
@@ -81,15 +86,17 @@ async function probeVideoDurationS(path: string, signal?: AbortSignal): Promise<
 async function probeOutput(path: string, signal?: AbortSignal): Promise<{
   duration_s: number; width: number; height: number; fps: number; size_bytes: number;
 }> {
-  const { code, stdout, stderr } = await runCommand([
+  const { code, stdout } = await runCommand([
     "ffprobe", "-v", "error", "-select_streams", "v:0",
     "-show_entries", "stream=width,height,avg_frame_rate:format=duration,size", "-of", "json", path,
   ], signal);
-  if (code !== 0) throw new Error(`ffprobe 验证成片失败：${stderr.slice(-STDERR_TAIL_CHARS)}`);
-  const data = JSON.parse(stdout) as {
+  if (code !== 0) throw new CompositionError("media_invalid", undefined, code);
+  let data: {
     streams?: { width?: number; height?: number; avg_frame_rate?: string }[];
     format?: { duration?: string; size?: string };
   };
+  try { data = JSON.parse(stdout); }
+  catch { throw new CompositionError("media_invalid"); }
   const stream = data.streams?.[0];
   const [numerator, denominator] = (stream?.avg_frame_rate ?? "").split("/").map(Number);
   const fps = denominator ? numerator! / denominator : Number(stream?.avg_frame_rate);
@@ -97,7 +104,7 @@ async function probeOutput(path: string, signal?: AbortSignal): Promise<{
   const size = Number(data.format?.size);
   if (!stream?.width || !stream.height || !Number.isFinite(fps) || fps <= 0 ||
       !Number.isFinite(duration) || duration <= 0 || !Number.isSafeInteger(size) || size <= 0) {
-    throw new Error("ffprobe 返回了无效的成片参数");
+    throw new CompositionError("media_invalid");
   }
   return { duration_s: duration, width: stream.width, height: stream.height,
     fps, size_bytes: size };
@@ -132,18 +139,18 @@ async function renderPngOverlays(plan: ComposePlan, paths: ComposeInputPaths,
   const script = resolve(import.meta.dir, "../../../../scripts/render-text-overlays.py");
   const python = resolve(import.meta.dir, "../../../../services/inference/.venv/bin/python");
   if (!(await Bun.file(python).exists())) {
-    throw new Error("合成文字图层需要受管理的 Python 环境；先运行 make install");
+    throw new CompositionError("dependency_missing");
   }
-  const { code, stderr } = await runCommand([python, script, manifestPath], signal);
+  const { code } = await runCommand([python, script, manifestPath], signal);
   if (code !== 0) {
-    throw new Error(`无法绘制成片文字图层：${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+    throw new CompositionError("dependency_missing", undefined, code);
   }
   paths.overlay_images = overlayImages;
 }
 
 async function resolvePaths(plan: ComposePlan, signal?: AbortSignal): Promise<ComposeInputPaths> {
   const clips = await Promise.all(
-    plan.cuts.map((cut) => requireFile(artifactPath(plan.episode_id, cut.clip_key), `第 ${cut.no} 镜的片段`)),
+    plan.cuts.map((cut) => requireFile(artifactPath(plan.episode_id, cut.clip_key), "clip", cut.no)),
   );
   for (const [index, cut] of plan.cuts.entries()) {
     if (cut.frame_count === undefined) continue;
@@ -154,14 +161,15 @@ async function resolvePaths(plan: ComposePlan, signal?: AbortSignal): Promise<Co
   }
 
   // 跨期共享素材（曲库、LUT、片头片尾）挂在 projects 根下，不在期目录里。
-  const intro = plan.intro_key !== null ? await requireFile(sharedAssetPath(plan.intro_key), "片头") : null;
-  const outro = plan.outro_key !== null ? await requireFile(sharedAssetPath(plan.outro_key), "片尾") : null;
+  const intro = plan.intro_key !== null ? await requireFile(sharedAssetPath(plan.intro_key), "intro") : null;
+  const outro = plan.outro_key !== null ? await requireFile(sharedAssetPath(plan.outro_key), "outro") : null;
   const music =
-    plan.music !== null ? await requireFile(sharedAssetPath(plan.music.file_key), "配乐文件") : null;
-  const lut = plan.lut_key !== null ? await requireFile(sharedAssetPath(plan.lut_key), "LUT 文件") : null;
+    plan.music !== null ? await requireFile(sharedAssetPath(plan.music.file_key), "music") : null;
+  if (music !== null) await probeDurationS(music, signal);
+  const lut = plan.lut_key !== null ? await requireFile(sharedAssetPath(plan.lut_key), "lut") : null;
 
   const fontEnv = process.env.KELVOY_FONT_FILE;
-  const font = fontEnv ? await requireFile(fontEnv, "字体文件（KELVOY_FONT_FILE）") : null;
+  const font = fontEnv ? await requireFile(fontEnv, "font") : null;
 
   return {
     clips,
@@ -180,11 +188,11 @@ export const ffmpegComposeProvider: ComposeProvider = {
   async probeMedia({ episode_id, clips, intro_key, outro_key, signal }) {
     signal?.throwIfAborted();
     const clipEntries = await Promise.all(clips.map(async ({ no, clip_key }) => {
-      const path = await requireFile(artifactPath(episode_id, clip_key), `第 ${no} 镜的片段`);
+      const path = await requireFile(artifactPath(episode_id, clip_key), "clip", no);
       return [no, await probeVideoDurationS(path, signal)] as const;
     }));
-    const intro = intro_key === null ? null : await requireFile(sharedAssetPath(intro_key), "片头");
-    const outro = outro_key === null ? null : await requireFile(sharedAssetPath(outro_key), "片尾");
+    const intro = intro_key === null ? null : await requireFile(sharedAssetPath(intro_key), "intro");
+    const outro = outro_key === null ? null : await requireFile(sharedAssetPath(outro_key), "outro");
     const [introDuration, outroDuration] = await Promise.all([
       intro === null ? 0 : probeVideoDurationS(intro, signal),
       outro === null ? 0 : probeVideoDurationS(outro, signal),
@@ -230,12 +238,12 @@ export const ffmpegComposeProvider: ComposeProvider = {
     assertEpisodePublicationAllowed(plan.episode_id, signal);
     const { code, stderr } = await runCommand(["ffmpeg", ...args], signal);
     if (code !== 0) {
-      throw new Error(`ffmpeg 合成失败（退出码 ${code}）：\n${stderr.trim().slice(-STDERR_TAIL_CHARS)}`);
+      throw encodingFailure(stderr, code);
     }
     const probe = await probeOutput(paths.output, signal);
     assertEpisodePublicationAllowed(plan.episode_id, signal);
     if (probe.width !== plan.res.w || probe.height !== plan.res.h || Math.abs(probe.fps - plan.fps) > 0.01) {
-      throw new Error(`成片参数不匹配：${probe.width}x${probe.height} ${probe.fps}fps`);
+      throw new CompositionError("encoding_failed");
     }
     return { output_key: plan.output_key, probe };
   },
