@@ -104,13 +104,18 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   } else if (/<Subject \d+>/.test(all)) fail("I2VA must use base format");
   if (/<d>|<l>|\(S\d+\)|\b(?:dialogue|speaks?|says?|narration|narrator|captions?|subtitles?|on-screen text|lyrics?|sings?|singing|sung|vocals?|voices?|voice.over|spoken words|speech)\b/i.test(output)) fail("dialogue and text are not requested");
   if (/\b(?:sign|label|banner|screen|poster|notice|billboard|lettering|text)\b[^.\n]*\b(?:reads?|says?|displays?|shows?|spells?|written)\b/i.test(output)) fail("visible text is not requested");
+  // Script-stage "close" and "detail" are the same near-shot family; models use the two words interchangeably.
+  const nearShot = /\b(?:close[ -]?up|closeup|close shot|tight shot|detail|extreme close[ -]?up|macro|insert shot)\b/i;
   const sizes: Record<H3PromptContext["size"], RegExp> = {
-    wide: /\bwide\b/i, medium: /\bmedium\b/i, close: /\bclose[ -]?up\b/i,
-    detail: /\b(?:detail|extreme close[ -]?up)\b/i, pov: /\b(?:POV|point.of.view|first.person)\b/i,
+    wide: /\b(?:wide|establishing|long shot)\b/i, medium: /\bmedium\b/i, close: nearShot,
+    detail: nearShot, pov: /\b(?:POV|point.of.view|first.person)\b/i,
   };
+  // The camera enum has no tilt: the script stage folds tilt/sweep/swing into `pan`, so those words count as pan.
   const cameras: Record<H3PromptContext["camera"], RegExp> = {
-    static: /\b(?:static|fixed|locked.off|stationary)\b/i, pan: /\bpan(?:s|ning)?\b/i,
-    push: /\b(?:push(?:es|ing)?|dolly|moves? (?:slowly )?forward)\b/i, follow: /\b(?:follow(?:s|ing)?|track(?:s|ing)?)\b/i,
+    static: /\b(?:static|fixed|locked.off|stationary)\b/i,
+    pan: /\b(?:pan(?:s|ning)?|tilt(?:s|ing|ed)?|sweep(?:s|ing)?|swing(?:s|ing)?|rotat(?:es|ing)? (?:upward|upwards|downward|downwards|left|right))\b/i,
+    push: /\b(?:push(?:es|ing)?|dolly|moves? (?:slowly )?forward|zoom(?:s|ing)? in|approach(?:es|ing)?|moves? closer|closing in)\b/i,
+    follow: /\b(?:follow(?:s|ing)?|track(?:s|ing)?|trail(?:s|ing)?|accompan(?:y|ies|ying))\b/i,
   };
   if (!sizes[context.size].test(timeline) || !cameras[context.camera].test(timeline)) fail("preserve shot size and camera");
   if (context.camera === "static" && /\b(?:pan(?:s|ning)?|zoom(?:s|ing)?|dolly|tracking|push.in|camera moves)\b/i.test(actions)) fail("static camera cannot move");
