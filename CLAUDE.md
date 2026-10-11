@@ -7,7 +7,7 @@
 - 产品与数据模型：`docs/AI旅行Vlog生产工作台_PRD_v0.2.md`（v0.1 只留历史，别按它改代码）
 - 结构决策：`docs/decisions/`（改目录结构或跨模块边界前先写 ADR）
 - 数据类型：`packages/engine/src/schema/` 与 PRD §6 一一对应。**改其一必改另一**，同一个 commit。
-- 当前阶段：M0（手工验证）未完成。任何流水线阶段、模型选型、GPU 分钟、定价数字都是占位，别当真。
+- 当前阶段（2026-10-11）：六阶段流水线已实现，并在两台 DGX（Spark / GX10）上真实部署、验收、有真实作品在线；日常工作是迭代与运维，发布记录见 `infra/dgx/`，实现状态见 `docs/architecture.md`。仍待落实：`services/inference` 的 `/llm`、`/upscale`（501）、FR-02 配额告警、性能与交互审计。PRD 里的 GPU 分钟、定价数字未经实测校准，仍按占位对待。
 
 ## 核心工程原则
 
