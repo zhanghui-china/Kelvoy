@@ -200,7 +200,7 @@ H3 改写的格式／校验类失败原先是终止性的，镜头直接失败�
 
 Spark 未发布。未做的验证：浏览器走查（新建页默认值、选图界面、直出提示行）。回退：删除 `zzzzzzzzzzzzzzzzz-keyframe-default-20261011.conf`（web 与 worker 各一份），`daemon-reload` 后重启 web / worker，回到 `h3-round2-20261011-05753a6`。
 
-## 十、失败镜头重试入口（`fix/retry-buttons`，尚未发布）
+## 十、失败镜头重试入口（GX10，2026-10-11）
 
 决策见 ADR-0014，接口见 `docs/api/retry.md`。
 
@@ -209,3 +209,18 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 - 发布要求：无数据库迁移，不需要迁移闸门标志；Web 与 Worker 同版本；先 GX10 后 Spark，先排空任务。
 - 2026-10-11 已把本分支合并进 `feat/default-keyframe-ui`，作为 GX10 的一个发布（含默认关键帧前端）；Spark 尚未发布，也未合并 main。
 - 回退：切回上一发布目录（删除新增 drop-in，`daemon-reload` 后重启）。不恢复数据库；已入队的重试任务由旧版本按原逻辑消费。
+
+### 发布（GX10）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/keyframe-retry-20261011-5f9b5fa`（基于 `keyframe-default-20261011-4ee2729`，覆盖 18 个文件，`RELEASE.json` 带 sha256 清单） |
+| 源码 | `feat/default-keyframe-ui@5f9b5fa`（已合并 `fix/retry-buttons`），未合并 main |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-keyframe-retry-20261011-20261011T130357Z` |
+| 切换 | 13:04 左右，`deploy-web-worker.py` 状态 `deployed`，无迁移闸门参数；drop-in `zzzzzzzzzzzzzzzzzz-keyframe-retry-20261011.conf` |
+| 节点验证 | 类型检查 5 包通过；测试 1234 通过 / 1 平台条件跳过 / 0 失败；前端重建并 `dist_stamp verify` 通过 |
+| 切换后 | web／worker 为 user unit，均 active、重启 0；健康 `ok`；worker 工作目录指向新发布；近 6 分钟日志 0 错误；线上前端包为新构建 `index-BxZ9JTvP.js` |
+
+组装时的坑：macOS `tar` 会把 `._*` AppleDouble 文件带进发布目录，被 `bun test` 当成测试文件读到，造成 6 个"失败"。已在节点上清掉；以后用 `COPYFILE_DISABLE=1 tar` 或 `rsync`。
+
+未验证：真实失败镜头上点"重试这一镜"／"重试全部"的端到端表现；浏览器走查。Spark 未发布。回退：删除 web 与 worker 各一份 `zzzzzzzzzzzzzzzzzz-keyframe-retry-20261011.conf`，`daemon-reload` 后重启，回到 `keyframe-default-20261011-4ee2729`。
