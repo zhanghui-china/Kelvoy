@@ -170,7 +170,7 @@ H3 改写的格式／校验类失败原先是终止性的，镜头直接失败�
 | 节点 | 发布目录 | 数据库备份（UTC） | 切换 |
 | --- | --- | --- | --- |
 | GX10 | `~/kelvoy-releases/h3-round2-20261011-05753a6` | `/home/huntun/kelvoy-backups/pre-h3-round2-20261011-20261011T104204Z` | 10:42 左右（由主 agent 执行并核对：17 项隔离验收全过，新表 0 行，服务正常） |
-| Spark | 同上（已准备，未切换） | 待补 | 待补 |
+| Spark | 同上 | `/home/Developer/kelvoy-backups/pre-h3-round2-20261011-20261011T111756Z` | 11:17 左右（由主 agent 执行并核对：服务 active、重启 0、健康 ok、日志 0 错误、17 项隔离验收全过，新表 0 行，公网 :8063 返回 200） |
 
 闸门：`--allow-new-table prompt_trace_rejections --allow-migration prompt_traces_v2 --expect-empty-new-table`。drop-in 新文件名自动比现有多一个前导 `z`。`STEPFUN_MODEL` 仍为 `step-3.5-flash`。
 
