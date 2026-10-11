@@ -123,3 +123,21 @@
 - 剩余少量失败：模型漏写 Subject 行、`timeline must end at …`、`one continuous Shot 1`，没有足够原文。可考虑对格式类失败允许一次自动再试（模型输出随机，现在是终止性失败）。
 - 产品层面：是否对没有人的镜头不再带人物参考图（会改变视频直出的参考图策略）。
 - ADR-0011 仍写"LLM 单次上限 60 秒"。
+
+## 七、格式类失败自动重试一次（同日，`fe5b52b`）
+
+H3 改写的格式／校验类失败原先是终止性的，镜头直接失败、退积分，等用户手动重试。重放中同一镜头同一输入 3 次里常常 2 次成功，所以改为与超时、网络错误一样走一次本地重试（`MAX_LOCAL_ATTEMPTS = 2`）：第一次失败重排队、积分仍预留，第二次仍失败才终止并退款。内容拦截和无效输入仍不重试。
+
+- 改动：`errors.ts` 的 `classifyH3Failure` 里 `retryable: !blocked`；`consumer.ts` 去掉对 `H3FormatError` 的排除；PRD 一句同步。第一次失败的提示词记录照常落库，两次尝试在界面里都能看到。
+- 整合时发现并修了子代理测试的两处写法问题（`ContentBlockedError` 误传字符串；`classifyH3Failure` 旧断言未更新），实现本身无需改。全量 1181 通过、0 失败。
+
+| 节点 | 发布目录 | 数据库备份（UTC） | 切换 |
+| --- | --- | --- | --- |
+| Spark | `retry-once-20261011-fe5b52b` | `/home/Developer/kelvoy-backups/pre-retry-once-20261011-20261011T092507Z` | 09:25 |
+| GX10 | `retry-once-20261011-fe5b52b` | `/home/huntun/kelvoy-backups/pre-retry-once-20261011-20261011T092732Z` | 09:27 |
+
+本次发布由子代理按固定手册执行（Spark 全部满足期望才进入 GX10，失败即停、不自行回退）。我另行独立核对两节点：三个服务 active、重启 0、`WorkingDirectory` 指向新目录、健康 `ok`、`STEPFUN_MODEL=step-3.5-flash`、近 5 分钟日志无错误、发布目录里含该改动、变更包已清除。节点上测试 1129 通过、1 项平台条件跳过、0 失败。无迁移、无前端改动。
+
+**未验证**：真实流量下重试是否降低了用户可见失败。下次真实生成后应只读核对 `prompt_traces` 中同一任务是否出现两次尝试（`attempt` 1、2）及第二次结果。
+
+回退：删除 `zzzzzzzzzzzzzzz-retry-once-20261011.conf` 两个 drop-in，`daemon-reload` 后重启，回到 `retention-tolerance-20261011-c107ebd`；不恢复数据库。
