@@ -23,6 +23,8 @@ const ERROR_LABELS: Record<string, string> = {
   scene_not_found: "场景已变化，请重新选择",
   action_pending: "脚本任务正在处理，请等待完成",
   insufficient_credits: "积分不足，请联系团队发放额度",
+  no_failed_task: "没有可重试的失败任务，页面会自动刷新",
+  invalid_target: "这一镜当前不能重试，请刷新后再试",
   network_error: "网络不通，稍后再试",
   invalid_response: "服务端返回了无法解析的内容",
 };

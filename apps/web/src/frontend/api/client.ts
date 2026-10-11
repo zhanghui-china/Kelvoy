@@ -188,7 +188,7 @@ export interface ShotFailureSummary { shot_id: string; code: string; message: st
 
 export function getEpisode(episodeId: string) {
   return apiFetch<{ episode: Episode; persona: Persona | null; destination: Destination | null;
-    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null; shot_failures?: ShotFailureSummary[]; storyboard_busy?: boolean; storyboard_warnings?: string[]; storyboard_prices?: StoryboardPrices }>(
+    destination_history_approximate: boolean; row_version: number; failed_task?: FailedTaskSummary | null; failed_tasks?: FailedTaskSummary[]; shot_failures?: ShotFailureSummary[]; storyboard_busy?: boolean; storyboard_warnings?: string[]; storyboard_prices?: StoryboardPrices }>(
     `/api/episodes/${encodeURIComponent(episodeId)}`,
   );
 }
@@ -297,8 +297,25 @@ export function continueEpisode(episodeId: string, rowVersion: number) {
   return post(episodePath(episodeId, "/continue"), { row_version: rowVersion });
 }
 
-export function retryFailedTask(episodeId: string, rowVersion: number) {
-  return post(episodePath(episodeId, "/retry"), { row_version: rowVersion });
+/** POST /retry 成功体：queued 是本次入队的任务，skipped 是被跳过的失败项及原因。 */
+export interface RetryResponse {
+  row_version: number;
+  stage: StageName;
+  shot_no: number | null;
+  queued: { stage: StageName; shot_no: number | null; resynthesized: boolean }[];
+  skipped: { stage: StageName; shot_no: number | null; reason: string }[];
+}
+
+/**
+ * 不带 opts：重试最近一个失败任务（旧行为）；shotNo：只重试该镜；all：
+ * 重试当前阶段全部失败镜头。shotNo 与 all 互斥，由后端校验。
+ */
+export function retryFailedTask(episodeId: string, rowVersion: number,
+  opts: { shotNo?: number; all?: boolean } = {}) {
+  const body: Record<string, unknown> = { row_version: rowVersion };
+  if (opts.shotNo !== undefined) body.shot_no = opts.shotNo;
+  if (opts.all) body.all = true;
+  return apiFetch<RetryResponse>(episodePath(episodeId, "/retry"), { method: "POST", body: JSON.stringify(body) });
 }
 
 export function convertLegacyCuts(episodeId: string, rowVersion: number) {

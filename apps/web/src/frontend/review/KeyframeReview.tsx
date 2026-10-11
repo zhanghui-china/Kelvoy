@@ -1,4 +1,4 @@
-import { ShotFailureNotice } from "./ShotFailure";
+import { ShotFailureNotice, useShotRetry } from "./ShotFailure";
 import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
 import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
@@ -238,6 +238,7 @@ export default function KeyframeReview({
     }
   }, [activeNo]);
 
+  const shotRetry = useShotRetry(episode, mutation);
   const unselected = episode.shots.filter((s) =>
     s.status !== "approved" && (s.status !== "kf_selected" || !s.kf_selected)).length;
 
@@ -281,7 +282,9 @@ export default function KeyframeReview({
         )}
 
         <MutationError error={mutation.error} />
-        <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures} />
+        <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures}
+          onRetry={activeNo !== null ? () => void shotRetry.retry(activeNo) : undefined}
+          pending={shotRetry.pending} queued={activeNo !== null && shotRetry.isQueued(activeNo)} />
 
         {episode.shots.map((shot) => (
           <KeyframeShot

@@ -47,16 +47,17 @@ export default function EpisodeDetailPage() {
   const episode: Episode = data.episode;
   return <>{error && <p className="k-error" role="alert">刷新失败：{error}。表单内容已保留，请稍后重试。</p>}<EpisodeDetailContent key={id} episode={episode} destination={data.destination} persona={data.persona}
     destinationHistoryApproximate={data.destination_history_approximate}
-    shotFailures={data.shot_failures} failedTask={data.failed_task} mutation={mutation} storyboardBusy={data.storyboard_busy}
+    shotFailures={data.shot_failures} failedTask={data.failed_task} failedTasks={data.failed_tasks} mutation={mutation} storyboardBusy={data.storyboard_busy}
     storyboardWarnings={data.storyboard_warnings} storyboardPrices={data.storyboard_prices} /></>;
 }
 
-export function EpisodeDetailContent({ episode, destination, persona, destinationHistoryApproximate, failedTask, shotFailures, mutation, storyboardBusy, storyboardWarnings, storyboardPrices }: {
+export function EpisodeDetailContent({ episode, destination, persona, destinationHistoryApproximate, failedTask, failedTasks, shotFailures, mutation, storyboardBusy, storyboardWarnings, storyboardPrices }: {
   episode: Episode;
   destination: Destination | null;
   persona: Persona | null;
   destinationHistoryApproximate?: boolean;
   failedTask?: FailedTaskSummary | null;
+  failedTasks?: FailedTaskSummary[];
   shotFailures?: ShotFailureSummary[];
   mutation: EpisodeMutation;
   storyboardBusy?: boolean;
@@ -66,6 +67,8 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
 
   const [viewing, setViewing] = useState<{ episodeId: string; stage: StageId } | null>(null);
   const operationRef = useRef<HTMLDivElement>(null);
+  const failedShotCount = Math.max(failedTasks?.length ?? 0,
+    episode.shots.filter(shot => shot.status === "failed").length);
   const stages = episodeStages(episode, failedTask);
   const currentStage = currentEpisodeStage(episode, failedTask);
   const selectedStage = viewing?.episodeId === episode.episode_id &&
@@ -123,6 +126,10 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
           if (event.relatedTarget instanceof Element && event.relatedTarget.closest("[data-stage]")) event.stopPropagation();
         }}
         onPlayCapture={event => { if (replaying && event.target instanceof HTMLVideoElement) event.target.pause(); }}>
+        {failedShotCount > 0 && ["keyframing", "kf_review", "clipping", "clip_review"].includes(episode.status) &&
+          <p className="k-error" role="alert">
+            有 {failedShotCount} 镜生成失败，可在对应镜头或下方<a href="#failure-retry">进度区</a>重试。
+          </p>}
         {episode.status !== "done" && episode.final && <PriorFinal episode={episode} />}
 
         {episode.status === "script_review" && (
@@ -147,11 +154,11 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
         {(episode.status === "draft" ||
           episode.status === "scripting" ||
           episode.status === "assets" ||
-          episode.status === "failed") && <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} />}
+          episode.status === "failed") && <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} failedTasks={failedTasks} />}
         {(episode.status === "keyframing" || episode.status === "kf_review" ||
           episode.status === "clipping" || episode.status === "clip_review") &&
           episode.shots.some((shot) => shot.status === "failed") &&
-          <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} />}
+          <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} failedTasks={failedTasks} />}
 
         {episode.mode === "per_shot" && <details className="k-desk-main" open={episode.status === "script_review" ? true : undefined}>
           <summary>编辑分镜 · {episode.shots.length} 镜</summary>
