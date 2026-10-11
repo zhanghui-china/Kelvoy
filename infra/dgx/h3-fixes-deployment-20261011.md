@@ -141,3 +141,47 @@ H3 改写的格式／校验类失败原先是终止性的，镜头直接失败�
 **未验证**：真实流量下重试是否降低了用户可见失败。下次真实生成后应只读核对 `prompt_traces` 中同一任务是否出现两次尝试（`attempt` 1、2）及第二次结果。
 
 回退：删除 `zzzzzzzzzzzzzzz-retry-once-20261011.conf` 两个 drop-in，`daemon-reload` 后重启，回到 `retention-tolerance-20261011-c107ebd`；不恢复数据库。
+
+## 八、无人镜头校验、运镜升降词、被拒原文记录（同日，`05753a6`）
+
+起因：GX10 上真实用户作品 `e_0a0d9f4d…`（直出模式）第 2 镜失败（积分已退回）、第 3 镜两次尝试均失败。提示词记录首次有真实数据：第 2 镜两次分别死在 `rewrite must be English` 与 `all supplied pictures must be referenced`，第 3 镜两次均 `preserve shot size and camera`。同镜头同输入重放大多通过，说明是采样随机性撞上偏严规则，加上两类确定性根因：无人镜头仍被要求引用人物图；脚本里 `camera=push` 与"镜头缓慢向上抬升"自相矛盾而规则词表没覆盖。
+
+### 变更（三个分支合并，主干 `05753a6`；验收脚本 `813f79b`）
+
+1. **无人镜头不强制引用人物图**（A，`person_visible`）：分镜新增可选布尔字段，缺省视为 `true`，旧作品行为不变；脚本阶段由 LLM 输出，只存显式 `false`。为 `false` 的镜头仍把人物图作为 Picture 1 送入视频模型，只是 H3 校验不再要求提示词引用它；场景图必须引用、人物主体仍须定义、角色词汇匹配不变。分镜编辑界面**没有**该开关。
+2. **脚本阶段升降词**（B）：`camera_motion_consistency` 增加"镜头…抬升／升起／上升／升高／下降／降落／下移／上移""摇臂升降""升降镜头"，归 `pan`；必须紧跟"镜头"才计入，"灯火升起"之类写景物的说法不判。已知漏判：没有"镜头"二字或中间夹了副词表以外的词。
+3. **失败时保存被拒的模型原文**（C）：新增加性表 `prompt_trace_rejections`（迁移 `prompt_traces_v2`），与 `prompt_traces` 同主键，仅在 H3 格式校验失败时保存最后一次被拒输出，64KB 截断，同一结算事务内写入；脱敏沿用参考图路径与哈希替换，仅作品所有者接口可读，不进分享、作品详情、日志与 `tasks.error`，随作品删除清理。这**放宽**了 ADR-0012 原"原始 LLM 响应不入库"的约定，已在 ADR 补充段落，用户已确认。
+
+### 发布前门槛（GX10，发布目录 `h3-round2-20261011-05753a6`，来源 `813f79b`）
+
+| 项 | 结果 |
+| --- | --- |
+| 变更包 | 29 个文件（含前端 `PromptVersions.tsx`），`RELEASE.json` 带 sha256 清单，节点上重建前端并 `dist_stamp stamp/verify` |
+| 类型检查 | 5 个包全过 |
+| 测试（节点上） | engine 304、store 163、worker 226（1 项平台条件跳过）、web 457，**0 失败** |
+| 重放 A（`person_visible:false`，e_0a0d9f4d 第 2、3 镜各 4 次，仅调 LLM） | **8/8 通过**，`all supplied pictures must be referenced` 0 次；此前同镜头基线 3/3 与 2/3 |
+| 重放（缺省 `person_visible`，有人镜头 3 次） | 3/3 通过，行为不变 |
+| 迁移预演（生产库副本，两遍幂等） | 只新增 `prompt_trace_rejections`（0 行）、`idx_prompt_trace_rejections_episode`、自动索引与迁移 `prompt_traces_v2` |
+
+重放耗时 17–73 秒，均在 120 秒预算内。Spark 的同一变更包同样通过类型检查、同一组测试（0 失败）与迁移预演（`prompt_trace_rejections` 0 行、`prompt_traces` 0 行）；未重复 LLM 重放。
+
+### 发布
+
+| 节点 | 发布目录 | 数据库备份（UTC） | 切换 |
+| --- | --- | --- | --- |
+| GX10 | `~/kelvoy-releases/h3-round2-20261011-05753a6` | `/home/huntun/kelvoy-backups/pre-h3-round2-20261011-20261011T104204Z` | 10:42 左右（由主 agent 执行并核对：17 项隔离验收全过，新表 0 行，服务正常） |
+| Spark | 同上（已准备，未切换） | 待补 | 待补 |
+
+闸门：`--allow-new-table prompt_trace_rejections --allow-migration prompt_traces_v2 --expect-empty-new-table`。drop-in 新文件名自动比现有多一个前导 `z`。`STEPFUN_MODEL` 仍为 `step-3.5-flash`。
+
+### 未验证与提醒
+
+- 真实流量下 `person_visible` 的判断准确率没有实测：重放里字段是人工置为 `false`，脚本 LLM 是否会正确输出它要靠下次真实生成核对（提示词记录里查脚本轮次与镜头字段）。
+- `prompt_trace_rejections` 的首次真实写入尚未被生产流量验证。
+- 视频质量是否受"人物不入镜"改写指令影响未测量。
+- **GX10 磁盘 97%（约 29GB 可用）**，每个发布目录约 140MB（含 `node_modules`）；后续发布前应清理旧发布目录，否则 `cp -a` 与 DB 备份可能写满盘。
+- 需 Web 与 Worker 同版本：Web 的 schema 校验必须接受新字段，否则带 `person_visible` 的分镜会被拒。
+
+### 回退
+
+在对应节点删除 `kelvoy-{web,worker}.service.d/` 下本次新建的 `…-h3-round2-20261011.conf`（文件名比 `zzzzzzzzzzzzzzz-retry-once-20261011.conf` 多一个前导 `z`），`daemon-reload` 后重启 Web／Worker，回到 `retry-once-20261011-fe5b52b`。新表与迁移记录保留，旧版本忽略它；**不恢复数据库**，避免覆盖上线后的新数据；备份仅用于核对和人工恢复。
