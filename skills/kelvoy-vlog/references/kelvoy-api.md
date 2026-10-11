@@ -39,10 +39,12 @@ POST /api/auth/login
 
 ```http
 POST /api/episodes
-{"persona_id":"…","destination_id":"…","template_id":"…","tone":"安静的旅行记录"}
+{"persona_id":"…","destination_id":"…","template_id":"…","tone":"安静的旅行记录","video_source":"references"}
 ```
 
-必需三个 ID。可选：`name`、`requirements`、`aspect`（`9:16` 默认）、`video_source`（`references` 默认，或 `keyframe`）、`candidate_count`、`series_id`、`season`、`tone`、`banned`（字符串数组）、`outfit_override`。`mode` 只接受 `per_shot`。服务派生 owner、版本快照、`cut_policy=fixed_1s`、30 秒、render，并自动入队 brief。
+必需三个 ID。可选：`name`、`requirements`、`aspect`（`9:16` 默认）、`video_source`（`references` 或 `keyframe`；不传时服务端缺省为 `references`）、`candidate_count`、`series_id`、`season`、`tone`、`banned`（字符串数组）、`outfit_override`。`mode` 只接受 `per_shot`。服务派生 owner、版本快照、`cut_policy=fixed_1s`、30 秒、render，并自动入队 brief。
+
+**默认值差异**：服务端缺省 `video_source=references`（API 契约，不随 Web 界面变化）；Web 新建页的界面默认是 `keyframe`。因此依赖直出路径（无关键帧审核）或依赖关键帧路径的调用方，都应显式传 `video_source`，不要依赖缺省值。
 
 成功 201：`{"ok":true,"episode":{…}}`，立即记录 `episode.episode_id`。
 
@@ -56,7 +58,7 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
       → clip_review → compose_ready → composing → done        任一生成态可 → failed
 ```
 
-`video_source=references`（默认）在 assets 之后直接进 `clipping`，**没有 kf_review**。`keyframe` 模式才有关键帧审核。`/continue` 可从四个审核态推进：`script_review`、`kf_review`、`clip_review`、`compose_ready`。`clip_review` 在 `fixed_1s` 下先进 `compose_ready`，再 `/continue` 才进 `composing`。非 `fixed_1s` 的旧期 `clip_review` 直接进 `composing`。
+`video_source=references`（服务端缺省；Web 界面默认为 `keyframe`）在 assets 之后直接进 `clipping`，**没有 kf_review**。`keyframe` 模式才有关键帧审核。`/continue` 可从四个审核态推进：`script_review`、`kf_review`、`clip_review`、`compose_ready`。`clip_review` 在 `fixed_1s` 下先进 `compose_ready`，再 `/continue` 才进 `composing`。非 `fixed_1s` 的旧期 `clip_review` 直接进 `composing`。
 
 ## 审核写入
 
