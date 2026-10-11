@@ -12,10 +12,29 @@ export class H3FormatError extends Error {
   constructor(message: string, public correctable = true, public rule?: string) { super(message); }
 }
 
-function removeNegativeConstraints(text: string): string {
-  const term = "(?:(?:spoken|sung|audible|visible)\\s+)?(?:face|mouth|eating|cuts?|dialogue|narration|subtitles?|captions?|on-screen text|lyrics?|vocals?|voices?|singing|speech|spoken words)";
-  const list = `\\b(?:no|without)\\s+${term}(?:(?:,\\s*(?:(?:or|and)\\s+)?|\\s+(?:or|and)\\s+)${term})*\\b`;
-  return text.replace(new RegExp(list, "gi"), "");
+/**
+ * Strips whole negation clauses ("no sound effects, footsteps, or human voices") so the forbidden-term
+ * checks in `validateSections` only see affirmative content. A clause starts at `no`/`without` and ends
+ * at `.`, `;`, a newline, `|`, or `, but ` / `, while ` / `, then ` / `, and then ` (terminator kept).
+ * Commas, `or` and `and` inside the clause are part of the negation. A clause is capped at
+ * MAX_NEGATION_WORDS words so a run-on sentence cannot swallow unrelated affirmative content.
+ *
+ * Trade-off, accepted on purpose: in a mixed clause like "no sound effects, and she says hello"
+ * the text after `, and ` is stripped too (until the next terminator). This function only feeds
+ * forbidden-term detection, so under-reporting is preferred to false rejections. `, and ` is
+ * deliberately NOT a terminator: otherwise "no X, and Y" would leak Y out of the negation.
+ */
+const MAX_NEGATION_WORDS = 12;
+const NEGATION_CLAUSE = /\b(?:no|without)\s+((?:(?!,\s*(?:but|while|then|and\s+then)\s)[^.;\n|])*)/gi;
+
+export function removeNegativeConstraints(text: string): string {
+  return text.replace(NEGATION_CLAUSE, (_match, clause: string) => {
+    let count = 0;
+    for (const word of clause.matchAll(/\S+/g)) {
+      if (++count === MAX_NEGATION_WORDS) return clause.slice(word.index + word[0].length);
+    }
+    return "";
+  });
 }
 
 export function parseSections(content: string, context: H3PromptContext): Record<string, string> {
