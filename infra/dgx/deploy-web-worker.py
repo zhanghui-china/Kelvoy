@@ -1,14 +1,24 @@
-"""Web/Worker code-only release cutover: no migration, media is neither backed up nor touched.
+"""Web/Worker code-only release cutover: media is neither backed up nor touched.
 Only the database gets a consistent backup as a safety net. RELEASE.json lists just the files changed
-since the base release. Retains online data and existing deletion audit on rollback."""
+since the base release. Retains online data and existing deletion audit on rollback.
+
+Additive store migrations (new tables/indexes created by `open()` on start) are allowed only when named
+via --allow-new-table / --allow-migration; see schema_compat.py. Rehearse them first with
+rehearse-migration.py. Without those flags the database must stay unchanged exactly as before.
+Requires schema_compat.py and dist_stamp.py next to this file."""
 import argparse
 import importlib.util
 import json
 import os
 import shutil
 import sqlite3
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dist_stamp  # noqa: E402
+import schema_compat  # noqa: E402
 
 spec = importlib.util.spec_from_file_location('deployment', Path(__file__).with_name('deploy-video-timeout.py'))
 ops = importlib.util.module_from_spec(spec)
@@ -23,7 +33,7 @@ def has_live_work(database):
         return connection.execute("select 1 from task_executions where exited=0 and lease_until>unixepoch('now') limit 1").fetchone() is not None
 
 
-def deploy(release, data_root, name):
+def deploy(release, data_root, name, *, allow_new_tables=(), allow_migrations=(), expect_empty_new_tables=False, verify_dist=True):
     DROPIN = f'zzzzzzzzzz-{name}.conf'
     os.umask(0o077)
     release, data_root = release.resolve(strict=True), data_root.resolve(strict=True)
@@ -36,6 +46,8 @@ def deploy(release, data_root, name):
             raise RuntimeError('Release file hash mismatch')
     if not (release / 'apps/web/dist/index.html').is_file():
         raise RuntimeError('Release production build missing')
+    if verify_dist:
+        dist_stamp.verify(release)
     for path in (release, database, projects):
         if any(character in str(path) for character in ('"', '\n', '%', '\\')) or any(character.isspace() for character in str(path)):
             raise RuntimeError('Unrepresentable service path')
@@ -95,7 +107,13 @@ def deploy(release, data_root, name):
         ops.wait_healthy('kelvoy-web', 'http://127.0.0.1:8888/api/health')
         if not ops.directory_matches('kelvoy-web', release / 'apps/web'):
             raise RuntimeError('Web working directory mismatch')
-        if ops.database_snapshot(database) != before_database:
+        if allow_new_tables or allow_migrations or expect_empty_new_tables:
+            # Web's open() ran the additive migration. The backup equals the pre-start database
+            # (verified above), so it is the "before" side; any other change aborts and rolls back.
+            report['additive_migration'] = schema_compat.check_additive(
+                backup / 'kelvoy-cutover.db', database, new_tables=allow_new_tables,
+                migration_ids=allow_migrations, expect_empty_new_tables=expect_empty_new_tables)
+        elif ops.database_snapshot(database) != before_database:
             raise RuntimeError('Paused database changed')
         if any(ops.digest(Path(path)) != digest for path, digest in configuration.items()):
             raise RuntimeError('Original configuration changed')
@@ -140,5 +158,10 @@ if __name__ == '__main__':
     parser.add_argument('--release', type=Path, required=True)
     parser.add_argument('--data-root', type=Path, required=True)
     parser.add_argument('--name', required=True, help='drop-in / backup label, e.g. rule-diagnostics-20261011')
+    parser.add_argument('--allow-new-table', action='append', default=[], metavar='NAME', help='table the release may newly create (repeatable)')
+    parser.add_argument('--allow-migration', action='append', default=[], metavar='ID', help='schema_migrations id the release may newly add (repeatable)')
+    parser.add_argument('--expect-empty-new-table', action='store_true', help='fail if an allowed new table already has rows at this point')
+    parser.add_argument('--skip-dist-verify', action='store_true', help='skip the frontend build stamp check (releases without frontend changes only)')
     args = parser.parse_args()
-    deploy(args.release, args.data_root, args.name)
+    deploy(args.release, args.data_root, args.name, allow_new_tables=args.allow_new_table, allow_migrations=args.allow_migration,
+           expect_empty_new_tables=args.expect_empty_new_table, verify_dist=not args.skip_dist_verify)
