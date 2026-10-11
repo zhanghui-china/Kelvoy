@@ -185,3 +185,13 @@ H3 改写的格式／校验类失败原先是终止性的，镜头直接失败�
 ### 回退
 
 在对应节点删除 `kelvoy-{web,worker}.service.d/` 下本次新建的 `…-h3-round2-20261011.conf`（文件名比 `zzzzzzzzzzzzzzz-retry-once-20261011.conf` 多一个前导 `z`），`daemon-reload` 后重启 Web／Worker，回到 `retry-once-20261011-fe5b52b`。新表与迁移记录保留，旧版本忽略它；**不恢复数据库**，避免覆盖上线后的新数据；备份仅用于核对和人工恢复。
+
+## 十、失败镜头重试入口（`fix/retry-buttons`，尚未发布）
+
+决策见 ADR-0014，接口见 `docs/api/retry.md`。
+
+- 改动：`packages/store`（`listRetryableFailedTasks`、`submitFailedTaskRetry` 增加 `shot_no`／`all`／补发）、`apps/web` 路由（`/retry` 参数校验、详情 `failed_tasks`）、前端失败卡片与进度区按钮。
+- 验证：`make typecheck && make test` 通过（1229 pass / 0 fail）；`all` 批量入队、余额不足零副作用、无任务记录补发均有 store 层测试。尚未在生产数据上验证。
+- 发布要求：无数据库迁移，不需要迁移闸门标志；Web 与 Worker 同版本；先 GX10 后 Spark，先排空任务。
+- 发布前须确认：`feat/default-keyframe-ui` 是否一并合并（GX10 当前运行其前端构建 `keyframe-default-20261011-4ee2729`，本分支基于 main，未包含它）。
+- 回退：切回上一发布目录（删除新增 drop-in，`daemon-reload` 后重启）。不恢复数据库；已入队的重试任务由旧版本按原逻辑消费。

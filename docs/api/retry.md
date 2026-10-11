@@ -28,7 +28,7 @@
 ```
 
 - `stage` / `shot_no`：本次主要重试的任务（`shot_no` 为 `null` 表示期级任务，如合成）。
-- `queued`：已入队的任务；`resynthesized` 表示是否连带重新合成。
+- `queued`：已入队的任务；`resynthesized` 为 `true` 表示该镜没有可重试的任务记录，由服务按镜头状态补发了新任务。
 - `skipped`：被跳过的失败及原因。
 
 ## 错误码
