@@ -33,6 +33,28 @@ def has_live_work(database):
         return connection.execute("select 1 from task_executions where exited=0 and lease_until>unixepoch('now') limit 1").fetchone() is not None
 
 
+def _store_open_runner():
+    spec = importlib.util.spec_from_file_location('rehearse_migration', Path(__file__).with_name('rehearse-migration.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.run_store_open
+
+
+def apply_additive_migration(release, database, backup_database, *, new_tables, migration_ids,
+                             expect_empty_new_tables=False, runner=None):
+    """Apply the release's store migration to the (stopped) live database, then require that it only added the
+    allowed objects. Done explicitly because Web opens the database lazily: checking after a Web start can pass
+    vacuously. A name on the allow list that did not appear is a failure, not a no-op."""
+    (runner or _store_open_runner())(release, database)
+    summary = schema_compat.check_additive(
+        backup_database, database, new_tables=new_tables, migration_ids=migration_ids,
+        expect_empty_new_tables=expect_empty_new_tables)
+    missing = summary['absent_new_tables'] + summary['absent_migrations']
+    if missing:
+        raise RuntimeError('Expected migration objects did not appear after applying the release store: ' + ', '.join(missing))
+    return summary
+
+
 def dropin_filename(directory, name):
     """systemd merges drop-ins in lexicographic order and the later one wins. Earlier releases used a fixed
     `zzzzzzzzzz-<name>.conf`, so a release whose name sorts alphabetically earlier than an existing one
@@ -115,6 +137,14 @@ def deploy(release, data_root, name, *, allow_new_tables=(), allow_migrations=()
         if ops.database_snapshot(backup / 'kelvoy-cutover.db') != before_database:
             raise RuntimeError('Database backup mismatch')
         report.update(database_snapshot=before_database, configuration_sha256=configuration)
+        additive = bool(allow_new_tables or allow_migrations or expect_empty_new_tables)
+        if additive:
+            record('apply_additive_migration')
+            report['additive_migration'] = apply_additive_migration(
+                release, database, backup / 'kelvoy-cutover.db', new_tables=allow_new_tables,
+                migration_ids=allow_migrations, expect_empty_new_tables=expect_empty_new_tables)
+            # Starting Web must not change the migrated database any further.
+            before_database = ops.database_snapshot(database)
         record('switch_web_worker')
         bun = Path.home() / '.bun/bin/bun'
         for service, directory, entry in (('kelvoy-web', release / 'apps/web', 'src/server/index.ts'), ('kelvoy-worker', release, 'apps/worker/src/index.ts')):
@@ -128,13 +158,7 @@ def deploy(release, data_root, name, *, allow_new_tables=(), allow_migrations=()
         ops.wait_healthy('kelvoy-web', 'http://127.0.0.1:8888/api/health')
         if not ops.directory_matches('kelvoy-web', release / 'apps/web'):
             raise RuntimeError('Web working directory mismatch: ' + describe_directory('kelvoy-web', release / 'apps/web'))
-        if allow_new_tables or allow_migrations or expect_empty_new_tables:
-            # Web's open() ran the additive migration. The backup equals the pre-start database
-            # (verified above), so it is the "before" side; any other change aborts and rolls back.
-            report['additive_migration'] = schema_compat.check_additive(
-                backup / 'kelvoy-cutover.db', database, new_tables=allow_new_tables,
-                migration_ids=allow_migrations, expect_empty_new_tables=expect_empty_new_tables)
-        elif ops.database_snapshot(database) != before_database:
+        if ops.database_snapshot(database) != before_database:
             raise RuntimeError('Paused database changed')
         if any(ops.digest(Path(path)) != digest for path, digest in configuration.items()):
             raise RuntimeError('Original configuration changed')
