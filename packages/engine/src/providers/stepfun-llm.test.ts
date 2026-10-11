@@ -313,3 +313,25 @@ test("callChatCompletion applies the configured per-request LLM timeout", async 
     else process.env.KELVOY_LLM_TIMEOUT_SECONDS = original;
   }
 });
+
+test("person_visible=false from the script is kept; missing, true or malformed falls back to visible", async () => {
+  const raw = buildValidRawShots(4).map((shot, index) => ({ ...shot,
+    ...(index === 0 ? { person_visible: false } : index === 1 ? { person_visible: true } : index === 2 ? { person_visible: "false" } : {}) }));
+  mockFetchOnce(JSON.stringify(raw));
+  const { shots } = await stepfunScriptProvider.generateShots({ brief, destination });
+  expect(shots[0]!.person_visible).toBe(false);
+  // Absent means visible; only an explicit false is stored so existing episodes and fixtures stay unchanged.
+  expect(shots[1]!.person_visible).toBeUndefined();
+  expect(shots[2]!.person_visible).toBeUndefined();
+  expect(shots[3]!.person_visible).toBeUndefined();
+});
+
+test("script prompt asks for person_visible", async () => {
+  let body = "";
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    body = String(init!.body);
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(buildValidRawShots(4)) } }] }));
+  }) as unknown as typeof fetch;
+  await stepfunScriptProvider.generateShots({ brief, destination });
+  expect(body).toContain("person_visible");
+});
