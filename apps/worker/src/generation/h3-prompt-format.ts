@@ -110,9 +110,21 @@ export function validateSections(value: Record<string, string>, context: H3Promp
     const definitions = [...value.subject_definitions!.matchAll(/<Subject (\d+)>\s+(?:is|represents|refers to)/g)].map(match => match[1]);
     const subjects = [...all.matchAll(/<Subject (\d+)>/g)].map(match => match[1]);
     if (!value.summary!.startsWith("[reference generation]")) fail("summary must start with [reference generation]");
-    const retention = value.retention_analysis!.trim().split(/\n+/);
-    const retained = retention.map(line => line.match(/^<Subject (\d+)> \(appears in \[Shot 1\]\): (fully_preserved|partially_preserved|attribute_transfer|weak_reference) - .+/)?.[1]);
-    retentionSyntaxInvalid = retained.some(n => !n) || definitions.some(n => !retained.includes(n)) || retained.length !== definitions.length;
+    // The product forces a person reference on every shot, so a shot may legitimately contain no person, and the
+    // spec has no "not present" wording. The parenthetical is therefore free text (1-80 chars, no brackets/newlines);
+    // structure (entry kind, number, relation tag, " - " separator, one Subject entry per definition) stays strict.
+    // Picture entries are allowed by the spec and are neither required nor counted.
+    const entry = (kind: "Subject" | "Picture", line: string) => line.match(new RegExp(`^<${kind} (\\d+)> \\(([^()\\n]{1,80})\\): (fully_preserved|partially_preserved|attribute_transfer|weak_reference) - .+`))?.[1];
+    const retention = value.retention_analysis!.trim().split(/\n+/).filter(line => line.trim());
+    const retained: string[] = [];
+    let linesValid = retention.length > 0;
+    for (const line of retention) {
+      const subject = entry("Subject", line);
+      if (subject) retained.push(subject);
+      else if (!entry("Picture", line)) linesValid = false;
+    }
+    retentionSyntaxInvalid = !linesValid || new Set(retained).size !== retained.length
+      || definitions.some(n => !retained.includes(n)) || retained.length !== definitions.length;
     if (definitions.length !== context.references.length || definitions.some((n, index) => Number(n) !== index + 1)) fail("subject order must match actual pictures");
     for (const ref of context.references) {
       const definition = value.subject_definitions!.match(new RegExp(`<Subject ${ref.picture}>\\s+(?:is|represents|refers to)\\s+[^\\n]*?<Picture (\\d+)>`));
