@@ -224,3 +224,24 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 组装时的坑：macOS `tar` 会把 `._*` AppleDouble 文件带进发布目录，被 `bun test` 当成测试文件读到，造成 6 个"失败"。已在节点上清掉；以后用 `COPYFILE_DISABLE=1 tar` 或 `rsync`。
 
 未验证：真实失败镜头上点"重试这一镜"／"重试全部"的端到端表现；浏览器走查。Spark 未发布。回退：删除 web 与 worker 各一份 `zzzzzzzzzzzzzzzzzz-keyframe-retry-20261011.conf`，`daemon-reload` 后重启，回到 `keyframe-default-20261011-4ee2729`。
+
+## 十一、I2VA 提示词校验误杀修复（GX10，2026-10-11）
+
+触发：GX10 关键帧模式作品 `e_5cc656f2` 第 6 镜视频任务两次尝试均被 H3 校验拒绝（`timeline must end at 00:04.000`、`one continuous Shot 1 required`）；同作品 I2VA 10 次改写 4 次被拒，其中 3 次是同一回声。
+
+- 根因：worker 自己拼进的官方首帧句含 `(from [Shot 1])`，模型回声后被校验器数成第二个 `[Shot 1]`。
+- 改动（仅 `apps/worker/src/generation/`，3 个文件）：计数前去掉该来源标注（真实 `[Shot N]` 仍终止）；`[Shot 1]` 重复／缺失与"时间线完全没有时间戳"两类纯格式失败给一次纠正；带错误时间戳仍终止；提示词点明首帧句由 worker 添加、时间线需写 `00:0N.000`。
+- 回放（真实被拒输出，不调 LLM）：回声类 2 条直接通过；第 6 镜两次均只剩"缺结束时间戳"，走一次纠正。能否救回取决于模型。
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/i2va-format-20261011-ea11290`（基于 `keyframe-retry-20261011-5f9b5fa`，覆盖 3 个文件） |
+| 源码 | `feat/default-keyframe-ui@ea11290` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-i2va-format-20261011-20261011T223622Z` |
+| 切换 | 22:36 左右，`deploy-web-worker.py` 状态 `deployed`，无迁移 |
+| 节点验证 | 类型检查 5 包通过；测试 1237 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、近 4 分钟日志 0 错误、worker 工作目录为新发布、无进行中任务 |
+
+注意：节点上跑测试必须带 `PATH=$HOME/.bun/bin:$HOME/.local/bin:$PATH`；缺 `~/.local/bin` 时用到 `/usr/local/bin/ffmpeg`，22 个合成测试会失败（环境问题，与代码无关）。
+
+未验证：第 6 镜尚未重试；纠正通道在真实 LLM 上的命中率未测。Spark 未发布。回退：删除 `zzzzzzzzzzzzzzzzzzz-i2va-format-20261011.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `keyframe-retry-20261011-5f9b5fa`。
