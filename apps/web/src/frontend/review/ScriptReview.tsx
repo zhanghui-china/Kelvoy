@@ -3,6 +3,7 @@ import type { Destination, Episode } from "@kelvoy/engine";
 import { continueEpisode, optimizeScript, regenerateScript, type StoryboardPrices } from "../api/client";
 import { SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS } from "../labels";
 import { GuideTip } from "../GuideTip";
+import PromptTrace from "./PromptTrace";
 import StoryboardEditor from "./StoryboardEditor";
 import { downloadScriptCsv } from "./scriptExport";
 import type { EpisodeMutation } from "./useEpisodeMutation";
@@ -50,6 +51,8 @@ export default function ScriptReview({ episode, destination, mutation, busy = fa
           <button type="button" className="k-btn k-btn-secondary" disabled={disabled || !prices || !instruction.trim()}
             onClick={() => mutation.run((version) => optimizeScript(episode.episode_id, version, instruction.trim()))}>按指令优化</button>
         </div>
+        <PromptTrace episodeId={episode.episode_id} kind="script"
+          refreshKey={`${episode.script_pending_task_id ?? ""}:${episode.shots.length}`} />
         {scriptBusy && <p role="status">脚本正在处理中，请稍候…</p>}
         {episode.script_action_error && <p role="alert">{episode.script_action_error}</p>}
       </div>
