@@ -4,12 +4,14 @@ import { videoTimeoutSeconds } from "./inference-client";
  * (@kelvoy/store, no Redis), calls the local inference service, writes
  * artifacts to local disk, writes status back via @kelvoy/store.
  */
+import { llmTimeoutSeconds } from "@kelvoy/engine";
 import { consumeLoop } from "./queue/consumer";
 import { installShutdownHandlers } from "./queue/shutdown";
 import { cleanupIncompleteEpisodeMedia, cleanupStaleEpisodeTemps, cleanupStaleInferenceMedia } from "./storage/cleanup";
 import { cleanupDeletedEpisodes } from "./storage/episode-deletion";
 
 videoTimeoutSeconds();
+llmTimeoutSeconds();
 
 const sweep = () => {
   void cleanupStaleInferenceMedia().catch((error) => {

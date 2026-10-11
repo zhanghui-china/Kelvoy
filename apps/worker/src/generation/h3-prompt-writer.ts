@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, mkdir, link, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { checkContent, ContentBlockedError, type H3PromptContext, type H3PromptResult, type H3PromptWriter, type PromptTraceSink } from "@kelvoy/engine";
+import { checkContent, ContentBlockedError, llmTimeoutMs, type H3PromptContext, type H3PromptResult, type H3PromptWriter, type PromptTraceSink } from "@kelvoy/engine";
 import { classifyH3Failure } from "./errors";
 import { artifactPath, assertEpisodePublicationAllowed, sharedAssetPath } from "../storage/artifacts";
 import { BASE_FIELDS, REF_FIELDS, H3FormatError, parseSections, validateSections, renderSections } from "./h3-prompt-format";
@@ -51,6 +51,11 @@ async function publish(episodeId: string, path: string, value: unknown, signal?:
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
   } finally { await rm(temporary, { force: true }); }
+}
+
+/** Per-request budget: an explicit override (tests) wins, otherwise the shared LLM timeout. */
+export function rewriteTimeoutMs(options: Pick<Options, "timeoutMs">): number {
+  return options.timeoutMs ?? llmTimeoutMs();
 }
 
 /** Worker-only text rewrite. It never calls a vision model or video backend. */
@@ -128,7 +133,7 @@ export function createH3PromptWriter(options: Options = {}): H3PromptWriter {
           const request = new AbortController();
           const cancelRequest = () => request.abort(controller.signal.reason);
           controller.signal.addEventListener("abort", cancelRequest, { once: true });
-          const timer = setTimeout(() => request.abort(new Error("H3 prompt rewrite timed out")), options.timeoutMs ?? 60_000);
+          const timer = setTimeout(() => request.abort(new Error("H3 prompt rewrite timed out")), rewriteTimeoutMs(options));
           let body: { choices?: { message?: { content?: unknown } }[] };
           try {
             const response = await call(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {

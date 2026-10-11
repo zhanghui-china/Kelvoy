@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promis
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { H3PromptContext, PromptTraceEntry } from "@kelvoy/engine";
-import { createH3PromptWriter } from "./h3-prompt-writer";
+import { createH3PromptWriter, rewriteTimeoutMs } from "./h3-prompt-writer";
 import { H3FormatError } from "./h3-prompt-format";
 import { close, deleteEpisode, insertEpisode, open } from "@kelvoy/store";
 import { deletionEpisodeFixture } from "../queue/deletion-test-fixture";
@@ -388,4 +388,19 @@ test("a throwing sink never changes the writer result or its error", async () =>
   expect(result.prompt).toContain("detailed_description:");
   const failWriter = writer((async () => response({ ...sections(), summary: "爆炸物" })) as unknown as typeof fetch, { trace: boom });
   await expect(failWriter.write({ episode_id: "e1", context: { ...context(), beat: "x" } })).rejects.toThrow("内容审核");
+});
+
+test("rewrite timeout prefers the explicit override and otherwise follows the shared LLM budget", () => {
+  const original = process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+  try {
+    delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    expect(rewriteTimeoutMs({})).toBe(120_000);
+    expect(rewriteTimeoutMs({ timeoutMs: 10 })).toBe(10);
+    process.env.KELVOY_LLM_TIMEOUT_SECONDS = "45";
+    expect(rewriteTimeoutMs({})).toBe(45_000);
+    expect(rewriteTimeoutMs({ timeoutMs: 10 })).toBe(10);
+  } finally {
+    if (original === undefined) delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    else process.env.KELVOY_LLM_TIMEOUT_SECONDS = original;
+  }
 });

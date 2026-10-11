@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import type { Destination } from "../schema/destination";
 import type { EpisodeBrief } from "../schema/episode";
 import { ContentBlockedError } from "../rules/content";
 import type { PromptTraceEntry } from "./prompt-trace";
-import { stepfunScriptProvider } from "./stepfun-llm";
+import { callChatCompletion, stepfunScriptProvider } from "./stepfun-llm";
 
 const destination: Destination = {
   destination_id: "d_test",
@@ -294,4 +294,22 @@ test("operation can be set to revision", async () => {
   const { entries, sink } = collect();
   await stepfunScriptProvider.generateShots({ brief, destination, trace: sink, operation: "revision" });
   expect(scriptEntries(entries)[0]!.operation).toBe("revision");
+});
+
+test("callChatCompletion applies the configured per-request LLM timeout", async () => {
+  globalThis.fetch = (async () => Response.json({ choices: [{ message: { content: "ok" } }] })) as unknown as typeof fetch;
+  const original = process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+  const spy = spyOn(AbortSignal, "timeout");
+  try {
+    delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    await callChatCompletion("p");
+    expect(spy).toHaveBeenLastCalledWith(120_000);
+    process.env.KELVOY_LLM_TIMEOUT_SECONDS = "45";
+    await callChatCompletion("p");
+    expect(spy).toHaveBeenLastCalledWith(45_000);
+  } finally {
+    spy.mockRestore();
+    if (original === undefined) delete process.env.KELVOY_LLM_TIMEOUT_SECONDS;
+    else process.env.KELVOY_LLM_TIMEOUT_SECONDS = original;
+  }
 });
