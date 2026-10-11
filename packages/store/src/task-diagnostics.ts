@@ -2,7 +2,10 @@ import type { Episode } from "@kelvoy/engine";
 import { getCreditAction } from "./credits";
 import { getDb } from "./db";
 
-/** Only safe provider messages belong here; raw prompts and responses never do. */
+/**
+ * Only safe provider messages belong here. Diagnostic JSON and logs must never contain prompts or
+ * raw responses; owner-visible prompt records live in `prompt_traces` instead (see ADR-0012).
+ */
 export interface GenerationTaskDiagnostic {
   stage: string;
   code: string;
