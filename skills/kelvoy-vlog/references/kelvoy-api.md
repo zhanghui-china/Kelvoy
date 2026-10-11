@@ -24,7 +24,7 @@ POST /api/auth/login
 | `GET /api/me/credits` | `{"ok":true,"balance":{…},"ledger":[…]}`，流水 |
 | `GET /api/personas` `/destinations` `/templates` | `{"ok":true,"<复数名>":[…]}` |
 | `GET /api/episodes` | `{"ok":true,"episodes":[…]}`，用于续跑和建期结果核对 |
-| `GET /api/episodes/<id>` | `{"ok":true,"episode":{…},"persona":…,"destination":…,"row_version":7,"failed_task":{"stage":"video","shot_no":3}\|null}` |
+| `GET /api/episodes/<id>` | `{"ok":true,"episode":{…},"persona":…,"destination":…,"row_version":7,"failed_task":{"stage":"video","shot_no":3}\|null,"failed_tasks":[{"stage":"video","shot_no":3}]}` |
 | `GET /api/episodes/estimate?mode=per_shot&video_source=references&candidates=3` | `{"ok":true,"estimate":{…},"credit_quote":N}`。**`estimate.estimated_credits` 其实是 GPU 分钟，向用户报价用 `credit_quote`** |
 
 名称不是 ID，不凭列表序号当 ID。`row_version` 是期级写入锁，每次写前读最新值，成功响应带新值。不同镜头共用期级锁，写入串行。
@@ -103,7 +103,7 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 | --- | --- | --- |
 | 重做某镜 | `POST /api/episodes/<id>/shots/<no>/regen` `{"row_version":7,"regen_stage":"video"}` | `regen_stage`=`keyframe`/`video`，可省略，服务按镜状态推断；明确传更稳。镜须为 `kf_ready`／`clip_ready`／`approved`。期须在对应审核态或 `done`。`references` 模式不支持 `keyframe`；`keyframe` 模式做 `video` 需要有效的已选关键帧。整期回到相应审核态，其他镜保留 |
 | 坏镜免费重做 | `POST /api/episodes/<id>/shots/<no>/report-bad` | 同 `/regen` 的 body 与约束，仅视频阶段、每镜第一次免费 |
-| 重试失败任务 | `POST /api/episodes/<id>/retry` `{"row_version":7}` | **期级**，不分镜。服务取最近一个可重试的失败任务；没有则 400 `no_failed_task`。先读 `GET` 详情里的 `failed_task` 告诉用户是哪一步 |
+| 重试失败任务 | `POST /api/episodes/<id>/retry` `{"row_version":7}` | 不带 `shot_no`／`all` 时取最近一个可重试的失败任务（`failed_task`）；没有则 400 `no_failed_task`。可选 `shot_no`（正整数）只重试该镜，`all:true` 重试全部可重试失败（二者互斥，否则 400 `invalid_target`）；成功返回 `queued`／`skipped` 明细。先读 `GET` 详情里的 `failed_tasks`（`[{stage,shot_no}]`，全部可重试失败）告诉用户哪几步失败，`failed_task` 仍是最近一个。完整说明见 `docs/api/retry.md` |
 | 重新合成 | `POST /api/episodes/<id>/recompose` `{"row_version":7}` | 只允许 `done`。合成失败走 `/retry` |
 | 旧期转固定一秒 | `POST /api/episodes/<id>/convert-cuts` `{"row_version":7}` | 仅无 `cut_policy=fixed_1s` 的旧期，且在 `clip_review`／`done` 且全部镜有 clip。转换后所有镜回到 `clip_ready`，须重新审核，让用户决定 |
 

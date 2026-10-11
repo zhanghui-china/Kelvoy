@@ -199,3 +199,13 @@ H3 改写的格式／校验类失败原先是终止性的，镜头直接失败�
 | 切换后 | 三服务 active、重启 0、健康 `ok`、近 3 分钟日志 0 错误、`STEPFUN_MODEL` 仍为 `step-3.5-flash`、无进行中任务、线上前端包含新文案 |
 
 Spark 未发布。未做的验证：浏览器走查（新建页默认值、选图界面、直出提示行）。回退：删除 `zzzzzzzzzzzzzzzzz-keyframe-default-20261011.conf`（web 与 worker 各一份），`daemon-reload` 后重启 web / worker，回到 `h3-round2-20261011-05753a6`。
+
+## 十、失败镜头重试入口（`fix/retry-buttons`，尚未发布）
+
+决策见 ADR-0014，接口见 `docs/api/retry.md`。
+
+- 改动：`packages/store`（`listRetryableFailedTasks`、`submitFailedTaskRetry` 增加 `shot_no`／`all`／补发）、`apps/web` 路由（`/retry` 参数校验、详情 `failed_tasks`）、前端失败卡片与进度区按钮。
+- 验证：`make typecheck && make test` 通过（1229 pass / 0 fail）；`all` 批量入队、余额不足零副作用、无任务记录补发均有 store 层测试。尚未在生产数据上验证。
+- 发布要求：无数据库迁移，不需要迁移闸门标志；Web 与 Worker 同版本；先 GX10 后 Spark，先排空任务。
+- 2026-10-11 已把本分支合并进 `feat/default-keyframe-ui`，作为 GX10 的一个发布（含默认关键帧前端）；Spark 尚未发布，也未合并 main。
+- 回退：切回上一发布目录（删除新增 drop-in，`daemon-reload` 后重启）。不恢复数据库；已入队的重试任务由旧版本按原逻辑消费。

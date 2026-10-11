@@ -22,6 +22,7 @@ import {
   getEpisode,
   getUsageSummary,
   getLatestFailedTask,
+  listRetryableFailedTasks,
   getShotFailures,
   getPersona,
   getPersonaVersion,
@@ -195,6 +196,17 @@ episodes.get("/estimate", async (c) => {
     credit_quote: estimateCreditQuote(candidates ?? 3, 7, videoSource) });
 });
 
+// 全部可重试失败，shot_no 的解析规则与 getLatestFailedTask 一致：优先按稳定 shot_id 回查当前镜号。
+function failedTaskList(episode: Episode): { stage: string; shot_no: number | null }[] {
+  const normalized = { ...episode, shots: episode.shots.map((shot, i) => ({
+    ...shot, shot_id: shot.shot_id ?? `sh_${episode.episode_id}_active_${i}_${shot.no}` })) };
+  return listRetryableFailedTasks(normalized).map((failure) => ({
+    stage: failure.stage,
+    shot_no: failure.shot_id
+      ? normalized.shots.find((shot) => shot.shot_id === failure.shot_id)?.no ?? null : failure.shot_no,
+  }));
+}
+
 episodes.get("/:id", async (c) => {
   const result = await getEpisode(c.req.param("id"));
   if (!result.ok || result.episode.owner_id !== c.get("ownerId")) {
@@ -205,13 +217,14 @@ episodes.get("/:id", async (c) => {
     ? revision : null;
   // Ownership is established above before reading any task from the queue.
   const failed_task = await getLatestFailedTask(result.episode);
+  const failed_tasks = failedTaskList(result.episode);
   const destinationRevision = await getDestinationVersionInfo(
     result.episode.destination_id, result.episode.destination_version,
   );
   return c.json({ ok: true, episode: result.episode, persona,
     destination: destinationRevision?.destination ?? null,
     destination_history_approximate: destinationRevision?.compatibility_approximation ?? false,
-    row_version: result.row_version, failed_task, shot_failures: await getShotFailures(result.episode),
+    row_version: result.row_version, failed_task, failed_tasks, shot_failures: await getShotFailures(result.episode),
     storyboard_busy: storyboardBusy(result.episode.episode_id),
     storyboard_warnings: [],
     storyboard_prices: { script: getCreditPrice("script"), image: getCreditPrice("image"), video: getCreditPrice("video"), compose: getCreditPrice("compose") } });

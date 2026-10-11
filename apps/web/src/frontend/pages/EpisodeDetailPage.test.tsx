@@ -31,16 +31,18 @@ test.each([
   expect(html).toContain(`disabled="">${stage === "keyframe" ? "直接重生成" : "标记重生成"}</button>`);
 });
 
-test.each(["kf_review", "clip_review"] as const)("%s hides duplicate retry when queued or unavailable", (status) => {
+test.each(["kf_review", "clip_review"] as const)("%s keeps retry reachable without a task record", (status) => {
   const episode = { ...fixture("e_queued", "u_1"), status,
     shots: [shotFixture(1, { status: "failed" })] };
   const render = (shots = episode.shots) => renderToStaticMarkup(<StaticRouter location="/episodes/e_queued">
     <EpisodeDetailContent episode={{ ...episode, shots }} destination={null} persona={null}
       failedTask={null} mutation={mutation} />
   </StaticRouter>);
-  expect(render()).toContain("等待后台处理");
-  expect(render()).not.toContain("重新执行失败任务</button>");
-  expect(render([shotFixture(1, { status: "approved" })])).not.toContain("等待后台处理");
+  expect(render()).toContain(">重新执行失败任务</button>");
+  expect(render()).toContain(">重试这一镜</button>");
+  expect(render()).not.toContain("当前没有可重试的失败任务");
+  expect(render([shotFixture(1, { status: "approved" })])).not.toContain("重试这一镜");
+  expect(render([shotFixture(1, { status: "approved" })])).not.toContain("生成失败，可在");
 });
 
 test("episode detail passes failed shot summary into the progress view", () => {
@@ -68,4 +70,29 @@ test.each([
   </StaticRouter>);
   const hint = "本期为直出模式，无关键帧审核；如需选图，请新建时选择关键帧方式。";
   expect(html.split(hint).length - 1).toBe(shown ? 1 : 0);
+});
+
+test("failure summary above review links to the progress area and counts failed shots", () => {
+  const episode = { ...fixture("e_summary", "u_1"), status: "clip_review" as const,
+    shots: [shotFixture(1, { status: "failed" }), shotFixture(2, { status: "approved" }), shotFixture(3, { status: "failed" })] };
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_summary">
+    <EpisodeDetailContent episode={episode} destination={null} persona={null}
+      failedTask={{ stage: "video", shot_no: 1 }} failedTasks={[{ stage: "video", shot_no: 1 }, { stage: "video", shot_no: 3 }]}
+      mutation={mutation} />
+  </StaticRouter>);
+  expect(html).toContain("有 2 镜生成失败");
+  expect(html).toContain('href="#failure-retry"');
+  expect(html).toContain('id="failure-retry"');
+  expect(html).toContain(">重试全部失败镜头（2）</button>");
+  expect(html.indexOf("有 2 镜生成失败")).toBeLessThan(html.indexOf("审核 3 · 片段"));
+});
+
+test("healthy episode shows no failure summary or per-shot retry", () => {
+  const episode = { ...fixture("e_ok", "u_1"), status: "clip_review" as const,
+    shots: [shotFixture(1, { status: "clip_ready" })] };
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_ok">
+    <EpisodeDetailContent episode={episode} destination={null} persona={null} mutation={mutation} />
+  </StaticRouter>);
+  expect(html).not.toContain("生成失败，可在");
+  expect(html).not.toContain("重试这一镜");
 });
