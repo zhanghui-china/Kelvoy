@@ -14,3 +14,18 @@ test("historic failure has an explicit unknown reason and successful shots hide 
   expect(renderToStaticMarkup(<ShotFailureNotice shot={{shot_id:"b",status:"failed"}} />)).toContain("历史任务未记录具体原因");
   expect(renderToStaticMarkup(<ShotFailureNotice shot={{shot_id:"b",status:"approved"}} />)).toBe("");
 });
+
+test("failed shot offers a per-shot retry; other statuses and read-only notices do not", () => {
+  const failed = { shot_id: "b", status: "failed" };
+  expect(renderToStaticMarkup(<ShotFailureNotice shot={failed} onRetry={() => {}} />)).toContain(">重试这一镜</button>");
+  expect(renderToStaticMarkup(<ShotFailureNotice shot={failed} />)).not.toContain("<button");
+  expect(renderToStaticMarkup(<ShotFailureNotice shot={{ shot_id: "b", status: "approved" }} onRetry={() => {}} />)).toBe("");
+});
+
+test("queued or pending retry disables the button and explains the wait", () => {
+  const failed = { shot_id: "b", status: "failed" };
+  const queued = renderToStaticMarkup(<ShotFailureNotice shot={failed} onRetry={() => {}} queued />);
+  expect(queued).toContain('disabled="">已排队，等待后台处理</button>');
+  const pending = renderToStaticMarkup(<ShotFailureNotice shot={failed} onRetry={() => {}} pending />);
+  expect(pending).toContain('disabled="">正在提交重试…</button>');
+});

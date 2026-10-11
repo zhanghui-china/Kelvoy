@@ -1,4 +1,4 @@
-import { ShotFailureNotice } from "./ShotFailure";
+import { ShotFailureNotice, useShotRetry } from "./ShotFailure";
 import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
 import type { Episode, Shot } from "@kelvoy/engine";
@@ -275,6 +275,7 @@ export default function ClipReview({
     }
   }, [activeNo]);
   const unapproved = episode.shots.filter((s) => s.status !== "approved").length;
+  const shotRetry = useShotRetry(episode, mutation);
 
   return (
     <div className="k-desk-layout">
@@ -290,7 +291,9 @@ export default function ClipReview({
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />
         <MutationError error={mutation.error} />
-        <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures} />
+        <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures}
+          onRetry={activeNo !== null ? () => void shotRetry.retry(activeNo) : undefined}
+          pending={shotRetry.pending} queued={activeNo !== null && shotRetry.isQueued(activeNo)} />
         {episode.cut_policy !== "fixed_1s" && episode.cut_policy !== "long_3_6" && episode.shots.every((shot) => !!shot.clip) &&
           <div className="k-card">
             <div className="k-card-title">旧版剪辑</div>
