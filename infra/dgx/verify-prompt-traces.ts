@@ -51,7 +51,8 @@ try {
     { kind: "script_generate", round: 2, source: "llm", outcome: "accepted", user_message: "SCRIPT_R2" }] as any);
   insertPromptTraces(db, T("tk_v1"), [{ kind: "h3_rewrite", shot_id: "sh_2", source: "llm", outcome: "prompt_format_invalid",
     rule: "invalid visible retention syntax", model: "step-5-preview", skill_version: "a".repeat(64), writer_version: "h3-writer-v1",
-    h3_mode: "Ref2VA", user_message: context, input_hash: "f".repeat(64) }] as any);
+    h3_mode: "Ref2VA", user_message: context, input_hash: "f".repeat(64),
+    rejected_output: `Subject 1 REJECTED_BODY ${eid}/kf/${SECRET}.png ${"e".repeat(64)}` }] as any);
   close();
 
   server = Bun.spawn(["bun", "src/server/index.ts"], { cwd: join(release, "apps/web"), stdout: "ignore", stderr: "ignore",
@@ -73,6 +74,10 @@ try {
   check("video_failed_attempt_has_rule", video.items?.[0]?.validated === false && video.items[0].rule === "invalid visible retention syntax");
   check("video_references_redacted", !rawVideo.includes(SECRET) && !rawVideo.includes("f".repeat(64)) && video.items[0].input_hash.length === 12);
   check("video_no_internal_ids", !/tk_v1|task_id|owner_id/.test(rawVideo) && !rawVideo.includes(owner));
+  const rejected = video.items?.[0]?.rejected_output as string | null;
+  check("rejected_output_present_and_redacted", typeof rejected === "string" && rejected.includes("REJECTED_BODY")
+    && !rejected.includes(SECRET) && !rejected.includes("e".repeat(64)));
+  check("rejected_output_video_only", script.items.every((item: any) => item.rejected_output == null));
   const legacy = await (await get(`/api/episodes/${eid}/prompts?kind=video&shot_id=sh_1`)).json() as any;
   check("legacy_final_only", legacy.legacy?.note === "final_only");
   const foreign = await get(`/api/episodes/${eid}/prompts?kind=script`, otherCookie);
@@ -85,14 +90,20 @@ try {
   check("share_no_trace_or_paths", !/SCRIPT_R|FINAL_ONLY_PROMPT|ACCEPT_MUSIC|ACCEPT_FINAL_KEY|prompt/.test(shareText));
   const detail = await (await get(`/api/episodes/${eid}`)).text();
   check("detail_has_no_trace_text", !detail.includes("SCRIPT_R1") && !detail.includes("invalid visible retention syntax"));
+  check("rejected_not_in_share_or_detail", !shareText.includes("REJECTED_BODY") && !detail.includes("REJECTED_BODY"));
+  const foreignVideo = await (await get(`/api/episodes/${eid}/prompts?kind=video&shot_id=sh_2`, otherCookie)).text();
+  check("rejected_hidden_from_other_user", !foreignVideo.includes("REJECTED_BODY"));
 
   open(dbPath);
   const before = (await listPromptTraces({ episodeId: eid, ownerId: owner, kind: "script", limit: 50 })).items.length;
   const { deleteEpisode: _ignored } = await import("@kelvoy/store");
   void _ignored;
+  const rejectionsBefore = getDb().query("select count(*) as n from prompt_trace_rejections where episode_id = ?").get(eid) as { n: number };
   const removed = await deleteEpisode(eid, owner);
   const after = getDb().query("select count(*) as n from prompt_traces where episode_id = ?").get(eid) as { n: number };
+  const rejectionsAfter = getDb().query("select count(*) as n from prompt_trace_rejections where episode_id = ?").get(eid) as { n: number };
   check("delete_removes_traces", before === 2 && (removed as any).ok === true && after.n === 0);
+  check("delete_removes_rejections", rejectionsBefore.n === 1 && rejectionsAfter.n === 0);
   close();
 } finally {
   server?.kill();
