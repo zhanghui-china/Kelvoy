@@ -58,6 +58,13 @@ test("switching destinations preserves a custom season and updates a preset seas
   expect(seasonAfterDestinationChange("preset", "秋季", ["春季"])).toBe("春季");
 });
 
+test("a stored direct-output choice survives restore, and a draft without videoSource leaves it unset for the page default", () => {
+  saveDraft({ ...draft, videoSource: "references" }, "u_a");
+  expect(readDraft("u_a")?.videoSource).toBe("references");
+  saveDraft(draft, "u_a");
+  expect(readDraft("u_a")?.videoSource).toBeUndefined();
+});
+
 afterAll(() => {
   if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
   else delete (globalThis as { sessionStorage?: Storage }).sessionStorage;

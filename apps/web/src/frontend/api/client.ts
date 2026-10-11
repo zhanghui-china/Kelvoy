@@ -256,7 +256,7 @@ export function createEpisode(body: CreateEpisodeRequest) {
 }
 
 export function getEstimate(mode: EpisodeMode, candidates: number,
-  videoSource: "keyframe" | "references" = "references") {
+  videoSource: "keyframe" | "references" = "keyframe") {
   return apiFetch<{ estimate: EstimateCostResult; credit_quote: number }>(
     `/api/episodes/estimate?mode=${encodeURIComponent(mode)}&candidates=${encodeURIComponent(candidates)}&video_source=${videoSource}`,
   );
