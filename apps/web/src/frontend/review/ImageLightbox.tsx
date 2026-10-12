@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AssetImage } from "../AssetImage";
+import "./ImageLightbox.css";
 
 export type LightboxItem = { src: string; alt: string; label: string; selected?: boolean };
 
