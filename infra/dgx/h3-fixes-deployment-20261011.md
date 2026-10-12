@@ -269,3 +269,16 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 | 切换后 | web／worker active、重启 0、健康 `ok`、线上首页引用的 JS 与构建产物一致（`index-DNkXdBbs.js`） |
 
 未做：真实浏览器交互验证（`showModal`、Esc、焦点回到触发按钮、窄屏全屏）。Spark 未发布。回退：删除 drop-in `…-kf-lightbox-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-candidate-labels-20261012-3bf01aa`。
+
+## 十四、GX10：关键帧参考图规则收口并在审核页展示（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/kf-refs-20261012-9d0d7be`（基于 `kf-lightbox-20261012-aeca7d1`，覆盖 engine 与前端共 7 个文件含测试，无迁移） |
+| 源码 | `feat/default-keyframe-ui@9d0d7be` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-kf-refs-20261012-20261012T020655Z` |
+| 变更 | 新增 `keyframeReferences()`，`runKeyframe` 与审核页共用；行为与原先等价（角色第 1 张 + 地标第 1 张） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1250 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、近 4 分钟日志 0 条 error、worker 工作目录为新发布、线上 JS 为 `index-TupfmbcR.js` |
+
+未做：真实浏览器目视；切换前未单独核对进行中任务数（直接用 `deploy-web-worker.py` 的排空逻辑）。Spark 未发布。回退：删除 drop-in `…-kf-refs-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-lightbox-20261012-aeca7d1`。
