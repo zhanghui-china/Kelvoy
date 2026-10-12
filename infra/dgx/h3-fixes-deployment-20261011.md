@@ -323,3 +323,16 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 验证结果：v3 后 4 次改写全部一次通过，直出期 7 镜出片、首帧与大佛有关；规则上线后关键帧期 7 镜脚本全部写明朝向，第 1、2、3、4、7 镜背对或侧对且大佛清晰。两发布均无迁移，服务 active、重启 0、health ok。
 
 已知遗留：无地标的人物镜头（室内参观、吃小笼）只传角色参考图，仍会继承参考图的自拍构图并可能生成无关背景；决定不改代码，靠角色编辑页与手册对"第一张参考图用全身站姿"的提示。Spark 未发布。验证账号与三期验证作品仍在 GX10。
+
+## 十八、Spark：补齐穿搭、朝向与脚本规则（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/person-outfits-orient-20261012-ac47bb0`（基于 `h3-round2-20261011-05753a6`，覆盖 74 个文件，无数据库迁移） |
+| 源码 | `feat/default-keyframe-ui@ac47bb0`（ADR-0015、ADR-0016；含 `h3-writer-v3` 与脚本朝向规则） |
+| 数据库备份（UTC） | `/home/Developer/kelvoy-backups/pre-person-outfits-orient-20261012-ac47bb0-20261012T140557Z` |
+| 切换前 | 无排队／运行中任务；磁盘 1.6T 可用（55%） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过（线上 JS 为 `index-CRL6DOtK.js`）；类型检查 5 包通过；测试 1295 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker／inference active、重启 0、健康 `ok`、web 工作目录为新发布、近 3 分钟日志 0 条 error |
+
+未做：Spark 上没有建作品做端到端验证（验证只在 GX10 做过）。回退：部署脚本已自动备份；需要时删除 drop-in `…-person-outfits-orient-20261012-ac47bb0.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `h3-round2-20261011-05753a6`；已写入的 `outfits` 字段旧代码会忽略。
