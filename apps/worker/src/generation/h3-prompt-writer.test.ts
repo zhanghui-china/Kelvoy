@@ -1,46 +1,16 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import type { H3PromptContext, PromptTraceEntry } from "@kelvoy/engine";
-import { createH3PromptWriter, rewriteTimeoutMs } from "./h3-prompt-writer";
+import { rewriteTimeoutMs } from "./h3-prompt-writer";
 import { H3FormatError } from "./h3-prompt-format";
+import { context, makeWriterRoot, response, sections, writer } from "./h3-prompt-writer.fixture";
 import { close, deleteEpisode, insertEpisode, open } from "@kelvoy/store";
 import { deletionEpisodeFixture } from "../queue/deletion-test-fixture";
 let root: string;
-let oldRoot: string | undefined;
-beforeEach(async () => {
-  oldRoot = process.env.KELVOY_PROJECTS_ROOT;
-  root = await mkdtemp(join(tmpdir(), "h3-writer-"));
-  process.env.KELVOY_PROJECTS_ROOT = root;
-  await mkdir(join(root, "persona")); await mkdir(join(root, "dest"));
-  await mkdir(join(root, "e1", "kf"), { recursive: true });
-  await writeFile(join(root, "persona/a.png"), "person"); await writeFile(join(root, "dest/a.png"), "scene");
-  await writeFile(join(root, "e1/kf/a.png"), "first frame");
-});
-afterEach(async () => {
-  if (oldRoot === undefined) delete process.env.KELVOY_PROJECTS_ROOT; else process.env.KELVOY_PROJECTS_ROOT = oldRoot;
-  await rm(root, { recursive: true, force: true });
-});
-function context(mode: H3PromptContext["mode"] = "Ref2VA", duration_s = 4): H3PromptContext {
-  return { mode, aspect: "9:16", duration_s, size: "detail", camera: "static", beat: "展示黄山烧饼",
-    kf_prompt: "仅手部与黄山烧饼细节", motion_prompt: "手腕轻微旋转，固定镜头", scene: null,
-    destination: "黄山", landmark: "街头", references: mode === "Ref2VA"
-      ? [{ key: "persona/a.png", role: "person", picture: 1 }, { key: "dest/a.png", role: "scene", picture: 2 }]
-      : [{ key: "e1/kf/a.png", role: "first_frame", picture: 1 }] };
-}
-function sections(mode: H3PromptContext["mode"] = "Ref2VA", duration_s = 4): Record<string, string> {
-  const timeline = `[Shot 1] A detail shot shows only hands and pastry. A slight wrist rotation continues with a static camera through 00:0${duration_s}.000, in one continuous shot.`;
-  return mode === "Ref2VA" ? {
-    subject_definitions: "<Subject 1> is the person from <Picture 1>. <Subject 2> is the scene from <Picture 2>.",
-    summary: "[reference generation] A detail of <Subject 1>'s hands with pastry in <Subject 2>.",
-    retention_analysis: "<Subject 1> (appears in [Shot 1]): partially_preserved - hands only.\n<Subject 2> (appears in [Shot 1]): weak_reference - scene only.",
-    detailed_description: timeline + " <Subject 1> is framed against <Subject 2>.",
-    overall_soundscape: "Quiet ambient sound.", non_diegetic_music: "N/A",
-  } : { integrated_multimodal_description: timeline, overall_soundscape: "Quiet ambient sound.", non_diegetic_music: "N/A" };
-}
-function response(value: unknown) { return Response.json({ choices: [{ message: { content: JSON.stringify(value) } }] }); }
-function writer(call: typeof fetch, options = {}) { return createH3PromptWriter({ fetch: call, apiKey: "test", ...options }); }
+let restoreRoot: () => Promise<void>;
+beforeEach(async () => { ({ root, restore: restoreRoot } = await makeWriterRoot()); });
+afterEach(async () => { await restoreRoot(); });
 
 test("deleted work cannot archive a late H3 rewrite result", async () => {
   open(":memory:");
@@ -492,62 +462,6 @@ test("person_visible changes the cache key only when it is false", async () => {
   const base = await hash("e1", {});
   expect(await hash("e2", { person_visible: true })).toBe(base);
   expect(await hash("e3", { person_visible: false })).not.toBe(base);
-});
-
-// Production regressions (GX10 e_5cc656f2, I2VA): models echo the worker's own "(from [Shot 1])" first-frame
-// wording, and sometimes close the timeline with "4 seconds" instead of 00:04.000.
-// Same shape as the production shot: a close, static, person-free xiaolongbao shot (not the shaobing detail rules).
-const xiaolongbao = (): H3PromptContext => ({ ...context("I2VA"), size: "close", beat: "坐下品尝热乎的小笼",
-  kf_prompt: "刚蒸好的小笼放在竹制蒸屉上，冒着热气", motion_prompt: "镜头保持静止，捕捉袅袅热气" });
-const i2vaSections = (timeline: string) => ({ ...sections("I2VA"), integrated_multimodal_description: timeline });
-const echoed = "[Shot 1] Live-action, detail static shot of pastry, fully matching <Picture 1> (from [Shot 1]) at the 0.00-second mark. The camera remains static as mist shifts, with no people. The timeline of this shot ends at 00:04.000.";
-
-test("I2VA accepts the echoed first-frame source note as the only [Shot 1] marker", async () => {
-  let calls = 0;
-  const result = await writer((async () => { calls++; return response(i2vaSections(echoed)); }) as unknown as typeof fetch)
-    .write({ episode_id: "e1", context: xiaolongbao() });
-  expect(calls).toBe(1);
-  expect(result.prompt).toContain("(from [Shot 1])");
-});
-
-test("a repeated real [Shot 1] marker gets one format correction, a real [Shot 2] still never does", async () => {
-  let calls = 0;
-  const twice = "[Shot 1] A static detail of pastry. [Shot 1] The same detail continues through 00:04.000.";
-  const result = await writer((async (_u: string, init: RequestInit) => {
-    calls++;
-    if (calls === 2) expect(JSON.parse(init.body as string).messages.at(-1).content).toContain("one continuous Shot 1 required");
-    return response(calls === 1 ? i2vaSections(twice) : i2vaSections(echoed));
-  }) as unknown as typeof fetch).write({ episode_id: "e1", context: xiaolongbao() });
-  expect(calls).toBe(2);
-  expect(result.prompt).toContain("integrated_multimodal_description:");
-  const error = await writer((async () => response(i2vaSections("[Shot 1] A detail static shot through 00:04.000. [Shot 2] Cut."))) as unknown as typeof fetch)
-    .write({ episode_id: "e1", context: { ...xiaolongbao(), beat: "second input" } }).then(() => null, (e: unknown) => e as H3FormatError);
-  expect(error?.rule).toBe("one continuous Shot 1 required");
-  expect(error?.corrected).toBe(false);
-});
-
-test("a timeline without the closing timestamp gets one correction and stops after two requests", async () => {
-  const noEnd = "[Shot 1] A detail static shot of steam rising from the buns for the full 4-second duration, no people.";
-  let calls = 0;
-  const result = await writer((async (_u: string, init: RequestInit) => {
-    calls++;
-    if (calls === 2) expect(JSON.parse(init.body as string).messages.at(-1).content).toContain("timeline must end at 00:04.000");
-    return response(i2vaSections(calls === 1 ? noEnd : echoed));
-  }) as unknown as typeof fetch).write({ episode_id: "e1", context: xiaolongbao() });
-  expect(calls).toBe(2);
-  expect(result.prompt).toContain("00:04.000");
-  calls = 0;
-  const error = await writer((async () => { calls++; return response(i2vaSections(noEnd)); }) as unknown as typeof fetch)
-    .write({ episode_id: "e1", context: { ...xiaolongbao(), beat: "another input" } }).then(() => null, (e: unknown) => e as H3FormatError);
-  expect(calls).toBe(2);
-  expect(error?.rule).toBe("timeline must end at 00:04.000");
-  expect(error?.corrected).toBe(true);
-  // A present-but-wrong timestamp contradicts the requested length: terminal, no correction.
-  calls = 0;
-  const wrong = await writer((async () => { calls++; return response(i2vaSections("[Shot 1] A detail static shot of pastry through 00:05.000.")); }) as unknown as typeof fetch)
-    .write({ episode_id: "e1", context: { ...xiaolongbao(), beat: "third input" } }).then(() => null, (e: unknown) => e as H3FormatError);
-  expect(calls).toBe(1);
-  expect(wrong?.corrected).toBe(false);
 });
 
 test("system prompt keeps orientation and the landmark anchor, and the writer version invalidates v1 caches", async () => {
