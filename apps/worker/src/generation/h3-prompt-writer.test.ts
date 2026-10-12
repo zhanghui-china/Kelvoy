@@ -557,8 +557,9 @@ test("system prompt keeps orientation and the landmark anchor, and the writer ve
     return response(sections());
   }) as unknown as typeof fetch;
   const result = await writer(fetcher).write({ episode_id: "e1", context: context() });
-  expect(system).toContain("Keep the subject's orientation and gaze exactly as the source states");
+  expect(system).toContain("Name the shot size (wide / medium / close-up / detail / POV)");
+  expect(system).toContain("keep the subject's orientation and gaze as the source states");
   expect(system).toContain("never turn the subject to face the camera unless the source action says so");
-  expect(system).toContain("it is a visible anchor from 00:00");
-  expect(result.provenance.writer_version).toBe("h3-writer-v2");
+  expect(system).toContain("is visible from 00:00");
+  expect(result.provenance.writer_version).toBe("h3-writer-v3");
 });

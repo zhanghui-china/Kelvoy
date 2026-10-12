@@ -28,7 +28,7 @@
    `keyframeReferences` 新增 `person_omitted`。空镜没有地标图时保持原行为（工作流至少要一张参考图），
    这是已知局限。
 4. **视频层**（`h3-prompt-writer.ts`）：约束里加"保持源文本的朝向与视线，不得自行转向镜头""点名的地标是
-   00:00 起可见的锚点"；`WRITER_VERSION` 升到 `h3-writer-v2`，让 v1 缓存失效。
+   00:00 起可见的锚点"；`WRITER_VERSION` 升到 `h3-writer-v2`，让 v1 缓存失效。v2 上线后 GX10 实测改写被 `preserve shot size and camera` 拒绝 7/8（v1 为 2/54）：新句子挤掉了景别与运镜词。v3 在同一处显式要求写出景别与运镜词，并把朝向与地标句缩短。
 
 ## 依据（`spike/orientation/`，GX10，2 角色 × 3 地标，同一种子）
 
