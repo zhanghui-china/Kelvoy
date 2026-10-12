@@ -168,6 +168,10 @@
   font-family: var(--font-body);
 }
 
+.k-desk-candidate .k-card-meta {
+  overflow-wrap: anywhere;
+}
+
 .k-desk-candidate.is-selected {
   border-color: var(--color-accent);
   background: #e3f0ee;

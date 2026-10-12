@@ -61,8 +61,8 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
       const images = [...new Set([...s.candidates, ...(s.kf_selected ? [s.kf_selected] : [])])];
       return <article className="k-card" key={s.shot_id ?? s.no}><h3>第 {s.no} 镜 · {s.beat}</h3>
         <p className="k-card-meta">{s.kf_selected ? "已选图已标记" : "尚未选定图片"}</p>
-        {images.length ? <div className="k-desk-candidates">{images.map(ref => <figure key={ref} className={`k-desk-candidate k-playback-candidate ${ref === s.kf_selected ? "is-selected" : ""}`}>
-          <SavedMedia src={file(ref)} label={`第 ${s.no} 镜图片 ${ref}`} /><figcaption>{ref === s.kf_selected ? "已选图" : "候选图"} · {ref.split("/").pop()}</figcaption>
+        {images.length ? <div className="k-desk-candidates">{images.map((ref, index) => <figure key={ref} title={ref} className={`k-desk-candidate k-playback-candidate ${ref === s.kf_selected ? "is-selected" : ""}`}>
+          <SavedMedia src={file(ref)} label={`第 ${s.no} 镜图片 ${index + 1}`} /><figcaption>候选 {index + 1}{ref === s.kf_selected ? " · 已选图" : ""}</figcaption>
         </figure>)}</div> : <p className="k-empty">暂无已保存的图片</p>}
       </article>;
     })}</section>;

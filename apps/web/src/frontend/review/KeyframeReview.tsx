@@ -120,10 +120,12 @@ function KeyframeShot({
             <p className="k-empty">还没有候选图。</p>
           ) : (
             <div className="k-desk-candidates">
-              {shot.candidates.map((candidate) => (
+              {shot.candidates.map((candidate, index) => (
                 <button
                   type="button"
                   key={candidate}
+                  // 存储 key 又长又没信息量，只放 title 里供排查；界面上用序号。
+                  title={candidate}
                   className={`k-desk-candidate ${shot.kf_selected === candidate ? "is-selected" : ""}`}
                   aria-pressed={shot.kf_selected === candidate}
                   disabled={mutation.pending || shot.status === "approved"}
@@ -131,9 +133,11 @@ function KeyframeShot({
                 >
                   <AssetImage
                     src={episodeFileUrl(episode.episode_id, candidate)}
-                    alt={`第 ${shot.no} 镜候选 ${candidate}`}
+                    alt={`第 ${shot.no} 镜候选 ${index + 1}`}
                   />
-                  <span className="k-card-meta">{candidate.split("/").pop()}</span>
+                  <span className="k-card-meta">
+                    候选 {index + 1}{shot.kf_selected === candidate ? " · 已选定" : ""}
+                  </span>
                 </button>
               ))}
             </div>
@@ -269,12 +273,12 @@ export default function KeyframeReview({
           <div className="k-card">
             <div className="k-card-meta">网格策划稿（只看不审，不是审核点）</div>
             <div className="k-desk-candidates">
-              {episode.grid_refs.map((ref) => (
+              {episode.grid_refs.map((ref, index) => (
                 <AssetImage
                   key={ref}
                   src={episodeFileUrl(episode.episode_id, ref)}
-                  alt="网格策划稿"
-                  caption={ref}
+                  alt={`网格策划稿 ${index + 1}`}
+                  caption={`策划稿 ${index + 1}`}
                 />
               ))}
             </div>

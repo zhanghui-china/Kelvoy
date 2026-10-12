@@ -8,10 +8,12 @@ import type { EpisodeMutation } from "./useEpisodeMutation";
 
 function render(status: "failed" | "kf_selected" | "kf_ready" | "approved", options: {
   pending?: boolean; busy?: boolean; scripting?: boolean; generating?: boolean;
+  candidates?: string[]; selected?: string;
 } = {}) {
   const episode = { ...fixture("e_save", "owner"), status: options.generating ? "keyframing" as const : "kf_review" as const,
     script_pending_task_id: options.scripting ? "task" : undefined,
-    shots: [shotFixture(1, { status, kf_prompt: "山顶晨光" })] };
+    shots: [shotFixture(1, { status, kf_prompt: "山顶晨光",
+      candidates: options.candidates ?? [], kf_selected: options.selected ?? null })] };
   const mutation = { pending: !!options.pending, error: null, clearError() {}, async run() { return null; } } as EpisodeMutation;
   return renderToStaticMarkup(<StaticRouter location="/episodes/e_save">
     <EpisodeDetailContent episode={episode} destination={null} persona={null} mutation={mutation} storyboardBusy={options.busy} />
@@ -38,6 +40,20 @@ test.each([
     expect(html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0]).toContain('disabled=""');
   }
   expect(html).toContain(reason);
+});
+
+test("candidates are labelled by order, never by file name, and the selected one says so", () => {
+  const keys = ["kf/s1_gen_abcdef_1.png", "kf/s1_gen_abcdef_2.png", "kf/s1_gen_abcdef_3.png"];
+  const html = render("kf_selected", { candidates: keys, selected: keys[1] });
+  const buttons = [...html.matchAll(/<button[^>]*k-desk-candidate[^>]*>[\s\S]*?<\/button>/g)].map((m) => m[0]);
+  expect(buttons).toHaveLength(3);
+  expect(buttons.map((b) => b.replace(/<[^>]*>/g, ""))).toEqual(["候选 1", "候选 2 · 已选定", "候选 3"]);
+  expect(buttons.map((b) => b.includes('aria-pressed="true"'))).toEqual([false, true, false]);
+  // The full key stays reachable for debugging, but only as a tooltip.
+  expect(buttons[0]).toContain(`title="${keys[0]}"`);
+  // Visible text and alt text must not leak the key; src legitimately holds it.
+  expect(html.replace(/<[^>]*>/g, "")).not.toContain(".png");
+  expect([...html.matchAll(/alt="([^"]*)"/g)].map((m) => m[1])).toEqual(["第 1 镜候选 1", "第 1 镜候选 2", "第 1 镜候选 3"]);
 });
 
 const originalFetch = globalThis.fetch;
