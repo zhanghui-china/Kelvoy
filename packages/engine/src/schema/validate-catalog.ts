@@ -4,6 +4,7 @@ import type { Persona, PersonaStyle } from "./persona";
 import type { Template } from "./template";
 import { SETTINGS_CANDIDATES_MAX, SETTINGS_CANDIDATES_MIN, type UserSettings } from "./user";
 import type { ValidationResult } from "./validate";
+import { validatePersonaOutfits } from "./validate-outfit";
 import { isFiniteNumber, isNonEmptyString, isPlainObject, isStringArray } from "./validation-primitives";
 
 const DESTINATION_TYPES: DestinationType[] = ["mountain_summit", "city_night", "theme_town", "scenic_area", "water_town", "island"];
@@ -55,6 +56,7 @@ export function validatePersona(input: unknown): ValidationResult<Persona> {
   }
   if (p.style !== undefined) validatePersonaStyle(p.style, errors);
   else errors.push("style: 缺失");
+  validatePersonaOutfits(p.outfits, errors);
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: p as Persona };
@@ -210,6 +212,7 @@ export function validateCreateEpisodeRequest(input: unknown): ValidationResult<C
   if ("outfit_override" in r && !isNonEmptyString(r.outfit_override)) {
     errors.push("outfit_override: 必须是非空字符串");
   }
+  if ("outfit_id" in r && !isNonEmptyString(r.outfit_id)) errors.push("outfit_id: 必须是非空字符串");
 
   if (errors.length > 0) return { valid: false, errors };
   return { valid: true, value: r as CreateEpisodeRequest };

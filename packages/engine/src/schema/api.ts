@@ -104,6 +104,15 @@ export interface CreatePersonaRequest {
 // PATCH /api/personas/:id 请求体. Persona.version 不是乐观锁(不像
 // Episode.row_version),updatePersona 自己管 bump,所以这里没有 row_version
 // 信封,直接就是要改的字段。
+// POST /api/personas/:id/outfits 的文字字段（图片走 multipart files）与
+// PATCH .../outfits/:outfit_id 请求体：outfit_id 与 refs 都不可经此修改。
+export interface CreateOutfitRequest {
+  name: string;
+  desc: string;
+  seasons: string[];
+}
+export type OutfitPatch = Partial<CreateOutfitRequest>;
+
 export type PersonaPatch = Partial<Pick<Persona, "name" | "desc" | "locked" | "default_outfit" | "style">>;
 
 // FR-01 建期: apps/web 的 POST /api/episodes 请求体. series_id/season/
@@ -128,6 +137,7 @@ export interface CreateEpisodeRequest {
   banned?: string[];
   mode?: "per_shot";
   outfit_override?: string;
+  outfit_id?: string;
 }
 
 // FR-10 模板: apps/web 的 POST /api/templates 请求体. 不含 template_id/

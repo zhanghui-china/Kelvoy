@@ -178,6 +178,9 @@ function validateBrief(input: unknown, errors: string[]): void {
   if (b.outfit_override !== null && typeof b.outfit_override !== "string") {
     errors.push("brief.outfit_override: 必须是字符串或 null");
   }
+  if (b.outfit_id !== undefined && b.outfit_id !== null && !isNonEmptyString(b.outfit_id)) {
+    errors.push("brief.outfit_id: 必须是非空字符串或 null");
+  }
   if (!isStringArray(b.banned)) errors.push("brief.banned: 必须是字符串数组");
 }
 
@@ -454,3 +457,4 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
 
 
 export { validateLoginRequest, validatePersona, validateCreatePersonaRequest, validatePersonaPatchRequest, validateTemplate, validateCreateTemplateRequest, validateCreateEpisodeRequest, validateChangePasswordRequest, validateUserSettingsPatch } from "./validate-catalog";
+export { validateCreateOutfitRequest, validateOutfitPatchRequest } from "./validate-outfit";

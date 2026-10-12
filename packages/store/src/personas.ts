@@ -1,4 +1,5 @@
-import type { Persona } from "@kelvoy/engine";
+import { OUTFIT_REFS_MAX, OUTFIT_REFS_MIN, PERSONA_OUTFITS_MAX } from "@kelvoy/engine";
+import type { OutfitPatch, Persona, PersonaOutfit } from "@kelvoy/engine";
 import { getDb } from "./db";
 
 /**
@@ -96,6 +97,83 @@ export function appendPersonaRefs(input: {
   }).immediate();
 }
 
+export type OutfitMutationError = "not_found" | "outfit_not_found" | "too_many_outfits" | "invalid_ref_count";
+export type OutfitMutationResult =
+  | { ok: true; persona: Persona; outfit: PersonaOutfit | null }
+  | { ok: false; error: OutfitMutationError };
+
+/**
+ * Every outfit edit is a normal persona revision: version + 1 and a new
+ * persona_versions row, so episodes pinned to an older version keep exactly
+ * the outfits (and files) they were created with. Owner-scoped like
+ * appendPersonaRefs; official personas (owner_id null) are never writable here.
+ */
+function mutateOutfits(
+  personaId: string,
+  ownerId: string,
+  change: (outfits: PersonaOutfit[]) => { outfits: PersonaOutfit[]; outfit: PersonaOutfit | null } | OutfitMutationError,
+): OutfitMutationResult {
+  const database = getDb();
+  return database.transaction((): OutfitMutationResult => {
+    const current = readPersona(personaId);
+    if (!current || current.owner_id !== ownerId) return { ok: false, error: "not_found" };
+    const changed = change(current.outfits ?? []);
+    if (typeof changed === "string") return { ok: false, error: changed };
+    const updated: Persona = { ...current, version: current.version + 1, outfits: changed.outfits };
+    const doc = JSON.stringify(updated);
+    database.query("update personas set version = ?, doc = ?, updated_at = datetime('now') where persona_id = ?")
+      .run(updated.version, doc, personaId);
+    database.query("insert into persona_versions (persona_id, version, doc) values (?, ?, ?)")
+      .run(personaId, updated.version, doc);
+    return { ok: true, persona: updated, outfit: changed.outfit };
+  }).immediate();
+}
+
+export function addPersonaOutfit(input: {
+  persona_id: string; owner_id: string; outfit: PersonaOutfit;
+}): OutfitMutationResult {
+  return mutateOutfits(input.persona_id, input.owner_id, (outfits) => {
+    if (outfits.length >= PERSONA_OUTFITS_MAX) return "too_many_outfits";
+    if (input.outfit.refs.length < OUTFIT_REFS_MIN || input.outfit.refs.length > OUTFIT_REFS_MAX) return "invalid_ref_count";
+    return { outfits: [...outfits, input.outfit], outfit: input.outfit };
+  });
+}
+
+export function patchPersonaOutfit(input: {
+  persona_id: string; owner_id: string; outfit_id: string; patch: OutfitPatch;
+}): OutfitMutationResult {
+  return mutateOutfits(input.persona_id, input.owner_id, (outfits) => {
+    const found = outfits.find((o) => o.outfit_id === input.outfit_id);
+    if (!found) return "outfit_not_found";
+    const outfit = { ...found, ...input.patch };
+    return { outfits: outfits.map((o) => (o === found ? outfit : o)), outfit };
+  });
+}
+
+/** Append-only like persona refs; the total must stay within 1–3 under the writer lock. */
+export function appendOutfitRefs(input: {
+  persona_id: string; owner_id: string; outfit_id: string; refs: string[];
+}): OutfitMutationResult {
+  return mutateOutfits(input.persona_id, input.owner_id, (outfits) => {
+    const found = outfits.find((o) => o.outfit_id === input.outfit_id);
+    if (!found) return "outfit_not_found";
+    const refs = [...found.refs, ...input.refs];
+    if (refs.length < OUTFIT_REFS_MIN || refs.length > OUTFIT_REFS_MAX) return "invalid_ref_count";
+    const outfit = { ...found, refs };
+    return { outfits: outfits.map((o) => (o === found ? outfit : o)), outfit };
+  });
+}
+
+/** Removes it from the latest revision only; older revisions, episodes and files are untouched. */
+export function removePersonaOutfit(input: {
+  persona_id: string; owner_id: string; outfit_id: string;
+}): OutfitMutationResult {
+  return mutateOutfits(input.persona_id, input.owner_id, (outfits) => {
+    if (!outfits.some((o) => o.outfit_id === input.outfit_id)) return "outfit_not_found";
+    return { outfits: outfits.filter((o) => o.outfit_id !== input.outfit_id), outfit: null };
+  });
+}
+
 /** Internal catalog write. Public routes never call this entry point. */
 export async function upsertOfficialPersona(input: Persona): Promise<{ persona: Persona; changed: boolean }> {
   if (input.owner_id !== null) throw new Error("official persona must have owner_id null");
@@ -144,8 +222,14 @@ export async function canReadPersonaAsset(personaId: string, key: string, ownerI
     "select owner_id from personas where persona_id = ?",
   ).get(personaId);
   if (!row || (row.owner_id !== null && row.owner_id !== ownerId)) return false;
-  return database.query<{ found: number }, [string, string]>(
+  // Outfit images live in the same document ($.outfits[*].refs), so a pinned
+  // older version keeps authorizing exactly the files it referenced.
+  return database.query<{ found: number }, [string, string, string, string]>(
     `select 1 as found from persona_versions v, json_each(v.doc, '$.refs') r
-     where v.persona_id = ? and r.value = ? limit 1`,
-  ).get(personaId, key) !== null;
+       where v.persona_id = ? and r.value = ?
+     union all
+     select 1 from persona_versions v, json_each(v.doc, '$.outfits') o, json_each(o.value, '$.refs') r
+       where v.persona_id = ? and r.value = ?
+     limit 1`,
+  ).get(personaId, key, personaId, key) !== null;
 }

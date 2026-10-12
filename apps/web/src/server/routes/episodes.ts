@@ -98,6 +98,11 @@ episodes.post("/", async (c) => {
     return c.json({ ok: false, error: "template_not_found" }, 404);
   }
 
+  // 穿搭是 Persona 文档的一部分，随 persona_version 一起固定：只认当前版本里存在的 outfit_id。
+  if (req.outfit_id !== undefined && !persona.outfits?.some((o) => o.outfit_id === req.outfit_id)) {
+    return c.json({ ok: false, error: "outfit_not_found" }, 400);
+  }
+
   // FR-01"缺字段给默认值"：新期仅开放 per_shot；
   // series_id/season/tone/banned 没有 PRD 原文默认值可抄，这里按合理取舍
   // 补：series_id 缺省时 1 目的地 = 1 系列(PRD 没有定义"系列"怎么分组多个
@@ -135,6 +140,7 @@ episodes.post("/", async (c) => {
       duration_s: 30,
       tone: req.tone ?? "",
       outfit_override: req.outfit_override ?? null,
+      ...(req.outfit_id !== undefined ? { outfit_id: req.outfit_id } : {}),
       banned: req.banned ?? [],
     },
     grid_refs: [],
