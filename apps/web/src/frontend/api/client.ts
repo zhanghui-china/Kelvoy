@@ -8,6 +8,7 @@ import type {
   EpisodePatch,
   EstimateCostResult,
   Persona,
+  OutfitPatch,
   PersonaPatch,
   RegenStage,
   ScriptRuleViolation,
@@ -165,6 +166,37 @@ export function uploadPersonaRefs(personaId: string, files: File[]) {
   return apiFetchMultipart<{ persona: Persona }>(
     `/api/personas/${encodeURIComponent(personaId)}/refs`,
     form,
+  );
+}
+
+// 穿搭：每次写入都会让角色版本 +1，响应里带最新的 persona。
+export function createOutfit(personaId: string, input: { name: string; desc: string; seasons: string[]; files: File[] }) {
+  const form = new FormData();
+  form.append("name", input.name);
+  form.append("desc", input.desc);
+  for (const season of input.seasons) form.append("seasons", season);
+  for (const file of input.files) form.append("files", file);
+  return apiFetchMultipart<{ persona: Persona }>(`/api/personas/${encodeURIComponent(personaId)}/outfits`, form);
+}
+
+export function patchOutfit(personaId: string, outfitId: string, patch: OutfitPatch) {
+  return apiFetch<{ persona: Persona }>(
+    `/api/personas/${encodeURIComponent(personaId)}/outfits/${encodeURIComponent(outfitId)}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  );
+}
+
+export function uploadOutfitRefs(personaId: string, outfitId: string, files: File[]) {
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  return apiFetchMultipart<{ persona: Persona }>(
+    `/api/personas/${encodeURIComponent(personaId)}/outfits/${encodeURIComponent(outfitId)}/refs`, form);
+}
+
+export function deleteOutfit(personaId: string, outfitId: string) {
+  return apiFetch<{ persona: Persona }>(
+    `/api/personas/${encodeURIComponent(personaId)}/outfits/${encodeURIComponent(outfitId)}`,
+    { method: "DELETE" },
   );
 }
 

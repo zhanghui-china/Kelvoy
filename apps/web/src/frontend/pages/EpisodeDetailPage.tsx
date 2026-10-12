@@ -96,6 +96,9 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
       <div className="k-desk-head">
         <span className="k-card-meta">{episode.episode_id}</span>
         <span className="k-card-meta">角色：{persona?.name ?? episode.persona_id}</span>
+        {episode.brief.outfit_id && <span className="k-card-meta">
+          穿搭：{persona?.outfits?.find((o) => o.outfit_id === episode.brief.outfit_id)?.name ?? "（已不存在）"}
+        </span>}
         <span className="k-card-meta">
           目的地：{destination ? `${destination.city} · ${destination.name}` : episode.destination_id}
         </span>

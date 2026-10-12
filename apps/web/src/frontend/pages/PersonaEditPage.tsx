@@ -16,6 +16,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { canEditPersona } from "../persona-access";
 import { describeWriteError } from "../review/errors";
 import "./PersonaEditPage.css";
+import PersonaOutfits from "./PersonaOutfits";
 import { selectDraftPersona } from "./episode-draft";
 
 // §4："这三项是锁定的" —— 新建时默认全选；schema 是 string[]，用户可以
@@ -395,6 +396,8 @@ export default function PersonaEditPage() {
           </button>
         </div>
       </form>
+
+      {isEdit && current && <PersonaOutfits persona={current} onChange={setSavedPersona} />}
     </div>
   );
 }
