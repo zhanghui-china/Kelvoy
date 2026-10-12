@@ -37,6 +37,22 @@ interface RawShot {
   person_visible?: false;
 }
 
+/**
+ * 人物镜头的构图与朝向（ADR-0016）。画图模型会继承角色参考图的姿态与景别——参考图是
+ * 正脸自拍时，不写这些就是前景大半身自拍、地标缩成背景（GX10 对照实验，spike/orientation）。
+ * 所以这里要求脚本把人物的位置、比例、朝向、与地标的关系写进 kf_prompt 文本；
+ * 朝向由剧情动作推断，不是固定模板。kf_prompt 是给画图模型看的自然中文，不能带 id 和字段取值
+ * （回放中出现过 "nanchang_view"、"wide远景" 直接写进画面描述）。
+ */
+const PERSON_SHOT_RULES = `人物镜头的构图与朝向（主人公是这支 vlog 的主角）：
+- 除非创作要求另有说明，人物镜头约占一半到七成（person_visible 为 true）；景物、美食、建筑细节、环境空镜可以填 false。
+- 有人物的镜头，kf_prompt 要写明：人物在画面中的位置、身体朝向、视线落点、与本镜地标的空间关系。景别为 wide/medium 的镜头写明人物全身入镜、约占画面高度三分之一；close 可以半身。
+- 有 landmark 的镜头要在 kf_prompt 里用该地标的中文名称点名（如「灵山大佛」，不要写 id），并让地标是主体或清晰可辨的背景，不能只写"远处山峦"。
+- 朝向由这一镜的剧情动作决定：仰望、眺望、登阶、走向、游览地标 → 背影或侧后方；触摸、品尝、与景物互动 → 侧面或四分之三侧面；打招呼、自我介绍、回眸、情绪收束 → 才可以面向镜头。不要默认写"面向镜头""看向镜头"。
+- 如果第一镜有人物，必须同时可见该镜地标。
+- motion_prompt 的动作要与朝向一致：背对镜头的人不要"转身看镜头"，除非这一镜的动作就是回眸。
+- kf_prompt 与 motion_prompt 是给画图/视频模型看的自然中文，不要出现 id（如 lingshan_view）和 wide/medium/close/pov 等字段取值。`;
+
 function buildPrompt(input: {
   cutPolicy?: Episode["cut_policy"];
   durationTotal: number;
@@ -85,6 +101,8 @@ ${input.cutPolicy === "long_3_6" ? `- 每镜建议时长 duration_s 必须为 3�
 - 画面里不能出现可读文字、不能出现真人（vlog 角色除外，角色由后续阶段用参考图控制，这里的 kf_prompt 不用具体描述角色外貌）
 - 不得出现政治、色情、暴力、违法、歧视内容及他人商标
 - scene 字段填这一镜所属的段落名（同一段落内的镜头用完全相同的字符串，用于后续分组）
+
+${PERSON_SHOT_RULES}
 
 每个元素字段：${input.cutPolicy === "long_3_6" ? "duration_s, " : ""}scene, time, size, beat, caption, camera, landmark, kf_prompt, motion_prompt, person_visible。
 person_visible 是布尔值：这一镜画面里有没有出现人物（含手、背影）。纯空镜、景物、环境镜头填 false，kf_prompt 同时写明"无人物出镜"；有人物入镜填 true。拿不准填 true。

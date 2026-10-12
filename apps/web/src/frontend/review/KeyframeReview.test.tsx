@@ -8,14 +8,15 @@ import type { EpisodeMutation } from "./useEpisodeMutation";
 
 function render(status: "failed" | "kf_selected" | "kf_ready" | "approved", options: {
   pending?: boolean; busy?: boolean; scripting?: boolean; generating?: boolean;
-  candidates?: string[]; selected?: string; landmark?: string | null; withRefs?: boolean; outfitId?: string;
+  candidates?: string[]; selected?: string; landmark?: string | null; withRefs?: boolean; outfitId?: string; empty?: boolean;
 } = {}) {
   const base = fixture("e_save", "owner");
   const episode = { ...base, brief: { ...base.brief, ...(options.outfitId ? { outfit_id: options.outfitId } : {}) }, status: options.generating ? "keyframing" as const : "kf_review" as const,
     script_pending_task_id: options.scripting ? "task" : undefined,
     shots: [shotFixture(1, { status, kf_prompt: "山顶晨光",
       candidates: options.candidates ?? [], kf_selected: options.selected ?? null,
-      landmark: options.landmark === undefined ? null : options.landmark })] };
+      landmark: options.landmark === undefined ? null : options.landmark,
+      ...(options.empty ? { person_visible: false as const } : {}) })] };
   const mutation = { pending: !!options.pending, error: null, clearError() {}, async run() { return null; } } as EpisodeMutation;
   return renderToStaticMarkup(<StaticRouter location="/episodes/e_save">
     <EpisodeDetailContent episode={episode}
@@ -88,6 +89,14 @@ test("a chosen outfit is named and its image is the one shown instead of the bas
   expect(html).toContain("角色参考 · 小岛 · 穿搭「秋日风衣」 · 第 1 张 / 共 1 张");
   expect(html).toContain("o_1.png");
   expect(html).not.toContain("front.png");
+});
+
+test("an empty shot with a landmark says the person reference was not used and shows only the landmark", () => {
+  const html = render("kf_ready", { withRefs: true, landmark: "l1", empty: true });
+  expect(html).toContain("本镜是空镜，没有使用角色参考图，只用了地标参考图。");
+  expect(html).not.toContain("角色参考 · ");
+  expect(html).not.toContain("front.png");
+  expect(html).toContain("地标参考 · 地标");
 });
 
 test("a shot without a landmark says so instead of showing destination images", () => {

@@ -549,3 +549,16 @@ test("a timeline without the closing timestamp gets one correction and stops aft
   expect(calls).toBe(1);
   expect(wrong?.corrected).toBe(false);
 });
+
+test("system prompt keeps orientation and the landmark anchor, and the writer version invalidates v1 caches", async () => {
+  let system = "";
+  const fetcher = (async (_url: unknown, init: RequestInit) => {
+    system = JSON.parse(String(init.body)).messages[0].content;
+    return response(sections());
+  }) as unknown as typeof fetch;
+  const result = await writer(fetcher).write({ episode_id: "e1", context: context() });
+  expect(system).toContain("Keep the subject's orientation and gaze exactly as the source states");
+  expect(system).toContain("never turn the subject to face the camera unless the source action says so");
+  expect(system).toContain("it is a visible anchor from 00:00");
+  expect(result.provenance.writer_version).toBe("h3-writer-v2");
+});

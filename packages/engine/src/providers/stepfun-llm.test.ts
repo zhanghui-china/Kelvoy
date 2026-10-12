@@ -335,3 +335,25 @@ test("script prompt asks for person_visible", async () => {
   await stepfunScriptProvider.generateShots({ brief, destination });
   expect(body).toContain("person_visible");
 });
+
+test("every script round carries the person composition and orientation rules, including optimization and feedback", async () => {
+  const prompts: string[] = [];
+  let calls = 0;
+  globalThis.fetch = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    prompts.push(JSON.parse(init!.body as string).messages[0].content);
+    calls++;
+    // First answer breaks a rule so a second round with feedback is built.
+    const shots = calls === 1 ? buildValidRawShots(1).map(s => ({ ...s, landmark: "no_such_landmark" })) : buildValidRawShots(1);
+    return Response.json({ choices: [{ message: { content: JSON.stringify(shots) } }] });
+  }) as unknown as typeof fetch;
+  await stepfunScriptProvider.generateShots({ brief, destination, instruction: "多一点人物镜头" });
+  expect(prompts.length).toBeGreaterThanOrEqual(2);
+  for (const prompt of prompts) {
+    expect(prompt).toContain("人物镜头的构图与朝向");
+    expect(prompt).toContain("人物全身入镜、约占画面高度三分之一");
+    expect(prompt).toContain("朝向由这一镜的剧情动作决定");
+    expect(prompt).toContain("不要出现 id");
+    expect(prompt.indexOf("人物镜头的构图与朝向")).toBeLessThan(prompt.indexOf("每个元素字段"));
+  }
+  expect(prompts[1]).toContain("上一轮生成有以下问题");
+});

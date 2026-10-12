@@ -257,3 +257,26 @@ test("assets rejects a chosen outfit that is missing or has no images", async ()
   await expect(run("o_empty")).rejects.toThrow("没有参考图");
   expect((await run("o1")).status).toBe("keyframing");
 });
+
+test("keyframe prompt names the image roles; an empty shot with a landmark sends only the landmark image", async () => {
+  const seen: Array<{ prompt: string; refs: string[] }> = [];
+  const context: StageContext = {
+    persona, destination, generation_id: "t-prompt",
+    keyframe: { async generate(input) {
+      seen.push({ prompt: input.prompt, refs: input.refs });
+      return { key: `kf/${input.candidate_no}.png`, model: "Qwen", version: "1", seed: input.seed, seconds: 1, ref_hashes: [] };
+    } },
+  };
+  const person = await runKeyframe(episode({ status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf", kf_prompt: "人物背对镜头望向灵山大佛" })] }), 1, context);
+  expect(seen[0]!.refs).toEqual(["persona/front.png", "dest/a.jpg"]);
+  expect(seen[0]!.prompt.startsWith("图1是出镜人物的参考图，图2是「灵山大佛」的实景参考图")).toBe(true);
+  expect(seen[0]!.prompt.endsWith("人物背对镜头望向灵山大佛")).toBe(true);
+  // What was sent is what is recorded.
+  expect(person.shots[0]?.model.image?.prompt).toBe(seen[0]!.prompt);
+
+  await runKeyframe(episode({ status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf", kf_prompt: "无人物出镜", person_visible: false })] }), 1, context);
+  expect(seen[1]!.refs).toEqual(["dest/a.jpg"]);
+  expect(seen[1]!.prompt).toBe("图1是「灵山大佛」的实景参考图，画面中没有人物。无人物出镜");
+});

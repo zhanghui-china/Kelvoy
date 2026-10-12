@@ -16,6 +16,11 @@ export interface KeyframeReferences {
   landmark: (KeyframeReference & { id: string; name: string }) | null;
   /** The landmark the shot asks for; non-null with `landmark` null means it is missing or has no image. */
   landmark_id: string | null;
+  /**
+   * An empty shot (`person_visible === false`) with a usable landmark image: the person reference is
+   * deliberately not sent, so "no person" is not contradicted by a face in the references.
+   */
+  person_omitted: boolean;
 }
 
 /**
@@ -48,18 +53,23 @@ export function personaReference(
 export function keyframeReferences(
   persona: Persona | null | undefined,
   destination: Destination | null | undefined,
-  shot: Pick<Shot, "landmark">,
+  shot: Pick<Shot, "landmark" | "person_visible">,
   outfitId?: string | null,
 ): KeyframeReferences {
   const person = personaReference(persona, outfitId);
   const landmark = shot.landmark ? destination?.landmarks.find((item) => item.id === shot.landmark) : undefined;
   const landmarkKey = landmark?.refs[0];
+  const landmarkRef = landmark && landmarkKey
+    ? { id: landmark.id, name: landmark.name, key: landmarkKey, index: 0, total: landmark.refs.length }
+    : null;
+  // Only drop the person when there is a landmark image left to send: the image workflow needs at
+  // least one reference, so an empty shot without a landmark keeps today's behaviour (known limitation).
+  const personOmitted = shot.person_visible === false && landmarkRef !== null;
   return {
-    persona: person.ref,
-    outfit: person.outfit,
-    landmark: landmark && landmarkKey
-      ? { id: landmark.id, name: landmark.name, key: landmarkKey, index: 0, total: landmark.refs.length }
-      : null,
+    persona: personOmitted ? null : person.ref,
+    outfit: personOmitted ? null : person.outfit,
+    landmark: landmarkRef,
     landmark_id: shot.landmark ?? null,
+    person_omitted: personOmitted,
   };
 }

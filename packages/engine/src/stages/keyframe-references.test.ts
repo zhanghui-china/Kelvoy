@@ -19,6 +19,7 @@ test("uses the first persona image and the first image of the shot's landmark", 
   expect(keyframeReferences(persona, destination, { landmark: "l1" })).toEqual({
     persona: { key: "persona/front.png", index: 0, total: 3 },
     outfit: null,
+    person_omitted: false,
     landmark: { id: "l1", name: "灵山大佛", key: "dest/a.jpg", index: 0, total: 4 },
     landmark_id: "l1",
   });
@@ -40,7 +41,7 @@ test("a named landmark that is unknown or has no image is distinguishable from n
 });
 
 test("missing persona or destination degrade to nulls instead of throwing", () => {
-  expect(keyframeReferences(null, null, { landmark: "l1" })).toEqual({ persona: null, outfit: null, landmark: null, landmark_id: "l1" });
+  expect(keyframeReferences(null, null, { landmark: "l1" })).toEqual({ persona: null, outfit: null, landmark: null, landmark_id: "l1", person_omitted: false });
   expect(keyframeReferences({ ...persona, refs: [] }, destination, { landmark: null }).persona).toBeNull();
 });
 
@@ -76,4 +77,25 @@ test("an unknown or image-less outfit falls back to the base image", () => {
 test("personaReference works without a destination (direct video)", () => {
   expect(personaReference(withOutfits, "o1").ref?.key).toBe("persona/o1_a.png");
   expect(personaReference(null, "o1")).toEqual({ ref: null, outfit: null });
+});
+
+test("an empty shot with a landmark image drops the person reference", () => {
+  const refs = keyframeReferences(withOutfits, destination, { landmark: "l1", person_visible: false }, "o1");
+  expect(refs.persona).toBeNull();
+  expect(refs.outfit).toBeNull();
+  expect(refs.person_omitted).toBe(true);
+  expect(refs.landmark?.key).toBe("dest/a.jpg");
+});
+
+test("an empty shot with no usable landmark image keeps the person reference (the workflow needs one image)", () => {
+  for (const landmark of [null, "l2", "gone"]) {
+    const refs = keyframeReferences(persona, destination, { landmark, person_visible: false });
+    expect(refs.person_omitted).toBe(false);
+    expect(refs.persona?.key).toBe("persona/front.png");
+  }
+});
+
+test("person_visible true or missing never omits the person", () => {
+  expect(keyframeReferences(persona, destination, { landmark: "l1", person_visible: true }).person_omitted).toBe(false);
+  expect(keyframeReferences(persona, destination, { landmark: "l1" }).person_omitted).toBe(false);
 });

@@ -174,7 +174,8 @@ function KeyframeShot({
                 title={`${persona.name} 角色参考`} />
             </div>
           )}
-          {!usedRefs.persona && <p className="k-card-meta">角色暂无参考图，无法显示。</p>}
+          {usedRefs.person_omitted && <p className="k-card-meta">本镜是空镜，没有使用角色参考图，只用了地标参考图。</p>}
+          {!usedRefs.persona && !usedRefs.person_omitted && <p className="k-card-meta">角色暂无参考图，无法显示。</p>}
           {usedRefs.landmark ? (
             <div>
               <div className="k-card-meta">
