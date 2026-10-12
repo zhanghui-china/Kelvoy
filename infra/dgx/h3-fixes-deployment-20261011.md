@@ -245,3 +245,15 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 注意：节点上跑测试必须带 `PATH=$HOME/.bun/bin:$HOME/.local/bin:$PATH`；缺 `~/.local/bin` 时用到 `/usr/local/bin/ffmpeg`，22 个合成测试会失败（环境问题，与代码无关）。
 
 未验证：第 6 镜尚未重试；纠正通道在真实 LLM 上的命中率未测。Spark 未发布。回退：删除 `zzzzzzzzzzzzzzzzzzz-i2va-format-20261011.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `keyframe-retry-20261011-5f9b5fa`。
+
+## 十二、GX10：关键帧候选改用序号标识（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/kf-candidate-labels-20261012-3bf01aa`（基于 `i2va-format-20261011-ea11290`，覆盖 4 个前端文件，仅前端） |
+| 源码 | `feat/default-keyframe-ui@3bf01aa` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-kf-candidate-labels-20261012-20261012T004156Z` |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1238 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、线上首页引用的 JS 与发布目录构建产物一致（`index-oPsO2wJA.js`） |
+
+未做：浏览器目视（桌面与窄屏）。Spark 未发布。回退：删除 drop-in `…-kf-candidate-labels-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `i2va-format-20261011-ea11290`。
