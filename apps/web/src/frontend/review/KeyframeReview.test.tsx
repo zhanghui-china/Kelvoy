@@ -8,9 +8,10 @@ import type { EpisodeMutation } from "./useEpisodeMutation";
 
 function render(status: "failed" | "kf_selected" | "kf_ready" | "approved", options: {
   pending?: boolean; busy?: boolean; scripting?: boolean; generating?: boolean;
-  candidates?: string[]; selected?: string; landmark?: string | null; withRefs?: boolean;
+  candidates?: string[]; selected?: string; landmark?: string | null; withRefs?: boolean; outfitId?: string;
 } = {}) {
-  const episode = { ...fixture("e_save", "owner"), status: options.generating ? "keyframing" as const : "kf_review" as const,
+  const base = fixture("e_save", "owner");
+  const episode = { ...base, brief: { ...base.brief, ...(options.outfitId ? { outfit_id: options.outfitId } : {}) }, status: options.generating ? "keyframing" as const : "kf_review" as const,
     script_pending_task_id: options.scripting ? "task" : undefined,
     shots: [shotFixture(1, { status, kf_prompt: "山顶晨光",
       candidates: options.candidates ?? [], kf_selected: options.selected ?? null,
@@ -19,7 +20,8 @@ function render(status: "failed" | "kf_selected" | "kf_ready" | "approved", opti
   return renderToStaticMarkup(<StaticRouter location="/episodes/e_save">
     <EpisodeDetailContent episode={episode}
       destination={options.withRefs ? destinationFixture("d_test") : null}
-      persona={options.withRefs ? personaFixture("c_test", "owner") : null} mutation={mutation} storyboardBusy={options.busy} />
+      persona={options.withRefs ? { ...personaFixture("c_test", "owner"), outfits: [
+        { outfit_id: "o_1", name: "秋日风衣", desc: "", seasons: ["秋"], refs: ["persona/c_test/o_1.png"] }] } : null} mutation={mutation} storyboardBusy={options.busy} />
   </StaticRouter>);
 }
 
@@ -79,6 +81,13 @@ test("shows only the first persona image and the shot landmark's first image, wi
   expect(urls.filter((u) => u.includes("front.png"))).toHaveLength(1);
   expect(urls.filter((u) => u.includes("a.jpg"))).toHaveLength(1);
   expect(urls.some((u) => u.includes("b.jpg") || u.includes("c.jpg") || u.includes("side.png"))).toBe(false);
+});
+
+test("a chosen outfit is named and its image is the one shown instead of the base image", () => {
+  const html = render("kf_ready", { withRefs: true, landmark: "l1", outfitId: "o_1" });
+  expect(html).toContain("角色参考 · 小岛 · 穿搭「秋日风衣」 · 第 1 张 / 共 1 张");
+  expect(html).toContain("o_1.png");
+  expect(html).not.toContain("front.png");
 });
 
 test("a shot without a landmark says so instead of showing destination images", () => {

@@ -83,7 +83,7 @@ function KeyframeShot({
   }
 
   const landmark = destination?.landmarks.find((l) => l.id === shot.landmark) ?? null;
-  const usedRefs = keyframeReferences(persona, destination, shot);
+  const usedRefs = keyframeReferences(persona, destination, shot, episode.brief.outfit_id);
   const selectLocked = mutation.pending || shot.status === "approved";
   const candidateItems: LightboxItem[] = shot.candidates.map((candidate, index) => ({
     src: episodeFileUrl(episode.episode_id, candidate),
@@ -168,7 +168,7 @@ function KeyframeShot({
           {usedRefs.persona && persona && (
             <div>
               <div className="k-card-meta">
-                角色参考 · {persona.name} · 第 {usedRefs.persona.index + 1} 张 / 共 {usedRefs.persona.total} 张
+                角色参考 · {persona.name}{usedRefs.outfit ? ` · 穿搭「${usedRefs.outfit.name}」` : ""} · 第 {usedRefs.persona.index + 1} 张 / 共 {usedRefs.persona.total} 张
               </div>
               <ZoomImage src={assetUrl(usedRefs.persona.key)} alt={`${persona.name} 角色参考图`}
                 title={`${persona.name} 角色参考`} />

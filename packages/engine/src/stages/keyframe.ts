@@ -17,7 +17,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   }
   const shot = episode.shots.find((item) => (context?.shot_id ? item.shot_id === context.shot_id : item.no === shotNo));
   if (!shot || shot.status !== "generating_kf") throw new Error(`第 ${shotNo} 镜未处于关键帧生成中`);
-  const used = keyframeReferences(context.persona, context.destination, shot);
+  const used = keyframeReferences(context.persona, context.destination, shot, episode.brief.outfit_id);
   if (!used.persona) throw new Error("角色参考图缺失");
   if (used.landmark_id && !used.landmark) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
   const refs = [used.persona.key, ...(used.landmark ? [used.landmark.key] : [])];
