@@ -282,3 +282,17 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 | 切换后 | web／worker active、重启 0、健康 `ok`、近 4 分钟日志 0 条 error、worker 工作目录为新发布、线上 JS 为 `index-TupfmbcR.js` |
 
 未做：真实浏览器目视；切换前未单独核对进行中任务数（直接用 `deploy-web-worker.py` 的排空逻辑）。Spark 未发布。回退：删除 drop-in `…-kf-refs-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-lightbox-20261012-aeca7d1`。
+
+## 十五、GX10：角色穿搭（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/persona-outfits-20261012-8b597e7`（基于 `kf-refs-20261012-9d0d7be`，覆盖 schema／store／engine／web 服务端与前端，无数据库迁移） |
+| 源码 | `feat/default-keyframe-ui@8b597e7`（ADR-0015） |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-persona-outfits-20261012-8b597e7-20261012T053316Z` |
+| 变更 | `Persona.outfits` 与 `brief.outfit_id`（可缺省，老数据零迁移）；`/api/personas/:id/outfits[...]`；选中穿搭的第 1 张图替代角色第 1 张参考图用于关键帧与直出视频；角色页穿搭区块、新建作品选穿搭 |
+| 切换前 | 无排队／运行中任务；磁盘 28G 可用（97%） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1285 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker／inference active、重启 0、健康 `ok`、web 工作目录为新发布、线上 JS 为 `index-B0fL6dVU.js` 且含穿搭代码、未登录 POST outfits 返回 401、近 3 分钟日志 0 条 error |
+
+未做：真实浏览器交互验证（新建作品页季节自动选中与换角色重置）；真实穿搭照的脸漂风险未测（实验素材为模型生成）；A 方案姿态偏僵与背景噪点待用真实 `kf_prompt` 复核。Spark 未发布。回退：删除 drop-in `…-persona-outfits-20261012-8b597e7.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-refs-20261012-9d0d7be`；已写入的 `outfits` 字段旧代码会忽略。
