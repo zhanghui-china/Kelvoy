@@ -257,3 +257,15 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 | 切换后 | web／worker active、重启 0、健康 `ok`、线上首页引用的 JS 与发布目录构建产物一致（`index-oPsO2wJA.js`） |
 
 未做：浏览器目视（桌面与窄屏）。Spark 未发布。回退：删除 drop-in `…-kf-candidate-labels-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `i2va-format-20261011-ea11290`。
+
+## 十三、GX10：关键帧候选看大图（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/kf-lightbox-20261012-aeca7d1`（基于 `kf-candidate-labels-20261012-3bf01aa`，覆盖 6 个前端文件，仅前端） |
+| 源码 | `feat/default-keyframe-ui@aeca7d1` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-kf-lightbox-20261012-20261012T013147Z` |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1243 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、线上首页引用的 JS 与构建产物一致（`index-DNkXdBbs.js`） |
+
+未做：真实浏览器交互验证（`showModal`、Esc、焦点回到触发按钮、窄屏全屏）。Spark 未发布。回退：删除 drop-in `…-kf-lightbox-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-candidate-labels-20261012-3bf01aa`。
