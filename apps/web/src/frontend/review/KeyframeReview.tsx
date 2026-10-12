@@ -1,7 +1,7 @@
 import { ShotFailureNotice, useShotRetry } from "./ShotFailure";
 import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
-import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
+import { keyframeReferences, type Destination, type Episode, type Persona, type Shot } from "@kelvoy/engine";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import { describeWriteError } from "./errors";
@@ -83,6 +83,7 @@ function KeyframeShot({
   }
 
   const landmark = destination?.landmarks.find((l) => l.id === shot.landmark) ?? null;
+  const usedRefs = keyframeReferences(persona, destination, shot);
   const selectLocked = mutation.pending || shot.status === "approved";
   const candidateItems: LightboxItem[] = shot.candidates.map((candidate, index) => ({
     src: episodeFileUrl(episode.episode_id, candidate),
@@ -163,19 +164,31 @@ function KeyframeShot({
         </div>
 
         <div className="k-desk-refs">
-          {landmark && (
+          <div className="k-card-meta">本镜生成用到的参考图</div>
+          {usedRefs.persona && persona && (
             <div>
-              <div className="k-card-meta">地标实景参考 · {landmark.name}</div>
-              {landmark.refs.map((ref) => (
-                <ZoomImage key={ref} src={assetUrl(ref)} alt={`${landmark.name} 实景参考`} title={`${landmark.name} 实景参考`} />
-              ))}
+              <div className="k-card-meta">
+                角色参考 · {persona.name} · 第 {usedRefs.persona.index + 1} 张 / 共 {usedRefs.persona.total} 张
+              </div>
+              <ZoomImage src={assetUrl(usedRefs.persona.key)} alt={`${persona.name} 角色参考图`}
+                title={`${persona.name} 角色参考`} />
             </div>
           )}
-          {persona && persona.refs.length > 0 && (
+          {!usedRefs.persona && <p className="k-card-meta">角色暂无参考图，无法显示。</p>}
+          {usedRefs.landmark ? (
             <div>
-              <div className="k-card-meta">角色参考 · {persona.name}</div>
-              <ZoomImage src={assetUrl(persona.refs[0])} alt={`${persona.name} 参考图`} title={`${persona.name} 参考图`} />
+              <div className="k-card-meta">
+                地标参考 · {usedRefs.landmark.name} · 第 {usedRefs.landmark.index + 1} 张 / 共 {usedRefs.landmark.total} 张
+              </div>
+              <ZoomImage src={assetUrl(usedRefs.landmark.key)} alt={`${usedRefs.landmark.name} 地标参考图`}
+                title={`${usedRefs.landmark.name} 地标参考`} />
             </div>
+          ) : usedRefs.landmark_id ? (
+            <p className="k-card-meta">
+              地标「{landmark?.name ?? usedRefs.landmark_id}」暂无参考图，无法显示。
+            </p>
+          ) : (
+            <p className="k-card-meta">本镜没有指定地标，只用了角色参考图。</p>
           )}
         </div>
       </div>

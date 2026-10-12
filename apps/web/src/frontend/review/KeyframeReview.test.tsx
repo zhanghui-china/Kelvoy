@@ -1,22 +1,25 @@
 import { afterEach, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { StaticRouter } from "react-router-dom/server";
-import { fixture, shotFixture } from "../../server/routes/episode-test-fixtures";
+import { destinationFixture, fixture, personaFixture, shotFixture } from "../../server/routes/episode-test-fixtures";
 import { patchShot } from "../api/client";
 import { EpisodeDetailContent } from "../pages/EpisodeDetailPage";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
 function render(status: "failed" | "kf_selected" | "kf_ready" | "approved", options: {
   pending?: boolean; busy?: boolean; scripting?: boolean; generating?: boolean;
-  candidates?: string[]; selected?: string;
+  candidates?: string[]; selected?: string; landmark?: string | null; withRefs?: boolean;
 } = {}) {
   const episode = { ...fixture("e_save", "owner"), status: options.generating ? "keyframing" as const : "kf_review" as const,
     script_pending_task_id: options.scripting ? "task" : undefined,
     shots: [shotFixture(1, { status, kf_prompt: "山顶晨光",
-      candidates: options.candidates ?? [], kf_selected: options.selected ?? null })] };
+      candidates: options.candidates ?? [], kf_selected: options.selected ?? null,
+      landmark: options.landmark === undefined ? null : options.landmark })] };
   const mutation = { pending: !!options.pending, error: null, clearError() {}, async run() { return null; } } as EpisodeMutation;
   return renderToStaticMarkup(<StaticRouter location="/episodes/e_save">
-    <EpisodeDetailContent episode={episode} destination={null} persona={null} mutation={mutation} storyboardBusy={options.busy} />
+    <EpisodeDetailContent episode={episode}
+      destination={options.withRefs ? destinationFixture("d_test") : null}
+      persona={options.withRefs ? personaFixture("c_test", "owner") : null} mutation={mutation} storyboardBusy={options.busy} />
   </StaticRouter>);
 }
 
@@ -65,6 +68,28 @@ test("approved shots keep the pick buttons disabled but zoom stays available", (
   expect(html).toContain('aria-label="放大查看第 1 镜候选 1"');
   expect(html.match(/<button[^>]*aria-label="放大查看[^"]*"[^>]*>/g)?.some((b) => b.includes("disabled"))).toBe(false);
   expect(html).toMatch(/<button[^>]*disabled=""[^>]*>候选 2 · 选这张<\/button>/);
+});
+
+test("shows only the first persona image and the shot landmark's first image, with their position", () => {
+  const html = render("kf_ready", { withRefs: true, landmark: "l1" });
+  expect(html).toContain("本镜生成用到的参考图");
+  expect(html).toContain("角色参考 · 小岛 · 第 1 张 / 共 3 张");
+  expect(html).toContain("地标参考 · 地标 · 第 1 张 / 共 3 张");
+  const urls = [...html.matchAll(/src="([^"]*(?:persona|a\.jpg|b\.jpg|c\.jpg)[^"]*)"/g)].map((m) => m[1]);
+  expect(urls.filter((u) => u.includes("front.png"))).toHaveLength(1);
+  expect(urls.filter((u) => u.includes("a.jpg"))).toHaveLength(1);
+  expect(urls.some((u) => u.includes("b.jpg") || u.includes("c.jpg") || u.includes("side.png"))).toBe(false);
+});
+
+test("a shot without a landmark says so instead of showing destination images", () => {
+  const html = render("kf_ready", { withRefs: true, landmark: null });
+  expect(html).toContain("本镜没有指定地标，只用了角色参考图。");
+  expect(html).not.toContain("a.jpg");
+});
+
+test("a landmark that has no usable image is called out, not left blank", () => {
+  const html = render("kf_ready", { withRefs: true, landmark: "gone" });
+  expect(html).toContain("地标「gone」暂无参考图");
 });
 
 const originalFetch = globalThis.fetch;

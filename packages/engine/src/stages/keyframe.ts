@@ -2,6 +2,7 @@ import type { Episode } from "../schema";
 import { SETTINGS_CANDIDATES_MAX, SETTINGS_CANDIDATES_MIN } from "../schema/user";
 import { transitionEpisode, transitionShot } from "../state";
 import { generationSeed } from "./generation-seed";
+import { keyframeReferences } from "./keyframe-references";
 import type { GeneratedAsset, StageContext } from "./types";
 
 /** Generate the episode's saved candidate count for one shot. */
@@ -16,13 +17,10 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   }
   const shot = episode.shots.find((item) => (context?.shot_id ? item.shot_id === context.shot_id : item.no === shotNo));
   if (!shot || shot.status !== "generating_kf") throw new Error(`第 ${shotNo} 镜未处于关键帧生成中`);
-  const refs = [context.persona.refs[0]];
-  if (!refs[0]) throw new Error("角色参考图缺失");
-  if (shot.landmark) {
-    const landmark = context.destination.landmarks.find((item) => item.id === shot.landmark);
-    if (!landmark?.refs[0]) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
-    refs.push(landmark.refs[0]);
-  }
+  const used = keyframeReferences(context.persona, context.destination, shot);
+  if (!used.persona) throw new Error("角色参考图缺失");
+  if (used.landmark_id && !used.landmark) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
+  const refs = [used.persona.key, ...(used.landmark ? [used.landmark.key] : [])];
   const seed = generationSeed(context.generation_id, shot.shot_id ?? shotNo, "image");
   const generated: GeneratedAsset[] = [];
   for (let candidateNo = 0; candidateNo < candidateCount; candidateNo++) {
