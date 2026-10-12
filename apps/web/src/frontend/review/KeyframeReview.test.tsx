@@ -42,18 +42,29 @@ test.each([
   expect(html).toContain(reason);
 });
 
-test("candidates are labelled by order, never by file name, and the selected one says so", () => {
+test("candidate cards pair a zoom button with a separate pick button, labelled by order", () => {
   const keys = ["kf/s1_gen_abcdef_1.png", "kf/s1_gen_abcdef_2.png", "kf/s1_gen_abcdef_3.png"];
   const html = render("kf_selected", { candidates: keys, selected: keys[1] });
-  const buttons = [...html.matchAll(/<button[^>]*k-desk-candidate[^>]*>[\s\S]*?<\/button>/g)].map((m) => m[0]);
-  expect(buttons).toHaveLength(3);
-  expect(buttons.map((b) => b.replace(/<[^>]*>/g, ""))).toEqual(["候选 1", "候选 2 · 已选定", "候选 3"]);
-  expect(buttons.map((b) => b.includes('aria-pressed="true"'))).toEqual([false, true, false]);
+  const cards = [...html.matchAll(/<div[^>]*k-desk-candidate[^>]*>[\s\S]*?<\/button><\/div>/g)].map((m) => m[0]);
+  expect(cards).toHaveLength(3);
+  for (const [i, card] of cards.entries()) {
+    const buttons = [...card.matchAll(/<button[^>]*>[\s\S]*?<\/button>/g)].map((m) => m[0]);
+    expect(buttons).toHaveLength(2); // no nested buttons: zoom and pick are siblings
+    expect(buttons[0]).toContain(`aria-label="放大查看第 1 镜候选 ${i + 1}"`);
+    expect(buttons[0]).toContain(`alt="第 1 镜候选 ${i + 1}"`);
+    expect(buttons[1]).toContain(`aria-pressed="${i === 1}"`);
+    expect(buttons[1].replace(/<[^>]*>/g, "")).toBe(`候选 ${i + 1} · ${i === 1 ? "已选定" : "选这张"}`);
+  }
   // The full key stays reachable for debugging, but only as a tooltip.
-  expect(buttons[0]).toContain(`title="${keys[0]}"`);
-  // Visible text and alt text must not leak the key; src legitimately holds it.
+  expect(cards[0]).toContain(`title="${keys[0]}"`);
   expect(html.replace(/<[^>]*>/g, "")).not.toContain(".png");
-  expect([...html.matchAll(/alt="([^"]*)"/g)].map((m) => m[1])).toEqual(["第 1 镜候选 1", "第 1 镜候选 2", "第 1 镜候选 3"]);
+});
+
+test("approved shots keep the pick buttons disabled but zoom stays available", () => {
+  const html = render("approved", { candidates: ["kf/a.png", "kf/b.png"], selected: "kf/a.png" });
+  expect(html).toContain('aria-label="放大查看第 1 镜候选 1"');
+  expect(html.match(/<button[^>]*aria-label="放大查看[^"]*"[^>]*>/g)?.some((b) => b.includes("disabled"))).toBe(false);
+  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>候选 2 · 选这张<\/button>/);
 });
 
 const originalFetch = globalThis.fetch;

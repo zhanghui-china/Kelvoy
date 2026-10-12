@@ -6,6 +6,7 @@ import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from 
 import { GuideTip } from "../GuideTip";
 import { describeWriteError } from "./errors";
 import ReviewQueue from "./ReviewQueue";
+import { ImageLightbox, type LightboxItem, ZoomImage } from "./ImageLightbox";
 import { ShotFocusNav } from "./ShotFocusNav";
 import { AssetImage, MutationError, ShotHeader } from "./ShotHeader";
 import { focusedShot } from "./shot-focus";
@@ -45,6 +46,7 @@ function KeyframeShot({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const savingRef = useRef(false);
   const editLockReason = episode.status !== "kf_review" ? "当前不在关键帧审核，暂时不能修改画面描述。"
     : episode.script_pending_task_id ? "脚本任务正在处理，请等待完成。"
@@ -81,6 +83,13 @@ function KeyframeShot({
   }
 
   const landmark = destination?.landmarks.find((l) => l.id === shot.landmark) ?? null;
+  const selectLocked = mutation.pending || shot.status === "approved";
+  const candidateItems: LightboxItem[] = shot.candidates.map((candidate, index) => ({
+    src: episodeFileUrl(episode.episode_id, candidate),
+    alt: `第 ${shot.no} 镜候选 ${index + 1}`,
+    label: `候选 ${index + 1}`,
+    selected: shot.kf_selected === candidate,
+  }));
 
   async function select(candidate: string) {
     setError(null);
@@ -115,30 +124,39 @@ function KeyframeShot({
       <ShotHeader shot={shot} />
       <div className="k-desk-shot-body">
         <div>
-          <div className="k-card-meta">候选（点一张选定，顺序即生成顺序，不做打分排序）</div>
+          <div className="k-card-meta">候选（点图放大，按钮选定；顺序即生成顺序，不做打分排序）</div>
           {shot.candidates.length === 0 ? (
             <p className="k-empty">还没有候选图。</p>
           ) : (
             <div className="k-desk-candidates">
               {shot.candidates.map((candidate, index) => (
-                <button
-                  type="button"
+                <div
                   key={candidate}
                   // 存储 key 又长又没信息量，只放 title 里供排查；界面上用序号。
                   title={candidate}
                   className={`k-desk-candidate ${shot.kf_selected === candidate ? "is-selected" : ""}`}
-                  aria-pressed={shot.kf_selected === candidate}
-                  disabled={mutation.pending || shot.status === "approved"}
-                  onClick={() => select(candidate)}
                 >
-                  <AssetImage
-                    src={episodeFileUrl(episode.episode_id, candidate)}
-                    alt={`第 ${shot.no} 镜候选 ${index + 1}`}
-                  />
-                  <span className="k-card-meta">
-                    候选 {index + 1}{shot.kf_selected === candidate ? " · 已选定" : ""}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    className="k-desk-zoom"
+                    aria-label={`放大查看第 ${shot.no} 镜候选 ${index + 1}`}
+                    onClick={() => setZoomIndex(index)}
+                  >
+                    <AssetImage
+                      src={episodeFileUrl(episode.episode_id, candidate)}
+                      alt={`第 ${shot.no} 镜候选 ${index + 1}`}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    className={`k-btn k-btn-tiny ${shot.kf_selected === candidate ? "k-btn-primary" : "k-btn-secondary"}`}
+                    aria-pressed={shot.kf_selected === candidate}
+                    disabled={selectLocked}
+                    onClick={() => select(candidate)}
+                  >
+                    候选 {index + 1} · {shot.kf_selected === candidate ? "已选定" : "选这张"}
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -149,14 +167,14 @@ function KeyframeShot({
             <div>
               <div className="k-card-meta">地标实景参考 · {landmark.name}</div>
               {landmark.refs.map((ref) => (
-                <AssetImage key={ref} src={assetUrl(ref)} alt={`${landmark.name} 实景参考`} />
+                <ZoomImage key={ref} src={assetUrl(ref)} alt={`${landmark.name} 实景参考`} title={`${landmark.name} 实景参考`} />
               ))}
             </div>
           )}
           {persona && persona.refs.length > 0 && (
             <div>
               <div className="k-card-meta">角色参考 · {persona.name}</div>
-              <AssetImage src={assetUrl(persona.refs[0])} alt={`${persona.name} 参考图`} />
+              <ZoomImage src={assetUrl(persona.refs[0])} alt={`${persona.name} 参考图`} title={`${persona.name} 参考图`} />
             </div>
           )}
         </div>
@@ -208,6 +226,17 @@ function KeyframeShot({
         </div>
         <p className="k-card-meta">内容未变时留在当前审核；修改后返回脚本审核，仅此镜素材需重新生成，其他镜头与旧成片保留。保存不会自动生成。</p>
       </div>
+      {zoomIndex !== null && (
+        <ImageLightbox
+          title={`第 ${shot.no} 镜`}
+          items={candidateItems}
+          index={zoomIndex}
+          onIndexChange={setZoomIndex}
+          onClose={() => setZoomIndex(null)}
+          onSelect={(index) => void select(shot.candidates[index])}
+          selectDisabled={selectLocked}
+        />
+      )}
     </article>
   );
 }

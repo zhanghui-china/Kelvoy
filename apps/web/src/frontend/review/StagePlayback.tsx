@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Destination, Episode, Persona } from "@kelvoy/engine";
 import { assetUrl, episodeFileUrl } from "../api/client";
 import { DESTINATION_TYPE_LABELS, SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS, SHOT_STATUS_LABELS } from "../labels";
+import { ImageLightbox, type LightboxItem } from "./ImageLightbox";
 import PromptTrace from "./PromptTrace";
 import { videoPromptRefreshKey } from "./prompt-trace-key";
 import { downloadScriptCsv } from "./scriptExport";
@@ -15,6 +16,25 @@ function SavedMedia({ src, label, video = false }: { src: string; label: string;
   return video
     ? <video className="k-media k-desk-final" src={src} controls preload="metadata" aria-label={label} onError={() => setFailed(true)} />
     : <img className="k-media" src={src} alt={label} onError={() => setFailed(true)} />;
+}
+
+function SavedShotImages({ shotNo, images, selected, file }: {
+  shotNo: number; images: string[]; selected: string | null; file: (ref: string) => string;
+}) {
+  const [zoom, setZoom] = useState<number | null>(null);
+  const items: LightboxItem[] = images.map((ref, index) => ({
+    src: file(ref), alt: `第 ${shotNo} 镜图片 ${index + 1}`, label: `候选 ${index + 1}`, selected: ref === selected,
+  }));
+  return <>
+    <div className="k-desk-candidates">{images.map((ref, index) => <figure key={ref} title={ref}
+      className={`k-desk-candidate k-playback-candidate ${ref === selected ? "is-selected" : ""}`}>
+      <button type="button" className="k-desk-zoom" aria-label={`放大查看第 ${shotNo} 镜图片 ${index + 1}`}
+        onClick={() => setZoom(index)}><SavedMedia src={items[index]!.src} label={items[index]!.alt} /></button>
+      <figcaption>候选 {index + 1}{ref === selected ? " · 已选图" : ""}</figcaption>
+    </figure>)}</div>
+    {zoom !== null && <ImageLightbox title={`第 ${shotNo} 镜`} items={items} index={zoom}
+      onIndexChange={setZoom} onClose={() => setZoom(null)} />}
+  </>;
 }
 
 function Fields({ values }: { values: [string, string | number][] }) {
@@ -61,9 +81,8 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
       const images = [...new Set([...s.candidates, ...(s.kf_selected ? [s.kf_selected] : [])])];
       return <article className="k-card" key={s.shot_id ?? s.no}><h3>第 {s.no} 镜 · {s.beat}</h3>
         <p className="k-card-meta">{s.kf_selected ? "已选图已标记" : "尚未选定图片"}</p>
-        {images.length ? <div className="k-desk-candidates">{images.map((ref, index) => <figure key={ref} title={ref} className={`k-desk-candidate k-playback-candidate ${ref === s.kf_selected ? "is-selected" : ""}`}>
-          <SavedMedia src={file(ref)} label={`第 ${s.no} 镜图片 ${index + 1}`} /><figcaption>候选 {index + 1}{ref === s.kf_selected ? " · 已选图" : ""}</figcaption>
-        </figure>)}</div> : <p className="k-empty">暂无已保存的图片</p>}
+        {images.length ? <SavedShotImages shotNo={s.no} images={images} selected={s.kf_selected} file={file} />
+          : <p className="k-empty">暂无已保存的图片</p>}
       </article>;
     })}</section>;
   if (stage === "clips") return <section className="k-desk-main"><h2>已保存的视频片段</h2>
