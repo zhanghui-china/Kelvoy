@@ -352,6 +352,8 @@ test("every script round carries the person composition and orientation rules, i
     expect(prompt).toContain("人物镜头的构图与朝向");
     expect(prompt).toContain("人物全身入镜、约占画面高度三分之一");
     expect(prompt).toContain("朝向由这一镜的剧情动作决定");
+    expect(prompt).toContain("「背对镜头（背影）」「侧对镜头」「正对镜头」三选一");
+    expect(prompt).toContain("第一镜必须填 landmark");
     expect(prompt).toContain("不要出现 id");
     expect(prompt.indexOf("人物镜头的构图与朝向")).toBeLessThan(prompt.indexOf("每个元素字段"));
   }
