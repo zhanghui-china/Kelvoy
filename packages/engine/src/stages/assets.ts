@@ -8,6 +8,12 @@ export async function runAssets(episode: Episode, _shotNo?: number, context?: St
   if (episode.mode !== "per_shot") throw new Error("网格模式尚未完成，不能按逐镜模式生成");
   if (!context?.persona || !context.destination) throw new Error("assets 需要角色和目的地");
   if (context.persona.refs.length < 3) throw new Error("角色参考图不足 3 张");
+  const outfitId = episode.brief.outfit_id;
+  if (outfitId) {
+    const outfit = context.persona.outfits?.find((item) => item.outfit_id === outfitId);
+    if (!outfit) throw new Error("所选穿搭在该角色版本中不存在");
+    if (outfit.refs.length === 0) throw new Error(`穿搭「${outfit.name}」没有参考图`);
+  }
   if (episode.shots.length === 0) throw new Error("分镜表为空");
   if (episode.video_source === "references" && !context.destination.landmarks[0]?.refs[0]) {
     throw new Error("目的地缺少场景参考图，不能直接生成视频");

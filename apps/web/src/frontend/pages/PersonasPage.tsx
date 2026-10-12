@@ -56,6 +56,12 @@ export function PersonaCard({ persona: p, onRefresh }: {
           ))}
         </div>
       )}
+      {(p.outfits?.length ?? 0) > 0 && (
+        <div className="k-persona-row">
+          <span className="k-card-meta">穿搭</span>
+          <span className="k-card-meta">{p.outfits!.length} 套：{p.outfits!.map((o) => o.name).join("、")}</span>
+        </div>
+      )}
       {p.default_outfit && (
         <div className="k-persona-row">
           <span className="k-card-meta">默认穿搭</span>

@@ -15,6 +15,8 @@ export type EpisodeDraft = {
   requirements: string;
   aspect: EpisodeAspect;
   videoSource?: VideoSource;
+  /** 选用的角色穿搭；空串或缺省 = 默认穿搭。老草稿没有这个字段。 */
+  outfitId?: string;
 };
 
 /** An explicit destination link starts a new location choice while retaining the
@@ -34,6 +36,7 @@ function isDraft(value: unknown): value is EpisodeDraft {
   return ["personaId", "destinationId", "templateId", "season", "tone", "outfitOverride", "name", "requirements"].every((key) => typeof draft[key] === "string")
     && (draft.seasonMode === "preset" || draft.seasonMode === "custom")
     && (draft.aspect === "9:16" || draft.aspect === "16:9")
+    && (draft.outfitId === undefined || typeof draft.outfitId === "string")
     && (draft.videoSource === undefined || draft.videoSource === "keyframe" || draft.videoSource === "references")
     && typeof draft.candidates === "number" && Number.isInteger(draft.candidates)
     && Array.isArray(draft.banned) && draft.banned.every((term: unknown) => typeof term === "string");

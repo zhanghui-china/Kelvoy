@@ -25,8 +25,8 @@ Users pick one virtual on-camera character and one scenic-level destination; the
 - Destination symbol-pack retrieval and narrative-skeleton generation;
 - A freely editable storyboard script (about 28 shots as an initial starting point) with per-shot captions;
 - Either creation path:
-  - **Direct path (default for new projects)**: character reference image + landmark photo go straight to dual-reference video generation, skipping image generation entirely;
-  - **Classic path**: 1–3 keyframe candidates per shot → manual selection → image-to-video;
+  - **Keyframe path (default in the new-episode UI)**: 1–3 keyframe candidates per shot → manual selection → image-to-video;
+  - **Direct path (selectable in advanced settings)**: character reference image + landmark photo go straight to dual-reference video generation, skipping image generation entirely;
 - Per-shot clip review, trim-point refinement, and quality red-line confirmation;
 - Fixed one-second-per-shot cutting (30 frames @30fps), LUT grading, subtitles, transitions, intro/outro, and AI labeling in the compose stage;
 - Final-cut delivery, versioning, share links, and credit/usage reporting.
@@ -67,7 +67,7 @@ Production is decomposed into a **six-stage pipeline** with human review gates, 
 | Brief | Project creation | Character + destination + season + template + aspect + creation mode | — |
 | S1 | Script generation | Storyboard JSON with freely adjustable shot count (with per-shot captions) | Review 1: revise script |
 | S2 | Character assets | Reference set + character card (version snapshot) | — |
-| S3 | Keyframe generation (classic path) | 1–3 candidates per shot, 9:16 / 16:9 | Review 2: pick keyframes |
+| S3 | Keyframe generation (keyframe path) | 1–3 candidates per shot, 9:16 / 16:9 | Review 2: pick keyframes |
 | S4 | Video generation | 3–5s clip per shot (for a strict 1s cut) | Review 3: pick clips |
 | S5 | Compose & deliver | 1s-per-shot beat cutting + LUT + subtitles + transitions + intro/outro + AI-labeled MP4 | Compose-setup confirmation |
 
@@ -75,12 +75,12 @@ Production is decomposed into a **six-stage pipeline** with human review gates, 
 
 ### 2.2 Dual-Reference Direct Video: Skipping the Image Stage
 
-Since 2026-09, new projects default to the `video_source: "references"` direct path:
+Since 2026-09 the `video_source: "references"` direct path is available; the new-episode UI defaults to keyframe, and direct can be chosen in advanced settings (when the API receives no `video_source`, it still defaults to `references`):
 
 - Each shot feeds the **first character reference image from the persona version snapshot** and the **first real-photo reference of the script's landmark**, in that order, into the MiniMax H3 dual-reference video workflow (`2_2_DualRef2Video_MinimaxH3`); shots without a landmark use the destination's first scene reference;
 - The video prompt merges scene and action descriptions and follows the project's 9:16 / 16:9 aspect, generating 3–5 seconds of material for the user to cut down to exactly one second;
 - The flow goes script review → asset checks → video generation → clip review — **no image candidates, no keyframe review, and no image credits**;
-- Users can still choose `video_source: "keyframe"` in advanced settings for the classic keyframe path; old projects keep their original flow with no automatic conversion.
+- The new-episode page defaults to `video_source: "keyframe"` (the keyframe path); users can switch to direct in advanced settings; old projects keep their original flow with no automatic conversion.
 
 ### 2.3 A Vertical Genre: Virtual Character × Real Destination
 
@@ -128,7 +128,7 @@ Running on **two single-GPU DGX Spark machines** (GB10, 128GB unified memory), t
 ### 2.8 A Professional Review Desk
 
 - **Review 1 · Script**: script view / storyboard view, CSV export; edit shot fields, reorder, delete shots (floor of 24, no additions), edit captions; instruction-based optimization or full regeneration (row-version atomic marking; failures keep the current script and prompt retry);
-- **Review 2 · Keyframes** (classic path): pick a candidate per shot against character and landmark references; pending queue, per-shot mode, regenerate after editing the prompt;
+- **Review 2 · Keyframes** (keyframe path): pick a candidate per shot against character and landmark references; pending queue, per-shot mode, regenerate after editing the prompt;
 - **Review 3 · Clips**: drag the slider to preview in real time (snap-to-grid at 30fps in the new version), confirm five quality red lines per shot (character consistency, hands OK, landmark shape, physics, no readable text); mark bad shots for regeneration — the first bad-shot report per shot is free;
 - **Compose setup**: confirm title, subtitles, transitions, music, intro/outro, then start composing; progress polls in real time;
 - **Delivery page**: play the full cut, download the MP4, toggle the public share link, and view this episode's estimated vs. used credits.
@@ -247,7 +247,7 @@ Any generating state may enter `failed`; marking regeneration in reviews 2/3 mov
 
 - `DestinationType`: `mountain_summit` / `city_night` / `theme_town` / `scenic_area` / `water_town` / `island`
 - `EpisodeAspect`: `9:16` (default) / `16:9`; the server derives `render.res` from it
-- `VideoSource`: `references` (direct, default for new projects) / `keyframe` (classic)
+- `VideoSource`: `references` (direct; API default when omitted) / `keyframe` (keyframe path; default in the Web new-episode UI)
 - `cut_policy`: `fixed_1s` (new projects) / `beat_aligned` (backfilled for old projects)
 - `EpisodeMode`: `per_shot` / `grid`; `grid` is read-only for old JSON, new episodes accept only `per_shot`
 - `SceneTime`: morning / noon / afternoon / evening / night; `size` ∈ wide / medium / close / detail / pov; `camera` ∈ static / pan / push / follow
@@ -259,9 +259,9 @@ Any generating state may enter `failed`; marking regeneration in reviews 2/3 mov
 | Stage | Implementation | Model / service | Notes |
 |---|---|---|---|
 | Script / storyboard | `providers/stepfun-llm.ts` | StepFun API (`STEPFUN_API_KEY`) | brief + destination pack → flexible-shot-count JSON (with captions); structured output + schema validation; landmark entries must come from the destination library; supports instruction-based regeneration |
-| Keyframes (classic) | `services/inference /image/` → ComfyUI | Qwen-Image 2.1 (single ref = character; dual ref = character + landmark) | 1–3 candidates per shot; 9:16 / 16:9; 240s generation budget |
-| Image-to-video (classic) | `services/inference /video/` → ComfyUI | MiniMax H3 single-reference (approved keyframe) | 3–5s material cut to 1s; 240s budget |
-| Dual-reference direct (default) | `services/inference /video/` → ComfyUI | MiniMax H3 dual-reference (character + scene) | 3–5s material cut to 1s; 270s budget; no image credits |
+| Keyframes (keyframe path) | `services/inference /image/` → ComfyUI | Qwen-Image 2.1 (single ref = character; dual ref = character + landmark) | 1–3 candidates per shot; 9:16 / 16:9; 240s generation budget |
+| Image-to-video (keyframe path) | `services/inference /video/` → ComfyUI | MiniMax H3 single-reference (approved keyframe) | 3–5s material cut to 1s; 240s budget |
+| Dual-reference direct (advanced setting) | `services/inference /video/` → ComfyUI | MiniMax H3 dual-reference (character + scene) | 3–5s material cut to 1s; 270s budget; no image credits |
 | Video overflow | `providers/kling-api.ts`, `jimeng-api.ts` | Kling / Jimeng APIs | Automatic switch after ≤ 2 local retries |
 | Music (generated) | `comfyui-bridge /api/music` | ACE-STEP 1.5 XL + **MinimaxMusic 3** | Text-to-music; style + lyrics + duration (up to 180s) |
 | Music (retrieval) | `providers/music-library.ts` | Licensed library | Search existing tracks by tone |
@@ -690,13 +690,13 @@ After `VAEDecode` (video stream) and `VAEDecodeAudio` (stereo audio stream), `VH
 
 ### 6.1 Creating an Episode
 
-After signing in, "New episode" offers: an official or personal character, a destination (with landmarks and reference photos), a template, season, tone, and creative requirements. Advanced settings cover template, outfit, banned terms, **creation mode (dual-reference direct video recommended; the classic keyframe mode allows 1–3 candidates per shot)**, and aspect (9:16 default, 16:9 optional). A live credit estimate is shown before submission. Unsubmitted drafts persist in the current browser session; entering from a home-page destination card prioritizes the linked destination.
+After signing in, "New episode" offers: an official or personal character, a destination (with landmarks and reference photos), a template, season, tone, and creative requirements. Advanced settings cover template, outfit, banned terms, **creation mode (keyframe mode is the default and recommended, with 1–3 candidates per shot; dual-reference direct video can be selected instead)**, and aspect (9:16 default, 16:9 optional). A live credit estimate is shown before submission. Unsubmitted drafts persist in the current browser session; entering from a home-page destination card prioritizes the linked destination.
 
 ### 6.2 Review 1: Script
 
-When the script is ready, "Review 1 · Script" provides a script view / storyboard view and CSV export. Edit shot fields (including captions), reorder, or delete shots (floor of 24, no additions; deletions automatically re-validate shot-type continuity and landmark coverage); write an optimization instruction or regenerate the whole script (failures keep the current script and prompt retry). When done, click "Continue → generate video with character & scene" (direct mode) or "Continue → generate assets & keyframes" (classic mode).
+When the script is ready, "Review 1 · Script" provides a script view / storyboard view and CSV export. Edit shot fields (including captions), reorder, or delete shots (floor of 24, no additions; deletions automatically re-validate shot-type continuity and landmark coverage); write an optimization instruction or regenerate the whole script (failures keep the current script and prompt retry). When done, click "Continue → generate assets & keyframes" (keyframe mode, default) or "Continue → generate video with character & scene" (direct mode).
 
-### 6.3 Review 2: Keyframes (Classic Path)
+### 6.3 Review 2: Keyframes (Keyframe Path)
 
 Each shot shows 1–3 candidate 9:16 / 16:9 keyframes for side-by-side selection against character and landmark references; a pending queue, expand-all view, and planning grids (view-only) are available; regenerate directly or after editing the prompt. Once every shot is selected, video generation starts.
 
@@ -733,7 +733,7 @@ Play the full cut, download the MP4, and view this episode's estimated and used 
 | Output form | Illustrated audio comic short (images + narration + BGM) | Travel-vlog short (video + subtitles + BGM) |
 | Core scenario | Scenic-cultural-IP storytelling | Virtual-character travel content production |
 | Character consistency | Three-view references + fixed art style | Three-view + version snapshots + dual-reference direct video |
-| Generation mode | Fully automatic pipeline | Six stages + human review gates + two creation paths (direct / keyframe) |
+| Generation mode | Fully automatic pipeline | Six stages + human review gates + two creation paths (keyframe default / direct optional) |
 | Editing | Page rhythm with narration | Strict one-second (30-frame) fixed cutting + subtitle burn-in + 2-frame transitions |
 | Architecture | Web + FastAPI | Web + Worker + local SQLite + FastAPI inference adapter + ComfyUI |
 | Resource accounting | None | Atomic credit reserve/settle/release + versioned delivery + usage page |

@@ -6,7 +6,11 @@ import { classifyH3Failure } from "./errors";
 import { artifactPath, assertEpisodePublicationAllowed, sharedAssetPath } from "../storage/artifacts";
 import { BASE_FIELDS, REF_FIELDS, H3FormatError, normalizePictureLabels, parseSections, validateSections, renderSections } from "./h3-prompt-format";
 
-const WRITER_VERSION = "h3-writer-v1";
+// v2 (ADR-0016): orientation and landmark-anchor constraints in the system prompt. The version is part of the
+// cache key, so v1 cached rewrites are not reused for the new rules.
+// v3: v2 made the model drop the shot-size and camera words that validateSections requires (GX10 replay:
+// 7 of 8 rewrites rejected with "preserve shot size and camera"), so the sentence now demands them explicitly.
+const WRITER_VERSION = "h3-writer-v3";
 interface Options {
   fetch?: (url: string, init: RequestInit) => Promise<Response>;
   timeoutMs?: number;
@@ -28,11 +32,13 @@ function systemPrompt(skill: string, guide: string, context: H3PromptContext): s
   return `${skill}\n\n${guide}\n\nKelvoy constraints (override examples):
 Rewrite the supplied JSON context as ${context.mode}. Return ONLY a JSON object with these string fields: ${fields.join(", ")}.
 Use English. Preserve the source action, shot size, composition and camera exactly. No dialogue, lyrics, narration, subtitles, captions, visible text or cuts. Do not turn the beat into speech or text.
-One continuous [Shot 1], no other shots. Explicitly end its timeline at 00:0${context.duration_s}.000 (${context.duration_s} seconds). Aspect ${context.aspect}.
+Name the shot size (wide / medium / close-up / detail / POV) and the camera movement (static / pan / push / follow) in plain words at the start of [Shot 1], exactly as the source gives them.
+Also keep the subject's orientation and gaze as the source states (for example back to the camera, side-on, looking at the landmark) and never turn the subject to face the camera unless the source action says so. A landmark named in the source is visible from 00:00 and the subject stays positioned relative to it as the source describes.
+One continuous [Shot 1], no other shots. Explicitly end its timeline at 00:0${context.duration_s}.000 (${context.duration_s} seconds): write the timestamp itself, not just "${context.duration_s} seconds". Aspect ${context.aspect}.
 non_diegetic_music must be exactly N/A; episode music is added later. Use only the supplied reference roles and picture numbers, in their actual order. No video/audio references. summary starts [reference generation]. Retention has one line per Subject: <Subject N> (appears in [Shot 1]): fully_preserved/partially_preserved/attribute_transfer/weak_reference - explanation. Subject 1 cites Picture 1 (person), Subject 2 cites Picture 2 (scene); preserve that order.
 Describe affirmative actions; negative production constraints may say no face/no eating/no cuts.
 You have NOT viewed the images. Do not claim to observe details or invent appearance, clothing, objects, sounds or architecture absent from the source. Define reference subjects only by supplied role, without visual guesses.
-For I2VA, the worker adds the official first-frame instruction; return only the three fields, no Subject labels.
+For I2VA, the worker adds the official first-frame instruction (including its "(from [Shot 1])" note); do not write that sentence or note yourself. Return only the three fields, no Subject labels.
 For Ref2VA, define every Subject you use in subject_definitions, citing its actual Picture source. Reference pictures define identity/scene, not an extra shot.
 If this is a shaobing pastry detail shot: show only hands and pastry; a slight wrist rotation; static camera; no face, eating, cuts or extra motion.${context.person_visible === false ? `
 Script flag: no person is visible in this shot. The person reference is identity-only and must not appear. Still define Subject 1 by its person role (retention weak_reference, you may cite <Picture 1>), but do not describe any person, hands, body or silhouette in the timeline; the scene reference <Picture 2> carries the whole shot.` : ""}

@@ -1,11 +1,12 @@
-import { ShotFailureNotice } from "./ShotFailure";
+import { ShotFailureNotice, useShotRetry } from "./ShotFailure";
 import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
-import type { Destination, Episode, Persona, Shot } from "@kelvoy/engine";
+import { keyframeReferences, type Destination, type Episode, type Persona, type Shot } from "@kelvoy/engine";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import { describeWriteError } from "./errors";
 import ReviewQueue from "./ReviewQueue";
+import { ImageLightbox, type LightboxItem, ZoomImage } from "./ImageLightbox";
 import { ShotFocusNav } from "./ShotFocusNav";
 import { AssetImage, MutationError, ShotHeader } from "./ShotHeader";
 import { focusedShot } from "./shot-focus";
@@ -45,6 +46,7 @@ function KeyframeShot({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const savingRef = useRef(false);
   const editLockReason = episode.status !== "kf_review" ? "当前不在关键帧审核，暂时不能修改画面描述。"
     : episode.script_pending_task_id ? "脚本任务正在处理，请等待完成。"
@@ -81,6 +83,14 @@ function KeyframeShot({
   }
 
   const landmark = destination?.landmarks.find((l) => l.id === shot.landmark) ?? null;
+  const usedRefs = keyframeReferences(persona, destination, shot, episode.brief.outfit_id);
+  const selectLocked = mutation.pending || shot.status === "approved";
+  const candidateItems: LightboxItem[] = shot.candidates.map((candidate, index) => ({
+    src: episodeFileUrl(episode.episode_id, candidate),
+    alt: `第 ${shot.no} 镜候选 ${index + 1}`,
+    label: `候选 ${index + 1}`,
+    selected: shot.kf_selected === candidate,
+  }));
 
   async function select(candidate: string) {
     setError(null);
@@ -115,45 +125,71 @@ function KeyframeShot({
       <ShotHeader shot={shot} />
       <div className="k-desk-shot-body">
         <div>
-          <div className="k-card-meta">候选（点一张选定，顺序即生成顺序，不做打分排序）</div>
+          <div className="k-card-meta">候选（点图放大，按钮选定；顺序即生成顺序，不做打分排序）</div>
           {shot.candidates.length === 0 ? (
             <p className="k-empty">还没有候选图。</p>
           ) : (
             <div className="k-desk-candidates">
-              {shot.candidates.map((candidate) => (
-                <button
-                  type="button"
+              {shot.candidates.map((candidate, index) => (
+                <div
                   key={candidate}
+                  // 存储 key 又长又没信息量，只放 title 里供排查；界面上用序号。
+                  title={candidate}
                   className={`k-desk-candidate ${shot.kf_selected === candidate ? "is-selected" : ""}`}
-                  aria-pressed={shot.kf_selected === candidate}
-                  disabled={mutation.pending || shot.status === "approved"}
-                  onClick={() => select(candidate)}
                 >
-                  <AssetImage
-                    src={episodeFileUrl(episode.episode_id, candidate)}
-                    alt={`第 ${shot.no} 镜候选 ${candidate}`}
-                  />
-                  <span className="k-card-meta">{candidate.split("/").pop()}</span>
-                </button>
+                  <button
+                    type="button"
+                    className="k-desk-zoom"
+                    aria-label={`放大查看第 ${shot.no} 镜候选 ${index + 1}`}
+                    onClick={() => setZoomIndex(index)}
+                  >
+                    <AssetImage
+                      src={episodeFileUrl(episode.episode_id, candidate)}
+                      alt={`第 ${shot.no} 镜候选 ${index + 1}`}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    className={`k-btn k-btn-tiny ${shot.kf_selected === candidate ? "k-btn-primary" : "k-btn-secondary"}`}
+                    aria-pressed={shot.kf_selected === candidate}
+                    disabled={selectLocked}
+                    onClick={() => select(candidate)}
+                  >
+                    候选 {index + 1} · {shot.kf_selected === candidate ? "已选定" : "选这张"}
+                  </button>
+                </div>
               ))}
             </div>
           )}
         </div>
 
         <div className="k-desk-refs">
-          {landmark && (
+          <div className="k-card-meta">本镜生成用到的参考图</div>
+          {usedRefs.persona && persona && (
             <div>
-              <div className="k-card-meta">地标实景参考 · {landmark.name}</div>
-              {landmark.refs.map((ref) => (
-                <AssetImage key={ref} src={assetUrl(ref)} alt={`${landmark.name} 实景参考`} />
-              ))}
+              <div className="k-card-meta">
+                角色参考 · {persona.name}{usedRefs.outfit ? ` · 穿搭「${usedRefs.outfit.name}」` : ""} · 第 {usedRefs.persona.index + 1} 张 / 共 {usedRefs.persona.total} 张
+              </div>
+              <ZoomImage src={assetUrl(usedRefs.persona.key)} alt={`${persona.name} 角色参考图`}
+                title={`${persona.name} 角色参考`} />
             </div>
           )}
-          {persona && persona.refs.length > 0 && (
+          {usedRefs.person_omitted && <p className="k-card-meta">本镜是空镜，没有使用角色参考图，只用了地标参考图。</p>}
+          {!usedRefs.persona && !usedRefs.person_omitted && <p className="k-card-meta">角色暂无参考图，无法显示。</p>}
+          {usedRefs.landmark ? (
             <div>
-              <div className="k-card-meta">角色参考 · {persona.name}</div>
-              <AssetImage src={assetUrl(persona.refs[0])} alt={`${persona.name} 参考图`} />
+              <div className="k-card-meta">
+                地标参考 · {usedRefs.landmark.name} · 第 {usedRefs.landmark.index + 1} 张 / 共 {usedRefs.landmark.total} 张
+              </div>
+              <ZoomImage src={assetUrl(usedRefs.landmark.key)} alt={`${usedRefs.landmark.name} 地标参考图`}
+                title={`${usedRefs.landmark.name} 地标参考`} />
             </div>
+          ) : usedRefs.landmark_id ? (
+            <p className="k-card-meta">
+              地标「{landmark?.name ?? usedRefs.landmark_id}」暂无参考图，无法显示。
+            </p>
+          ) : (
+            <p className="k-card-meta">本镜没有指定地标，只用了角色参考图。</p>
           )}
         </div>
       </div>
@@ -204,6 +240,17 @@ function KeyframeShot({
         </div>
         <p className="k-card-meta">内容未变时留在当前审核；修改后返回脚本审核，仅此镜素材需重新生成，其他镜头与旧成片保留。保存不会自动生成。</p>
       </div>
+      {zoomIndex !== null && (
+        <ImageLightbox
+          title={`第 ${shot.no} 镜`}
+          items={candidateItems}
+          index={zoomIndex}
+          onIndexChange={setZoomIndex}
+          onClose={() => setZoomIndex(null)}
+          onSelect={(index) => void select(shot.candidates[index])}
+          selectDisabled={selectLocked}
+        />
+      )}
     </article>
   );
 }
@@ -238,6 +285,7 @@ export default function KeyframeReview({
     }
   }, [activeNo]);
 
+  const shotRetry = useShotRetry(episode, mutation);
   const unselected = episode.shots.filter((s) =>
     s.status !== "approved" && (s.status !== "kf_selected" || !s.kf_selected)).length;
 
@@ -268,12 +316,12 @@ export default function KeyframeReview({
           <div className="k-card">
             <div className="k-card-meta">网格策划稿（只看不审，不是审核点）</div>
             <div className="k-desk-candidates">
-              {episode.grid_refs.map((ref) => (
+              {episode.grid_refs.map((ref, index) => (
                 <AssetImage
                   key={ref}
                   src={episodeFileUrl(episode.episode_id, ref)}
-                  alt="网格策划稿"
-                  caption={ref}
+                  alt={`网格策划稿 ${index + 1}`}
+                  caption={`策划稿 ${index + 1}`}
                 />
               ))}
             </div>
@@ -281,7 +329,9 @@ export default function KeyframeReview({
         )}
 
         <MutationError error={mutation.error} />
-        <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures} />
+        <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures}
+          onRetry={activeNo !== null ? () => void shotRetry.retry(activeNo) : undefined}
+          pending={shotRetry.pending} queued={activeNo !== null && shotRetry.isQueued(activeNo)} />
 
         {episode.shots.map((shot) => (
           <KeyframeShot

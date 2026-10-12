@@ -1,6 +1,7 @@
 import type { Episode } from "../schema";
 import { transitionEpisode, transitionShot } from "../state";
 import { generationSeed } from "./generation-seed";
+import { personaReference } from "./keyframe-references";
 import type { StageContext } from "./types";
 
 /** Generate one clip from a reviewed keyframe. */
@@ -20,7 +21,7 @@ export async function runVideo(episode: Episode, shotNo?: number, context?: Stag
   }
   const landmark = context?.destination?.landmarks.find((item) => item.id === shot.landmark)
     ?? context?.destination?.landmarks[0];
-  const personRef = context.persona?.refs[0];
+  const personRef = personaReference(context.persona, episode.brief.outfit_id).ref?.key;
   const sceneRef = landmark?.refs[0];
   if (direct && (!personRef || !sceneRef)) throw new Error(`第 ${shotNo} 镜缺少人物或场景参考图`);
   const refs = direct ? [personRef!, sceneRef!] : undefined;

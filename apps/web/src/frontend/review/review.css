@@ -164,8 +164,23 @@
   border: 2px solid var(--color-border-strong);
   border-radius: 10px;
   background: transparent;
-  cursor: pointer;
   font-family: var(--font-body);
+}
+
+/* 图区是放大入口，选定是下面的独立按钮。 */
+.k-desk-zoom {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.k-desk-zoom:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .k-desk-candidate.is-selected {

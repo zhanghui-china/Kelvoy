@@ -16,6 +16,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { canEditPersona } from "../persona-access";
 import { describeWriteError } from "../review/errors";
 import "./PersonaEditPage.css";
+import PersonaOutfits from "./PersonaOutfits";
 import { selectDraftPersona } from "./episode-draft";
 
 // §4："这三项是锁定的" —— 新建时默认全选；schema 是 string[]，用户可以
@@ -337,7 +338,7 @@ export default function PersonaEditPage() {
           <p className="k-card-meta">
             允许上传真人照片，肖像权与合规责任由上传者自行确认并承担；系统不凭空生成与上传图无关的真实人物肖像。
           </p>
-          <p className="k-card-meta">建议包含正 / 侧 / 全身 / 细节各至少一张，共 3–7 张。</p>
+          <p className="k-card-meta">建议包含正 / 侧 / 全身 / 细节各至少一张，共 3–7 张。第 1 张会作为生成时的人物参考，建议用全身、姿态自然的照片；只有半身照时，全身镜头的下半身衣服可能前后不一致。</p>
 
           {current && current.refs.length > 0 && (
             <>
@@ -395,6 +396,8 @@ export default function PersonaEditPage() {
           </button>
         </div>
       </form>
+
+      {isEdit && current && <PersonaOutfits persona={current} onChange={setSavedPersona} />}
     </div>
   );
 }

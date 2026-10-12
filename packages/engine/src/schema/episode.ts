@@ -107,6 +107,8 @@ export interface EpisodeBrief {
   duration_s: number;
   tone: string;
   outfit_override: string | null;
+  /** 选用的自建穿搭（Persona.outfits[].outfit_id）；缺省或 null = 默认穿搭。 */
+  outfit_id?: string | null;
   banned: string[];
 }
 

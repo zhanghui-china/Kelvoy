@@ -15,14 +15,14 @@ import { GUIDE_SECTIONS } from "../guide";
 
 const render = (node: React.ReactNode) => renderToStaticMarkup(<StaticRouter location="/">{node}</StaticRouter>);
 
-test("public entry copy explains direct video and optional keyframe workflow", () => {
+test("public entry copy explains keyframe workflow with optional direct video", () => {
   const html = render(<><LandingHero destinationCount={2} /><LandingHow /><LandingFooter /><LoginPage /></>);
   expect(html).toContain("可旅，让每一场旅行");
   expect(html).toContain("已入库目的地");
   expect(html).toContain("<strong>2</strong>");
   expect(html).toContain('href="/login"');
-  expect(html).toContain("人物与场景参考直接生成视频");
-  expect(html).toContain("传统关键帧流程");
+  expect(html).toContain("先逐镜选定关键帧，再生成视频");
+  expect(html).toContain("人物与场景直出视频，跳过图片生成与关键帧审核");
   expect(html).not.toContain("三选一");
   expect(html).not.toContain("30 分钟");
   expect(html).not.toContain("免费体验");

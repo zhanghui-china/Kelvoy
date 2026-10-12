@@ -24,7 +24,7 @@ POST /api/auth/login
 | `GET /api/me/credits` | `{"ok":true,"balance":{…},"ledger":[…]}`，流水 |
 | `GET /api/personas` `/destinations` `/templates` | `{"ok":true,"<复数名>":[…]}` |
 | `GET /api/episodes` | `{"ok":true,"episodes":[…]}`，用于续跑和建期结果核对 |
-| `GET /api/episodes/<id>` | `{"ok":true,"episode":{…},"persona":…,"destination":…,"row_version":7,"failed_task":{"stage":"video","shot_no":3}\|null}` |
+| `GET /api/episodes/<id>` | `{"ok":true,"episode":{…},"persona":…,"destination":…,"row_version":7,"failed_task":{"stage":"video","shot_no":3}\|null,"failed_tasks":[{"stage":"video","shot_no":3}]}` |
 | `GET /api/episodes/estimate?mode=per_shot&video_source=references&candidates=3` | `{"ok":true,"estimate":{…},"credit_quote":N}`。**`estimate.estimated_credits` 其实是 GPU 分钟，向用户报价用 `credit_quote`** |
 
 名称不是 ID，不凭列表序号当 ID。`row_version` 是期级写入锁，每次写前读最新值，成功响应带新值。不同镜头共用期级锁，写入串行。
@@ -39,10 +39,12 @@ POST /api/auth/login
 
 ```http
 POST /api/episodes
-{"persona_id":"…","destination_id":"…","template_id":"…","tone":"安静的旅行记录"}
+{"persona_id":"…","destination_id":"…","template_id":"…","tone":"安静的旅行记录","video_source":"references"}
 ```
 
-必需三个 ID。可选：`name`、`requirements`、`aspect`（`9:16` 默认）、`video_source`（`references` 默认，或 `keyframe`）、`candidate_count`、`series_id`、`season`、`tone`、`banned`（字符串数组）、`outfit_override`。`mode` 只接受 `per_shot`。服务派生 owner、版本快照、`cut_policy=fixed_1s`、30 秒、render，并自动入队 brief。
+必需三个 ID。可选：`name`、`requirements`、`aspect`（`9:16` 默认）、`video_source`（`references` 或 `keyframe`；不传时服务端缺省为 `references`）、`candidate_count`、`series_id`、`season`、`tone`、`banned`（字符串数组）、`outfit_override`（仅记录，不影响生成）、`outfit_id`（选用该角色的一套穿搭，须出现在角色当前版本的 `outfits` 里；不传用默认穿搭，未知返回 400 `outfit_not_found`）。`mode` 只接受 `per_shot`。服务派生 owner、版本快照、`cut_policy=fixed_1s`、30 秒、render，并自动入队 brief。
+
+**默认值差异**：服务端缺省 `video_source=references`（API 契约，不随 Web 界面变化）；Web 新建页的界面默认是 `keyframe`。因此依赖直出路径（无关键帧审核）或依赖关键帧路径的调用方，都应显式传 `video_source`，不要依赖缺省值。
 
 成功 201：`{"ok":true,"episode":{…}}`，立即记录 `episode.episode_id`。
 
@@ -56,7 +58,7 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
       → clip_review → compose_ready → composing → done        任一生成态可 → failed
 ```
 
-`video_source=references`（默认）在 assets 之后直接进 `clipping`，**没有 kf_review**。`keyframe` 模式才有关键帧审核。`/continue` 可从四个审核态推进：`script_review`、`kf_review`、`clip_review`、`compose_ready`。`clip_review` 在 `fixed_1s` 下先进 `compose_ready`，再 `/continue` 才进 `composing`。非 `fixed_1s` 的旧期 `clip_review` 直接进 `composing`。
+`video_source=references`（服务端缺省；Web 界面默认为 `keyframe`）在 assets 之后直接进 `clipping`，**没有 kf_review**。`keyframe` 模式才有关键帧审核。`/continue` 可从四个审核态推进：`script_review`、`kf_review`、`clip_review`、`compose_ready`。`clip_review` 在 `fixed_1s` 下先进 `compose_ready`，再 `/continue` 才进 `composing`。非 `fixed_1s` 的旧期 `clip_review` 直接进 `composing`。
 
 ## 审核写入
 
@@ -101,7 +103,7 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 | --- | --- | --- |
 | 重做某镜 | `POST /api/episodes/<id>/shots/<no>/regen` `{"row_version":7,"regen_stage":"video"}` | `regen_stage`=`keyframe`/`video`，可省略，服务按镜状态推断；明确传更稳。镜须为 `kf_ready`／`clip_ready`／`approved`。期须在对应审核态或 `done`。`references` 模式不支持 `keyframe`；`keyframe` 模式做 `video` 需要有效的已选关键帧。整期回到相应审核态，其他镜保留 |
 | 坏镜免费重做 | `POST /api/episodes/<id>/shots/<no>/report-bad` | 同 `/regen` 的 body 与约束，仅视频阶段、每镜第一次免费 |
-| 重试失败任务 | `POST /api/episodes/<id>/retry` `{"row_version":7}` | **期级**，不分镜。服务取最近一个可重试的失败任务；没有则 400 `no_failed_task`。先读 `GET` 详情里的 `failed_task` 告诉用户是哪一步 |
+| 重试失败任务 | `POST /api/episodes/<id>/retry` `{"row_version":7}` | 不带 `shot_no`／`all` 时取最近一个可重试的失败任务（`failed_task`）；没有则 400 `no_failed_task`。可选 `shot_no`（正整数）只重试该镜，`all:true` 重试全部可重试失败（二者互斥，否则 400 `invalid_target`）；成功返回 `queued`／`skipped` 明细。先读 `GET` 详情里的 `failed_tasks`（`[{stage,shot_no}]`，全部可重试失败）告诉用户哪几步失败，`failed_task` 仍是最近一个。完整说明见 `docs/api/retry.md` |
 | 重新合成 | `POST /api/episodes/<id>/recompose` `{"row_version":7}` | 只允许 `done`。合成失败走 `/retry` |
 | 旧期转固定一秒 | `POST /api/episodes/<id>/convert-cuts` `{"row_version":7}` | 仅无 `cut_policy=fixed_1s` 的旧期，且在 `clip_review`／`done` 且全部镜有 clip。转换后所有镜回到 `clip_ready`，须重新审核，让用户决定 |
 
@@ -146,6 +148,10 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 
 本生产技能仍只使用已发布的目录，不自动创建、上传或发布素材。缺目的地时，引导用户在 `/destinations` 的“创建目的地”“我的草稿”完善地标实景照片并发布，完成后重新读取目录。目的地草稿操作不扣积分，建期仍可能返回 402。维护者的完整新增接口说明见仓库 `docs/api/destination-drafts.md`。
 
+
+## 角色穿搭
+
+角色对象可带 `outfits`（缺省 = 只有默认穿搭）：每项 `outfit_id`、`name`、`desc`、`seasons`、`refs`。建期时用 `outfit_id` 选一套，选中的穿搭图替代角色第 1 张参考图生成，所以它才真正改变成片里的衣服；`outfit_override` 文字不会。本技能不上传或编辑穿搭，没有合适穿搭时引导用户到 `/personas/<persona_id>/edit` 添加。新增字段为加法，`api_contract` 仍为 2。
 
 ## 角色退出可选库
 

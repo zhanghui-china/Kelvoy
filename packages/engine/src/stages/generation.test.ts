@@ -218,3 +218,65 @@ test("video rewrite context carries person_visible=false only for a no-person sh
     expect(seen!.context.references.map(ref => ref.role)).toEqual(["person", "scene"]);
   }
 });
+
+const outfitPersona: Persona = {
+  ...persona,
+  outfits: [
+    { outfit_id: "o1", name: "秋日风衣", desc: "", seasons: ["秋"], refs: ["persona/o1_a.png"] },
+    { outfit_id: "o_empty", name: "空", desc: "", seasons: [], refs: [] },
+  ],
+};
+
+test("a chosen outfit replaces the base image for keyframes and direct video, landmark unchanged", async () => {
+  let keyframeInput: unknown;
+  let videoInput: unknown;
+  const brief = { ...episode().brief, outfit_id: "o1" };
+  await runKeyframe(episode({ brief, status: "keyframing", shots: [shot({ status: "generating_kf" })] }), 1, {
+    persona: outfitPersona, destination, generation_id: "t-outfit",
+    keyframe: { async generate(input) {
+      keyframeInput = input;
+      return { key: "kf/x.png", model: "Qwen", version: "1", seed: input.seed, seconds: 1, ref_hashes: [] };
+    } },
+  });
+  expect((keyframeInput as { refs: string[] }).refs).toEqual(["persona/o1_a.png", "dest/a.jpg"]);
+  await runVideo(episode({ brief, video_source: "references", status: "clipping",
+    shots: [shot({ status: "generating_clip" })] }), 1, {
+    persona: outfitPersona, destination, generation_id: "t-outfit-v", h3PromptWriter: mockH3PromptWriter,
+    video: { async generate(input) {
+      videoInput = input;
+      return { key: "clip/x.mp4", model: "H3", version: "dual", seed: input.seed, seconds: 1, ref_hashes: [] };
+    } },
+  });
+  expect((videoInput as { refs: string[] }).refs).toEqual(["persona/o1_a.png", "dest/a.jpg"]);
+});
+
+test("assets rejects a chosen outfit that is missing or has no images", async () => {
+  const run = (outfit_id: string) => runAssets(episode({ brief: { ...episode().brief, outfit_id } }), undefined,
+    { persona: outfitPersona, destination });
+  await expect(run("gone")).rejects.toThrow("穿搭");
+  await expect(run("o_empty")).rejects.toThrow("没有参考图");
+  expect((await run("o1")).status).toBe("keyframing");
+});
+
+test("keyframe prompt names the image roles; an empty shot with a landmark sends only the landmark image", async () => {
+  const seen: Array<{ prompt: string; refs: string[] }> = [];
+  const context: StageContext = {
+    persona, destination, generation_id: "t-prompt",
+    keyframe: { async generate(input) {
+      seen.push({ prompt: input.prompt, refs: input.refs });
+      return { key: `kf/${input.candidate_no}.png`, model: "Qwen", version: "1", seed: input.seed, seconds: 1, ref_hashes: [] };
+    } },
+  };
+  const person = await runKeyframe(episode({ status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf", kf_prompt: "人物背对镜头望向灵山大佛" })] }), 1, context);
+  expect(seen[0]!.refs).toEqual(["persona/front.png", "dest/a.jpg"]);
+  expect(seen[0]!.prompt.startsWith("图1是出镜人物的参考图，图2是「灵山大佛」的实景参考图")).toBe(true);
+  expect(seen[0]!.prompt.endsWith("人物背对镜头望向灵山大佛")).toBe(true);
+  // What was sent is what is recorded.
+  expect(person.shots[0]?.model.image?.prompt).toBe(seen[0]!.prompt);
+
+  await runKeyframe(episode({ status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf", kf_prompt: "无人物出镜", person_visible: false })] }), 1, context);
+  expect(seen[1]!.refs).toEqual(["dest/a.jpg"]);
+  expect(seen[1]!.prompt).toBe("图1是「灵山大佛」的实景参考图，画面中没有人物。无人物出镜");
+});

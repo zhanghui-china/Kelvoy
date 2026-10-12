@@ -1,46 +1,16 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import type { H3PromptContext, PromptTraceEntry } from "@kelvoy/engine";
-import { createH3PromptWriter, rewriteTimeoutMs } from "./h3-prompt-writer";
+import { rewriteTimeoutMs } from "./h3-prompt-writer";
 import { H3FormatError } from "./h3-prompt-format";
+import { context, makeWriterRoot, response, sections, writer } from "./h3-prompt-writer.fixture";
 import { close, deleteEpisode, insertEpisode, open } from "@kelvoy/store";
 import { deletionEpisodeFixture } from "../queue/deletion-test-fixture";
 let root: string;
-let oldRoot: string | undefined;
-beforeEach(async () => {
-  oldRoot = process.env.KELVOY_PROJECTS_ROOT;
-  root = await mkdtemp(join(tmpdir(), "h3-writer-"));
-  process.env.KELVOY_PROJECTS_ROOT = root;
-  await mkdir(join(root, "persona")); await mkdir(join(root, "dest"));
-  await mkdir(join(root, "e1", "kf"), { recursive: true });
-  await writeFile(join(root, "persona/a.png"), "person"); await writeFile(join(root, "dest/a.png"), "scene");
-  await writeFile(join(root, "e1/kf/a.png"), "first frame");
-});
-afterEach(async () => {
-  if (oldRoot === undefined) delete process.env.KELVOY_PROJECTS_ROOT; else process.env.KELVOY_PROJECTS_ROOT = oldRoot;
-  await rm(root, { recursive: true, force: true });
-});
-function context(mode: H3PromptContext["mode"] = "Ref2VA", duration_s = 4): H3PromptContext {
-  return { mode, aspect: "9:16", duration_s, size: "detail", camera: "static", beat: "展示黄山烧饼",
-    kf_prompt: "仅手部与黄山烧饼细节", motion_prompt: "手腕轻微旋转，固定镜头", scene: null,
-    destination: "黄山", landmark: "街头", references: mode === "Ref2VA"
-      ? [{ key: "persona/a.png", role: "person", picture: 1 }, { key: "dest/a.png", role: "scene", picture: 2 }]
-      : [{ key: "e1/kf/a.png", role: "first_frame", picture: 1 }] };
-}
-function sections(mode: H3PromptContext["mode"] = "Ref2VA", duration_s = 4): Record<string, string> {
-  const timeline = `[Shot 1] A detail shot shows only hands and pastry. A slight wrist rotation continues with a static camera through 00:0${duration_s}.000, in one continuous shot.`;
-  return mode === "Ref2VA" ? {
-    subject_definitions: "<Subject 1> is the person from <Picture 1>. <Subject 2> is the scene from <Picture 2>.",
-    summary: "[reference generation] A detail of <Subject 1>'s hands with pastry in <Subject 2>.",
-    retention_analysis: "<Subject 1> (appears in [Shot 1]): partially_preserved - hands only.\n<Subject 2> (appears in [Shot 1]): weak_reference - scene only.",
-    detailed_description: timeline + " <Subject 1> is framed against <Subject 2>.",
-    overall_soundscape: "Quiet ambient sound.", non_diegetic_music: "N/A",
-  } : { integrated_multimodal_description: timeline, overall_soundscape: "Quiet ambient sound.", non_diegetic_music: "N/A" };
-}
-function response(value: unknown) { return Response.json({ choices: [{ message: { content: JSON.stringify(value) } }] }); }
-function writer(call: typeof fetch, options = {}) { return createH3PromptWriter({ fetch: call, apiKey: "test", ...options }); }
+let restoreRoot: () => Promise<void>;
+beforeEach(async () => { ({ root, restore: restoreRoot } = await makeWriterRoot()); });
+afterEach(async () => { await restoreRoot(); });
 
 test("deleted work cannot archive a late H3 rewrite result", async () => {
   open(":memory:");
@@ -492,4 +462,18 @@ test("person_visible changes the cache key only when it is false", async () => {
   const base = await hash("e1", {});
   expect(await hash("e2", { person_visible: true })).toBe(base);
   expect(await hash("e3", { person_visible: false })).not.toBe(base);
+});
+
+test("system prompt keeps orientation and the landmark anchor, and the writer version invalidates v1 caches", async () => {
+  let system = "";
+  const fetcher = (async (_url: unknown, init: RequestInit) => {
+    system = JSON.parse(String(init.body)).messages[0].content;
+    return response(sections());
+  }) as unknown as typeof fetch;
+  const result = await writer(fetcher).write({ episode_id: "e1", context: context() });
+  expect(system).toContain("Name the shot size (wide / medium / close-up / detail / POV)");
+  expect(system).toContain("keep the subject's orientation and gaze as the source states");
+  expect(system).toContain("never turn the subject to face the camera unless the source action says so");
+  expect(system).toContain("is visible from 00:00");
+  expect(result.provenance.writer_version).toBe("h3-writer-v3");
 });

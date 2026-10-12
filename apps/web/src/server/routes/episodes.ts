@@ -22,6 +22,7 @@ import {
   getEpisode,
   getUsageSummary,
   getLatestFailedTask,
+  listRetryableFailedTasks,
   getShotFailures,
   getPersona,
   getPersonaVersion,
@@ -97,6 +98,11 @@ episodes.post("/", async (c) => {
     return c.json({ ok: false, error: "template_not_found" }, 404);
   }
 
+  // 穿搭是 Persona 文档的一部分，随 persona_version 一起固定：只认当前版本里存在的 outfit_id。
+  if (req.outfit_id !== undefined && !persona.outfits?.some((o) => o.outfit_id === req.outfit_id)) {
+    return c.json({ ok: false, error: "outfit_not_found" }, 400);
+  }
+
   // FR-01"缺字段给默认值"：新期仅开放 per_shot；
   // series_id/season/tone/banned 没有 PRD 原文默认值可抄，这里按合理取舍
   // 补：series_id 缺省时 1 目的地 = 1 系列(PRD 没有定义"系列"怎么分组多个
@@ -134,6 +140,7 @@ episodes.post("/", async (c) => {
       duration_s: 30,
       tone: req.tone ?? "",
       outfit_override: req.outfit_override ?? null,
+      ...(req.outfit_id !== undefined ? { outfit_id: req.outfit_id } : {}),
       banned: req.banned ?? [],
     },
     grid_refs: [],
@@ -195,6 +202,17 @@ episodes.get("/estimate", async (c) => {
     credit_quote: estimateCreditQuote(candidates ?? 3, 7, videoSource) });
 });
 
+// 全部可重试失败，shot_no 的解析规则与 getLatestFailedTask 一致：优先按稳定 shot_id 回查当前镜号。
+function failedTaskList(episode: Episode): { stage: string; shot_no: number | null }[] {
+  const normalized = { ...episode, shots: episode.shots.map((shot, i) => ({
+    ...shot, shot_id: shot.shot_id ?? `sh_${episode.episode_id}_active_${i}_${shot.no}` })) };
+  return listRetryableFailedTasks(normalized).map((failure) => ({
+    stage: failure.stage,
+    shot_no: failure.shot_id
+      ? normalized.shots.find((shot) => shot.shot_id === failure.shot_id)?.no ?? null : failure.shot_no,
+  }));
+}
+
 episodes.get("/:id", async (c) => {
   const result = await getEpisode(c.req.param("id"));
   if (!result.ok || result.episode.owner_id !== c.get("ownerId")) {
@@ -205,13 +223,14 @@ episodes.get("/:id", async (c) => {
     ? revision : null;
   // Ownership is established above before reading any task from the queue.
   const failed_task = await getLatestFailedTask(result.episode);
+  const failed_tasks = failedTaskList(result.episode);
   const destinationRevision = await getDestinationVersionInfo(
     result.episode.destination_id, result.episode.destination_version,
   );
   return c.json({ ok: true, episode: result.episode, persona,
     destination: destinationRevision?.destination ?? null,
     destination_history_approximate: destinationRevision?.compatibility_approximation ?? false,
-    row_version: result.row_version, failed_task, shot_failures: await getShotFailures(result.episode),
+    row_version: result.row_version, failed_task, failed_tasks, shot_failures: await getShotFailures(result.episode),
     storyboard_busy: storyboardBusy(result.episode.episode_id),
     storyboard_warnings: [],
     storyboard_prices: { script: getCreditPrice("script"), image: getCreditPrice("image"), video: getCreditPrice("video"), compose: getCreditPrice("compose") } });

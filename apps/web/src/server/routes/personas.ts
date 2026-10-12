@@ -61,13 +61,13 @@ personas.delete("/:id", async (c) => {
 // projectsRoot() 同一套约定（PROJECTS_ROOT 环境变量 + 4 行拼接），两个路由
 // 文件各自留一份而不是抽公共模块——episodes.ts 已经为同样的理由（不跨 app
 // 导入 apps/worker）这么做了，这里是同一个取舍，不是新发明。
-function projectsRoot(): string {
+export function projectsRoot(): string {
   return process.env.KELVOY_PROJECTS_ROOT ?? "projects";
 }
 
 const MIN_REFS = 3;
 const MAX_REFS = 7;
-const MAX_REF_BYTES = 10 * 1024 * 1024;
+export const MAX_REF_BYTES = 10 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = MAX_REFS * MAX_REF_BYTES + 1024 * 1024;
 
 /** Bound the entire multipart body before FormData parsing allocates File objects. */
@@ -104,7 +104,7 @@ export async function parseBoundedMultipart(request: Request, maxBytes: number):
   }
 }
 
-const EXT_BY_MIME: Record<string, string> = {
+export const EXT_BY_MIME: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
   "image/webp": ".webp",

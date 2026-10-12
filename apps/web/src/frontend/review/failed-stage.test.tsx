@@ -45,8 +45,8 @@ test("failure view names stage and shot while keeping retry action", () => {
   expect(html).toContain("重新执行失败任务");
   const generic = renderToStaticMarkup(<StaticRouter location="/episodes/e_1"><ProgressView episode={episode} mutation={mutation} /></StaticRouter>);
   expect(generic).toContain("生成失败");
-  expect(generic).toContain("未找到可重试的失败任务");
-  expect(generic).not.toContain("<button");
+  expect(generic).not.toContain("未找到可重试的失败任务");
+  expect(generic).toContain("重新执行失败任务");
 });
 
 test("a failed shot shows its task stage even while episode status is generating", () => {
@@ -56,11 +56,33 @@ test("a failed shot shows its task stage even while episode status is generating
   expect(html).toContain("重新执行失败任务");
 });
 
-test("queued retry keeps progress visible without offering another retry", () => {
-  const episode = { episode_id: "e_1", status: "keyframing", shots: [{ status: "failed" }] } as unknown as Episode;
+test("a failed shot without a task record still offers retry instead of a dead end", () => {
+  const episode = { episode_id: "e_1", status: "keyframing", shots: [{ no: 2, status: "failed" }] } as unknown as Episode;
   const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_1"><ProgressView episode={episode} mutation={mutation} failedTask={null} /></StaticRouter>);
-  expect(html).toContain("等待后台处理");
-  expect(html).not.toContain("<button");
+  expect(html).toContain(">重新执行失败任务</button>");
+  expect(html).not.toContain("当前没有可重试的失败任务");
+  expect(html).not.toContain("请刷新页面确认最新状态");
+  expect(html).not.toContain("重试全部失败镜头");
+});
+
+test("two or more failed shots offer retry-all with the count", () => {
+  const shots = [{ no: 1, status: "failed" }, { no: 2, status: "approved" }, { no: 3, status: "failed" }];
+  const episode = { episode_id: "e_1", status: "clip_review", shots } as unknown as Episode;
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_1"><ProgressView episode={episode}
+    mutation={mutation} failedTask={{ stage: "video", shot_no: 1 }} /></StaticRouter>);
+  expect(html).toContain(">重试全部失败镜头（2）</button>");
+  const byTasks = renderToStaticMarkup(<StaticRouter location="/episodes/e_1"><ProgressView
+    episode={{ ...episode, shots: [{ no: 1, status: "failed" }] } as unknown as Episode} mutation={mutation}
+    failedTask={{ stage: "video", shot_no: 1 }}
+    failedTasks={[{ stage: "video", shot_no: 1 }, { stage: "video", shot_no: 4 }]} /></StaticRouter>);
+  expect(byTasks).toContain(">重试全部失败镜头（2）</button>");
+});
+
+test("a single failure does not show retry-all", () => {
+  const episode = { episode_id: "e_1", status: "clip_review", shots: [{ no: 1, status: "failed" }] } as unknown as Episode;
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_1"><ProgressView episode={episode}
+    mutation={mutation} failedTask={{ stage: "video", shot_no: 1 }} failedTasks={[{ stage: "video", shot_no: 1 }]} /></StaticRouter>);
+  expect(html).not.toContain("重试全部失败镜头");
 });
 
 test("retry submission disables the action and describes the waiting state", () => {

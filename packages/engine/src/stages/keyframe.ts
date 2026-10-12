@@ -2,6 +2,8 @@ import type { Episode } from "../schema";
 import { SETTINGS_CANDIDATES_MAX, SETTINGS_CANDIDATES_MIN } from "../schema/user";
 import { transitionEpisode, transitionShot } from "../state";
 import { generationSeed } from "./generation-seed";
+import { keyframeReferences } from "./keyframe-references";
+import { buildKeyframePrompt } from "./keyframe-prompt";
 import type { GeneratedAsset, StageContext } from "./types";
 
 /** Generate the episode's saved candidate count for one shot. */
@@ -16,13 +18,13 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   }
   const shot = episode.shots.find((item) => (context?.shot_id ? item.shot_id === context.shot_id : item.no === shotNo));
   if (!shot || shot.status !== "generating_kf") throw new Error(`第 ${shotNo} 镜未处于关键帧生成中`);
-  const refs = [context.persona.refs[0]];
-  if (!refs[0]) throw new Error("角色参考图缺失");
-  if (shot.landmark) {
-    const landmark = context.destination.landmarks.find((item) => item.id === shot.landmark);
-    if (!landmark?.refs[0]) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
-    refs.push(landmark.refs[0]);
-  }
+  const used = keyframeReferences(context.persona, context.destination, shot, episode.brief.outfit_id);
+  if (!used.persona && !used.person_omitted) throw new Error("角色参考图缺失");
+  if (used.landmark_id && !used.landmark) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
+  const refs = [...(used.persona ? [used.persona.key] : []), ...(used.landmark ? [used.landmark.key] : [])];
+  // What the model is told, not just the script's kf_prompt: image roles are named (ADR-0016).
+  const prompt = buildKeyframePrompt({ kf_prompt: shot.kf_prompt, landmarkName: used.landmark?.name ?? null,
+    personOmitted: used.person_omitted });
   const seed = generationSeed(context.generation_id, shot.shot_id ?? shotNo, "image");
   const generated: GeneratedAsset[] = [];
   for (let candidateNo = 0; candidateNo < candidateCount; candidateNo++) {
@@ -31,7 +33,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
       episode_id: episode.episode_id, shot_no: shotNo,
       ...(shot.shot_id ? { shot_id: shot.shot_id } : {}), candidate_no: candidateNo,
       aspect: episode.brief.aspect,
-      prompt: shot.kf_prompt, refs, seed: (seed + candidateNo) >>> 0,
+      prompt, refs, seed: (seed + candidateNo) >>> 0,
       generation_id: context.generation_id,
       ...(context.execution_id ? { execution_id: context.execution_id } : {}),
       ...(context.signal ? { signal: context.signal } : {}),
@@ -51,7 +53,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
     regen_stage: null,
     model: { ...shot.model, image: {
       provider: "local" as const, model: first.model, version: first.version,
-      seed: first.seed, prompt: shot.kf_prompt, ref_hashes: first.ref_hashes,
+      seed: first.seed, prompt, ref_hashes: first.ref_hashes,
       attempts: context.attempt ?? 1, cost_usd: 0,
     } },
   };

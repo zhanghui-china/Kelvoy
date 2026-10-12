@@ -116,7 +116,7 @@ export default function SettingsPage() {
         <section className="k-card">
           <h2>出片默认值</h2>
           <p className="k-card-meta">新建一期时预填这几项，每一期都还能当场改。</p>
-          <GuideTip section="settings">默认值仅影响之后新建的作品。候选数仅用于传统关键帧方式；人物与场景直出视频不会生成候选图。提交时请看预估积分。</GuideTip>
+          <GuideTip section="settings">默认值仅影响之后新建的作品。候选数用于默认的关键帧方式；若新建时选择人物与场景直出视频，则不会生成候选图。提交时请看预估积分。</GuideTip>
 
           <form className="k-settings-form" onSubmit={handleSaveDefaults} aria-busy={savingDefaults}>
             <Field label="默认语气">
@@ -128,7 +128,7 @@ export default function SettingsPage() {
               />
             </Field>
 
-            <Field label="传统方式默认每镜候选数">
+            <Field label="默认每镜候选数">
               <select value={candidates} disabled={savingDefaults}
                 onChange={(e) => { setCandidates(Number(e.target.value)); setDefaultsSaved(false); }}>
                 {CANDIDATE_OPTIONS.map((n) => (

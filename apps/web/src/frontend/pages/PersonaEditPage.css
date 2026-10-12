@@ -109,3 +109,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 穿搭区块（PersonaOutfits.tsx）：主表单之外的即时保存区 */
+.k-outfits { margin-top: 1.25rem; display: grid; gap: 0.9rem; }
+.k-outfit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.k-outfit-card { display: grid; gap: 0.5rem; align-content: start; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-card); background: #fff; }
+.k-outfit-refs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; }
+.k-outfit-refs img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; }
+.k-outfit-title { font-weight: 600; }
+.k-outfit-seasons, .k-outfit-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.k-outfit-edit, .k-outfit-add { display: grid; gap: 0.6rem; }
+.k-outfit-add { padding-top: 0.75rem; border-top: 1px solid var(--color-border); }
+.k-outfit-add h3 { margin: 0; font-size: 1rem; }
+.k-btn.is-disabled { opacity: 0.5; pointer-events: none; }

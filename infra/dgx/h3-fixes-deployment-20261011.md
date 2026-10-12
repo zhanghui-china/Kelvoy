@@ -185,3 +185,154 @@ H3 改写的格式／校验类失败原先是终止性的，镜头直接失败�
 ### 回退
 
 在对应节点删除 `kelvoy-{web,worker}.service.d/` 下本次新建的 `…-h3-round2-20261011.conf`（文件名比 `zzzzzzzzzzzzzzz-retry-once-20261011.conf` 多一个前导 `z`），`daemon-reload` 后重启 Web／Worker，回到 `retry-once-20261011-fe5b52b`。新表与迁移记录保留，旧版本忽略它；**不恢复数据库**，避免覆盖上线后的新数据；备份仅用于核对和人工恢复。
+
+## 九、新建界面默认关键帧（仅前端，GX10，2026-10-11）
+
+分支 `feat/default-keyframe-ui`（未合并 main），提交 `4ee2729`，基线 `813f79b`。只改 `apps/web/src/frontend` 下 15 个文件，服务端、engine、worker、store 零改动，无迁移。
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/keyframe-default-20261011-4ee2729` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-keyframe-default-20261011-20261011T115859Z` |
+| 切换 | 11:59 左右，`deploy-web-worker.py` 状态 `deployed`，未带迁移闸门参数 |
+| 节点验证 | typecheck 5 包通过；web 463 通过 / 0 失败 |
+| 切换后 | 三服务 active、重启 0、健康 `ok`、近 3 分钟日志 0 错误、`STEPFUN_MODEL` 仍为 `step-3.5-flash`、无进行中任务、线上前端包含新文案 |
+
+Spark 未发布。未做的验证：浏览器走查（新建页默认值、选图界面、直出提示行）。回退：删除 `zzzzzzzzzzzzzzzzz-keyframe-default-20261011.conf`（web 与 worker 各一份），`daemon-reload` 后重启 web / worker，回到 `h3-round2-20261011-05753a6`。
+
+## 十、失败镜头重试入口（GX10，2026-10-11）
+
+决策见 ADR-0014，接口见 `docs/api/retry.md`。
+
+- 改动：`packages/store`（`listRetryableFailedTasks`、`submitFailedTaskRetry` 增加 `shot_no`／`all`／补发）、`apps/web` 路由（`/retry` 参数校验、详情 `failed_tasks`）、前端失败卡片与进度区按钮。
+- 验证：`make typecheck && make test` 通过（1229 pass / 0 fail）；`all` 批量入队、余额不足零副作用、无任务记录补发均有 store 层测试。尚未在生产数据上验证。
+- 发布要求：无数据库迁移，不需要迁移闸门标志；Web 与 Worker 同版本；先 GX10 后 Spark，先排空任务。
+- 2026-10-11 已把本分支合并进 `feat/default-keyframe-ui`，作为 GX10 的一个发布（含默认关键帧前端）；Spark 尚未发布，也未合并 main。
+- 回退：切回上一发布目录（删除新增 drop-in，`daemon-reload` 后重启）。不恢复数据库；已入队的重试任务由旧版本按原逻辑消费。
+
+### 发布（GX10）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/keyframe-retry-20261011-5f9b5fa`（基于 `keyframe-default-20261011-4ee2729`，覆盖 18 个文件，`RELEASE.json` 带 sha256 清单） |
+| 源码 | `feat/default-keyframe-ui@5f9b5fa`（已合并 `fix/retry-buttons`），未合并 main |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-keyframe-retry-20261011-20261011T130357Z` |
+| 切换 | 13:04 左右，`deploy-web-worker.py` 状态 `deployed`，无迁移闸门参数；drop-in `zzzzzzzzzzzzzzzzzz-keyframe-retry-20261011.conf` |
+| 节点验证 | 类型检查 5 包通过；测试 1234 通过 / 1 平台条件跳过 / 0 失败；前端重建并 `dist_stamp verify` 通过 |
+| 切换后 | web／worker 为 user unit，均 active、重启 0；健康 `ok`；worker 工作目录指向新发布；近 6 分钟日志 0 错误；线上前端包为新构建 `index-BxZ9JTvP.js` |
+
+组装时的坑：macOS `tar` 会把 `._*` AppleDouble 文件带进发布目录，被 `bun test` 当成测试文件读到，造成 6 个"失败"。已在节点上清掉；以后用 `COPYFILE_DISABLE=1 tar` 或 `rsync`。
+
+未验证：真实失败镜头上点"重试这一镜"／"重试全部"的端到端表现；浏览器走查。Spark 未发布。回退：删除 web 与 worker 各一份 `zzzzzzzzzzzzzzzzzz-keyframe-retry-20261011.conf`，`daemon-reload` 后重启，回到 `keyframe-default-20261011-4ee2729`。
+
+## 十一、I2VA 提示词校验误杀修复（GX10，2026-10-11）
+
+触发：GX10 关键帧模式作品 `e_5cc656f2` 第 6 镜视频任务两次尝试均被 H3 校验拒绝（`timeline must end at 00:04.000`、`one continuous Shot 1 required`）；同作品 I2VA 10 次改写 4 次被拒，其中 3 次是同一回声。
+
+- 根因：worker 自己拼进的官方首帧句含 `(from [Shot 1])`，模型回声后被校验器数成第二个 `[Shot 1]`。
+- 改动（仅 `apps/worker/src/generation/`，3 个文件）：计数前去掉该来源标注（真实 `[Shot N]` 仍终止）；`[Shot 1]` 重复／缺失与"时间线完全没有时间戳"两类纯格式失败给一次纠正；带错误时间戳仍终止；提示词点明首帧句由 worker 添加、时间线需写 `00:0N.000`。
+- 回放（真实被拒输出，不调 LLM）：回声类 2 条直接通过；第 6 镜两次均只剩"缺结束时间戳"，走一次纠正。能否救回取决于模型。
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/i2va-format-20261011-ea11290`（基于 `keyframe-retry-20261011-5f9b5fa`，覆盖 3 个文件） |
+| 源码 | `feat/default-keyframe-ui@ea11290` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-i2va-format-20261011-20261011T223622Z` |
+| 切换 | 22:36 左右，`deploy-web-worker.py` 状态 `deployed`，无迁移 |
+| 节点验证 | 类型检查 5 包通过；测试 1237 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、近 4 分钟日志 0 错误、worker 工作目录为新发布、无进行中任务 |
+
+注意：节点上跑测试必须带 `PATH=$HOME/.bun/bin:$HOME/.local/bin:$PATH`；缺 `~/.local/bin` 时用到 `/usr/local/bin/ffmpeg`，22 个合成测试会失败（环境问题，与代码无关）。
+
+未验证：第 6 镜尚未重试；纠正通道在真实 LLM 上的命中率未测。Spark 未发布。回退：删除 `zzzzzzzzzzzzzzzzzzz-i2va-format-20261011.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `keyframe-retry-20261011-5f9b5fa`。
+
+## 十二、GX10：关键帧候选改用序号标识（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/kf-candidate-labels-20261012-3bf01aa`（基于 `i2va-format-20261011-ea11290`，覆盖 4 个前端文件，仅前端） |
+| 源码 | `feat/default-keyframe-ui@3bf01aa` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-kf-candidate-labels-20261012-20261012T004156Z` |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1238 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、线上首页引用的 JS 与发布目录构建产物一致（`index-oPsO2wJA.js`） |
+
+未做：浏览器目视（桌面与窄屏）。Spark 未发布。回退：删除 drop-in `…-kf-candidate-labels-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `i2va-format-20261011-ea11290`。
+
+## 十三、GX10：关键帧候选看大图（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/kf-lightbox-20261012-aeca7d1`（基于 `kf-candidate-labels-20261012-3bf01aa`，覆盖 6 个前端文件，仅前端） |
+| 源码 | `feat/default-keyframe-ui@aeca7d1` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-kf-lightbox-20261012-20261012T013147Z` |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1243 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、线上首页引用的 JS 与构建产物一致（`index-DNkXdBbs.js`） |
+
+未做：真实浏览器交互验证（`showModal`、Esc、焦点回到触发按钮、窄屏全屏）。Spark 未发布。回退：删除 drop-in `…-kf-lightbox-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-candidate-labels-20261012-3bf01aa`。
+
+## 十四、GX10：关键帧参考图规则收口并在审核页展示（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/kf-refs-20261012-9d0d7be`（基于 `kf-lightbox-20261012-aeca7d1`，覆盖 engine 与前端共 7 个文件含测试，无迁移） |
+| 源码 | `feat/default-keyframe-ui@9d0d7be` |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-kf-refs-20261012-20261012T020655Z` |
+| 变更 | 新增 `keyframeReferences()`，`runKeyframe` 与审核页共用；行为与原先等价（角色第 1 张 + 地标第 1 张） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1250 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker active、重启 0、健康 `ok`、近 4 分钟日志 0 条 error、worker 工作目录为新发布、线上 JS 为 `index-TupfmbcR.js` |
+
+未做：真实浏览器目视；切换前未单独核对进行中任务数（直接用 `deploy-web-worker.py` 的排空逻辑）。Spark 未发布。回退：删除 drop-in `…-kf-refs-20261012.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-lightbox-20261012-aeca7d1`。
+
+## 十五、GX10：角色穿搭（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/persona-outfits-20261012-8b597e7`（基于 `kf-refs-20261012-9d0d7be`，覆盖 schema／store／engine／web 服务端与前端，无数据库迁移） |
+| 源码 | `feat/default-keyframe-ui@8b597e7`（ADR-0015） |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-persona-outfits-20261012-8b597e7-20261012T053316Z` |
+| 变更 | `Persona.outfits` 与 `brief.outfit_id`（可缺省，老数据零迁移）；`/api/personas/:id/outfits[...]`；选中穿搭的第 1 张图替代角色第 1 张参考图用于关键帧与直出视频；角色页穿搭区块、新建作品选穿搭 |
+| 切换前 | 无排队／运行中任务；磁盘 28G 可用（97%） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1285 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker／inference active、重启 0、健康 `ok`、web 工作目录为新发布、线上 JS 为 `index-B0fL6dVU.js` 且含穿搭代码、未登录 POST outfits 返回 401、近 3 分钟日志 0 条 error |
+
+未做：真实浏览器交互验证（新建作品页季节自动选中与换角色重置）；真实穿搭照的脸漂风险未测（实验素材为模型生成）；A 方案姿态偏僵与背景噪点待用真实 `kf_prompt` 复核。Spark 未发布。回退：删除 drop-in `…-persona-outfits-20261012-8b597e7.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `kf-refs-20261012-9d0d7be`；已写入的 `outfits` 字段旧代码会忽略。
+
+## 十六、GX10：人物镜头的构图与朝向（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/person-orientation-20261012-5f278b7`（基于 `persona-outfits-20261012-8b597e7`，覆盖 engine／worker／web 共 12 个文件含测试，无迁移） |
+| 源码 | `feat/default-keyframe-ui@5f278b7`（ADR-0016） |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-person-orientation-20261012-5f278b7-20261012T071038Z` |
+| 变更 | 脚本提示词新增人物镜头构图与朝向规则；关键帧提示词命名图1/图2；空镜且有地标图时不传角色参考图；H3 改写约束保持朝向与地标锚点，`WRITER_VERSION` 升到 `h3-writer-v2`；审核页空镜文案；角色编辑页参考图提示 |
+| 切换前 | 无排队／运行中任务；磁盘 28G 可用（97%） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1295 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker／inference active、重启 0、健康 `ok`、web 与 worker 工作目录均为新发布、线上 JS 为 `index-CRL6DOtK.js`、近 3 分钟日志 0 条 error |
+
+未做：新脚本与关键帧的真实端到端验证（灵山大佛关键帧模式一期、直出模式一期）；H3 视频层未实测；真实浏览器目视。影响范围：只影响之后新生成的脚本与关键帧，已有作品不变；已有脚本重新生成才会用新规则。Spark 未发布。回退：删除 drop-in `…-person-orientation-20261012-5f278b7.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `persona-outfits-20261012-8b597e7`。
+
+## 十七、GX10：朝向发布后的回归修复与脚本规则补强（2026-10-12）
+
+十六节发布后用专用验证账号 `verify_orient`（GX10，300 积分）在灵山大佛上各跑一期关键帧模式与直出模式，发现并修复两处问题。
+
+| 发布 | 目录／源码 | 备份（UTC） | 变更 |
+| --- | --- | --- | --- |
+| v3 改写 | `~/kelvoy-releases/h3-writer-v3-20261012-a562f25`／`a562f25` | `pre-h3-writer-v3-20261012-a562f25-20261012T082933Z` | `h3-writer-v2` 的朝向与地标句让模型丢掉景别与运镜词，改写被 `preserve shot size and camera` 拒绝 7/8（v1 为 2/54），直出期 7 镜失败 4 镜；v3 在同处显式要求写出景别与运镜词，`WRITER_VERSION` 升到 `h3-writer-v3` |
+| 脚本规则 | `~/kelvoy-releases/script-orient-rules-20261012-ac47bb0`／`ac47bb0` | `pre-script-orient-rules-20261012-ac47bb0-20261012T09130…` | 朝向必须写成「背对镜头／侧对镜头／正对镜头」；第一镜必须填主地标并点名 |
+
+验证结果：v3 后 4 次改写全部一次通过，直出期 7 镜出片、首帧与大佛有关；规则上线后关键帧期 7 镜脚本全部写明朝向，第 1、2、3、4、7 镜背对或侧对且大佛清晰。两发布均无迁移，服务 active、重启 0、health ok。
+
+已知遗留：无地标的人物镜头（室内参观、吃小笼）只传角色参考图，仍会继承参考图的自拍构图并可能生成无关背景；决定不改代码，靠角色编辑页与手册对"第一张参考图用全身站姿"的提示。Spark 未发布。验证账号与三期验证作品仍在 GX10。
+
+## 十八、Spark：补齐穿搭、朝向与脚本规则（2026-10-12）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/person-outfits-orient-20261012-ac47bb0`（基于 `h3-round2-20261011-05753a6`，覆盖 74 个文件，无数据库迁移） |
+| 源码 | `feat/default-keyframe-ui@ac47bb0`（ADR-0015、ADR-0016；含 `h3-writer-v3` 与脚本朝向规则） |
+| 数据库备份（UTC） | `/home/Developer/kelvoy-backups/pre-person-outfits-orient-20261012-ac47bb0-20261012T140557Z` |
+| 切换前 | 无排队／运行中任务；磁盘 1.6T 可用（55%） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过（线上 JS 为 `index-CRL6DOtK.js`）；类型检查 5 包通过；测试 1295 通过 / 1 跳过 / 0 失败 |
+| 切换后 | web／worker／inference active、重启 0、健康 `ok`、web 工作目录为新发布、近 3 分钟日志 0 条 error |
+
+未做：Spark 上没有建作品做端到端验证（验证只在 GX10 做过）。回退：部署脚本已自动备份；需要时删除 drop-in `…-person-outfits-orient-20261012-ac47bb0.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `h3-round2-20261011-05753a6`；已写入的 `outfits` 字段旧代码会忽略。

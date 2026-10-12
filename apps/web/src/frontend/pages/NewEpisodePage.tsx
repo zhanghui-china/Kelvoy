@@ -24,6 +24,8 @@ import { useApiResource } from "../hooks/useApiResource";
 import { GuideTip } from "../GuideTip";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import "./NewEpisodePage.css";
+import OutfitPicker from "./OutfitPicker";
+import { suggestedOutfitId } from "./outfit-helpers";
 import { clearDraft, draftForDestinationParam, readDraft, saveDraft, seasonAfterDestinationChange, type EpisodeDraft } from "./episode-draft";
 
 // FR-01 语气快捷 chip，点一下直接填入(替换，不追加)。
@@ -90,20 +92,23 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
   const [banned, setBanned] = useState<string[]>(initialDraft.current?.banned ?? DEFAULT_BANNED);
   const [bannedInput, setBannedInput] = useState("");
   const [outfitOverride, setOutfitOverride] = useState(initialDraft.current?.outfitOverride ?? "");
+  const [outfitId, setOutfitId] = useState(initialDraft.current?.outfitId ?? "");
+  // 用户手动选过（或恢复了草稿）后，换季节不再自动改穿搭；换角色会重新建议。
+  const outfitTouched = useRef(!!initialDraft.current);
   const [candidates, setCandidates] = useState<number>(initialDraft.current?.candidates ?? DEFAULT_CANDIDATES);
   const [name, setName] = useState(initialDraft.current?.name ?? "");
   const [requirements, setRequirements] = useState(initialDraft.current?.requirements ?? "");
   const [aspect, setAspect] = useState<EpisodeAspect>(initialDraft.current?.aspect ?? "9:16");
-  const [videoSource, setVideoSource] = useState<VideoSource>(initialDraft.current?.videoSource ?? "references");
+  const [videoSource, setVideoSource] = useState<VideoSource>(initialDraft.current?.videoSource ?? "keyframe");
 
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<string[] | null>(null);
   const [violations, setViolations] = useState<ContentViolation[] | null>(null);
 
   useEffect(() => {
-    const draft: EpisodeDraft = { personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect, videoSource };
+    const draft: EpisodeDraft = { personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, outfitId, candidates, name, requirements, aspect, videoSource };
     saveDraft(draft, ownerId);
-  }, [ownerId, personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, candidates, name, requirements, aspect, videoSource]);
+  }, [ownerId, personaId, destinationId, templateId, seasonMode, season, tone, banned, outfitOverride, outfitId, candidates, name, requirements, aspect, videoSource]);
 
   // 出片默认值到位后预填一次。settings 的引用只在这次请求结束时变，所以
   // 不会覆盖用户之后的手动修改（同下面那几个"各选一次默认项"的 effect）。
@@ -164,6 +169,20 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
     }
   }, [personasRes.loading, personas]);
 
+  // 穿搭：角色或季节变化时，没手动选过就建议第一个适合本季的；旧角色的 outfit_id 在新角色里不存在则清掉。
+  useEffect(() => {
+    if (!selectedPersona) return;
+    const outfits = selectedPersona.outfits ?? [];
+    let next = outfitId;
+    if (next && !outfits.some((o) => o.outfit_id === next)) {
+      next = "";
+      outfitTouched.current = false;
+    }
+    if (!outfitTouched.current) next = suggestedOutfitId(outfits, season);
+    if (next !== outfitId) setOutfitId(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPersona?.persona_id, selectedPersona?.version, season]);
+
   const selectedDestination = destinations.find((d) => d.destination_id === destinationId) ?? null;
   const selectedTemplate = templates.find((t) => t.template_id === templateId) ?? null;
 
@@ -221,6 +240,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
       tone: tone.trim().length > 0 ? tone : undefined,
       banned,
       outfit_override: outfitOverride.trim().length > 0 ? outfitOverride : undefined,
+      outfit_id: outfitId || undefined,
     });
     setSubmitting(false);
 
@@ -276,7 +296,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
       <div className="k-eyebrow">创作工作台 / 新建一期</div>
       <h1>创建新的旅行故事</h1>
       <p className="k-page-intro">选择角色与目的地，再写下这趟旅程希望呈现的内容。</p>
-      <GuideTip section="create">先选出镜角色与目的地。推荐人物图＋场景图直出视频，省去每镜图片生成；创建前核对实时积分预估。默认目标约 30 秒，每镜 3–6 秒；初始 7–8 镜只是起点，生成后可自由增删分镜。</GuideTip>
+      <GuideTip section="create">先选出镜角色与目的地。默认先为每镜生成关键帧候选、逐镜选图再做视频，也可在高级设置改为人物图＋场景图直出视频；创建前核对实时积分预估。默认目标约 30 秒，每镜 3–6 秒；初始 7–8 镜只是起点，生成后可自由增删分镜。</GuideTip>
       <form onSubmit={handleSubmit} className="k-create-layout">
         <div className="k-card k-create-form-panel">
           <div className="k-create-panel-heading"><span className="k-create-step">01</span><div><h2>本期内容</h2><p>为这期作品设定目的地与创作方向</p></div></div>
@@ -289,7 +309,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
               <select value={destinationId} onChange={(e) => { const next = destinations.find((d) => d.destination_id === e.target.value); setDestinationId(e.target.value); setSeason(seasonAfterDestinationChange(seasonMode, season, next?.season_best ?? [])); const match = templates.find((t) => t.skeleton === next?.type); if (match) setTemplateId(match.template_id); }}>
                 {destinations.map((d) => <option key={d.destination_id} value={d.destination_id}>{d.city} · {d.name}（{DESTINATION_TYPE_LABELS[d.type]}）</option>)}
               </select>
-              <span className="k-card-meta">直出视频会把选中角色的参考图与每镜地标实景图一起交给模型。</span>
+              <span className="k-card-meta">关键帧会以选中角色的参考图与每镜地标实景图为依据生成候选；选择直出时，二者会直接交给视频模型。</span>
             </label>
             {selectedDestination?.landmarks[0]?.refs[0] && <div className="k-create-scene-preview">
               <img src={`/api/assets/${selectedDestination.landmarks[0].refs[0]}`} alt={`${selectedDestination.name}场景参考`} />
@@ -328,10 +348,10 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
             <div className="k-create-fields">
               <label className="k-field">视频生成方式
                 <select value={videoSource} onChange={(e) => setVideoSource(e.target.value as VideoSource)}>
-                  <option value="references">人物＋场景直出视频（推荐）</option>
-                  <option value="keyframe">先生成关键帧候选，再做视频</option>
+                  <option value="keyframe">先生成关键帧候选，再做视频（推荐）</option>
+                  <option value="references">人物＋场景直出视频</option>
                 </select>
-                <span className="k-card-meta">直出流程跳过图片生成和关键帧审核；视频生成后直接逐镜检查片段。</span>
+                <span className="k-card-meta">关键帧流程先逐镜选图再生成视频，可控性更高但会产生图片积分；直出跳过图片生成和关键帧审核，视频生成后直接逐镜检查片段。</span>
               </label>
               <label className="k-field">模板
                 <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
@@ -340,7 +360,7 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
               </label>
               <p className="k-card-meta">模板决定镜头骨架，LUT 决定画面调色风格；可按目的地类型选择匹配模板。</p>
               {selectedTemplate && <p className="k-card-meta">LUT：{selectedTemplate.lut} · 片头：{selectedTemplate.intro ?? "无"} · 片尾：{selectedTemplate.outro ?? "无"} · 标题样式：{selectedTemplate.title_style}</p>}
-              <label className="k-field">穿搭覆盖（可选）<input value={outfitOverride} onChange={(e) => setOutfitOverride(e.target.value)} placeholder={selectedPersona?.default_outfit ?? ""} /></label>
+              <label className="k-field">穿搭备注（可选，仅记录，不影响生成）<input value={outfitOverride} onChange={(e) => setOutfitOverride(e.target.value)} placeholder={selectedPersona?.default_outfit ?? ""} /></label>
               <label className="k-field">禁止项
                 <div className="k-brief-banned-input"><input value={bannedInput} onChange={(e) => setBannedInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addBannedTerms(); } }} placeholder="按逗号/顿号/回车分隔多项" /><button type="button" className="k-btn k-btn-secondary" onClick={addBannedTerms}>添加</button></div>
               </label>
@@ -359,7 +379,9 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
           <div className="k-create-panel-heading"><span className="k-create-step">02</span><div><h2>选择出镜角色</h2><p>角色形象在多期作品中保持一致</p></div></div>
           <p className="k-card-meta">可直接选官方角色开始；想使用自己的形象时再新建角色。</p>
           <div className="k-create-tabs" role="group" aria-label="角色来源"><button type="button" aria-pressed={personaTab === "mine"} className={personaTab === "mine" ? "active" : ""} onClick={() => setPersonaTab("mine")}>我的角色</button><button type="button" aria-pressed={personaTab === "official"} className={personaTab === "official" ? "active" : ""} onClick={() => setPersonaTab("official")}>官方角色</button></div>
-          <div className="k-create-persona-list">{visiblePersonas.length === 0 ? <p className="k-empty">这里还没有角色。</p> : visiblePersonas.map((p: Persona) => <button type="button" className={`k-create-persona-card${personaId === p.persona_id ? " active" : ""}`} key={p.persona_id} onClick={() => setPersonaId(p.persona_id)} aria-pressed={personaId === p.persona_id}><span className="k-create-persona-avatar">{p.refs[0] ? <img src={`/api/assets/${p.refs[0]}`} alt="" /> : p.name.slice(0, 1)}</span><span><strong>{p.name}</strong><small>v{p.version} · {p.desc || p.default_outfit || "旅行角色"}</small></span><span className="k-create-persona-check" aria-hidden="true">✓</span></button>)}</div>
+          <div className="k-create-persona-list">{visiblePersonas.length === 0 ? <p className="k-empty">这里还没有角色。</p> : visiblePersonas.map((p: Persona) => <button type="button" className={`k-create-persona-card${personaId === p.persona_id ? " active" : ""}`} key={p.persona_id} onClick={() => { outfitTouched.current = false; setPersonaId(p.persona_id); }} aria-pressed={personaId === p.persona_id}><span className="k-create-persona-avatar">{p.refs[0] ? <img src={`/api/assets/${p.refs[0]}`} alt="" /> : p.name.slice(0, 1)}</span><span><strong>{p.name}</strong><small>v{p.version} · {p.desc || p.default_outfit || "旅行角色"}</small></span><span className="k-create-persona-check" aria-hidden="true">✓</span></button>)}</div>
+          {selectedPersona && <OutfitPicker persona={selectedPersona} season={season} value={outfitId}
+            onChange={(id) => { outfitTouched.current = true; setOutfitId(id); }} />}
           <Link to="/personas/new?returnTo=/episodes/new" className="k-create-persona-add">＋ 新建角色</Link>
           {selectedPersona && <p className="k-card-meta">已选择：{selectedPersona.name}。切换页面后，本期草稿会保存在当前浏览器会话中。</p>}
         </aside>

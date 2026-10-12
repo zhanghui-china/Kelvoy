@@ -77,6 +77,18 @@ export function normalizePictureLabels(
 const PERSON_WORDS = /\b(?:person|persona|human|character|woman|man|girl|boy|lady|traveler|traveller|tourist|visitor|protagonist|figure|individual|hands?|identity|appearance)\b/i;
 const SCENE_WORDS = /\b(?:scene|scenery|scenic|environment|location|landscape|setting|background|interior|exterior|area|space|place|site|spot|street|view|vista|surroundings|destination|landmark|attraction)\b/i;
 
+const FIRST_FRAME_SOURCE_NOTE = /\(from \[Shot 1\]\)/g;
+
+/**
+ * Only pure formatting slips may be sent back to the model for one correction. These three carry no
+ * semantic content: a retention line syntax and the `[Shot 1]` marker count. The closing-timestamp rule is
+ * correctable only when no timestamp is present, and a real `[Shot N]` with N > 1 is a cut, not a slip; both
+ * decisions are made at their check sites.
+ */
+function isCorrectableRule(reason: string): boolean {
+  return reason === "invalid visible retention syntax" || reason === "one continuous Shot 1 required";
+}
+
 /** Semantic failures are terminal: a format correction must never repair unsafe content. */
 export function validateSections(value: Record<string, string>, context: H3PromptContext): void {
   const all = Object.values(value).join("\n");
@@ -84,13 +96,22 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   // Negative production constraints are allowed; only described actions are checked below.
   const actions = removeNegativeConstraints(timeline);
   const output = removeNegativeConstraints(all);
-  const fail = (reason: string): never => { throw new H3FormatError(`H3 constraint: ${reason}`, reason === "invalid visible retention syntax", reason); };
+  const fail = (reason: string, correctable = isCorrectableRule(reason)): never => {
+    throw new H3FormatError(`H3 constraint: ${reason}`, correctable, reason);
+  };
   if (/[\u3400-\u9fff]/.test(all)) fail("rewrite must be English");
   if (/\b(?:I (?:see|observe)|I have (?:seen|viewed)|observed in|the (?:reference )?(?:image|picture|photo) shows)\b/i.test(all)) fail("must not claim image observation");
   if (value.non_diegetic_music !== "N/A") fail("background music must be N/A");
-  if ((timeline.match(/\[Shot 1\]/g) ?? []).length !== 1 || /\[Shot (?!1\])\d+\]/.test(all)) fail("one continuous Shot 1 required");
+  // The worker's own first-frame sentence ends "(from [Shot 1])" and models echo it; that is a source annotation,
+  // not a second shot, so it is not counted. A real `[Shot 1]` marker or any `[Shot N]` still is.
+  const shotMarkers = timeline.replace(FIRST_FRAME_SOURCE_NOTE, "");
+  // A real second shot is content (a cut) and stays terminal; only a missing/repeated `[Shot 1]` is a formatting slip.
+  if (/\[Shot (?!1\])\d+\]/.test(all)) fail("one continuous Shot 1 required", false);
+  if ((shotMarkers.match(/\[Shot 1\]/g) ?? []).length !== 1) fail("one continuous Shot 1 required");
   const end = `00:0${context.duration_s}.000`;
-  if (!timeline.includes(end)) fail(`timeline must end at ${end}`);
+  // Correctable only when the timeline carries no timestamp at all ("for the full 4 seconds"); a wrong timestamp
+  // contradicts the requested length and stays terminal.
+  if (!timeline.includes(end)) fail(`timeline must end at ${end}`, !/\b\d{2}:\d{2}\.\d{3}\b/.test(timeline));
   if ([...timeline.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/gi)].some(match => Number(match[1]) > context.duration_s)) fail("duration contradicts requested length");
   const totalDurations = [
     ...timeline.matchAll(/\b(?:total (?:duration|length)|(?:clip|video|shot)(?:'s)? (?:duration|length))\s*(?:is|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/gi),

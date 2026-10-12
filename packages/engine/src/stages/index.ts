@@ -7,6 +7,7 @@ import { runScript } from "./script";
 export { AI_LABEL_TEXT, buildComposePlan, finalOutputKey } from "./compose";
 export { runScriptRevision } from "./script";
 export { planStoryboardGeneration, hasUsableClip, hasSelectedFrame } from "./generation-plan";
+export { keyframeReferences, personaReference, type KeyframeReference, type KeyframeReferences } from "./keyframe-references";
 export { mergeGeneratedShotResult } from "./generation-commit";
 export type { StageContext } from "./types";
 import type { StageContext } from "./types";

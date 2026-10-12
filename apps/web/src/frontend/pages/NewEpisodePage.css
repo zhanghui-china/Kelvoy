@@ -47,3 +47,4 @@
 @media (max-width: 980px) { .k-create-layout { grid-template-columns: 1fr; } .k-create-personas { grid-row: 1; } }
 @media (max-width: 600px) { .k-create-form-panel, .k-create-personas { padding: 1rem; } .k-create-submit .k-btn { width: 100%; } }
 @media (max-width: 600px) { .k-create-row { grid-template-columns: 1fr; } }
+.k-outfit-picker { display: grid; gap: 0.6rem; margin: 1rem 0; }

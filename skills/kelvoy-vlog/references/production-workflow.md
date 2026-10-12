@@ -6,7 +6,7 @@
 
 1. 确认服务地址和会话，`GET /api/me` 验证，并读余额与 `api_contract`。`api_contract` 不是 2 就停止并告知用户。
 2. 读角色、目的地、模板。名称不是 ID，同名对象展示 ID 与必要描述让用户选。角色须有可用参考图；自定义角色不可用时引导到 `/personas/<persona_id>/edit`。目的地须有地标和实景参考，模板按用户要求选，未指定时展示与目的地类型对应的候选让用户选。
-3. 提交前简述角色、目的地、模板、风格、穿搭、`video_source`（默认 `references`）。只追问未确定项。
+3. 角色带 `outfits` 时，把可选穿搭（名称、`seasons`、描述）列给用户选，按本期季节指出哪套适合，不替用户决定；用户不选就是默认穿搭。提交前简述角色、目的地、模板、风格、穿搭（`outfit_id`）、`video_source`（API 缺省 `references`；Web 界面默认 `keyframe`）。只追问未确定项。
 4. 读 `estimate` 的 `credit_quote` 告诉用户预计总积分，与余额比较；不够就先说，不要建期。
 5. 建期，记录 `episode_id`。
 
@@ -17,7 +17,7 @@ draft → scripting → script_review → assets → (keyframing → kf_review �
       → clip_review → compose_ready → composing → done
 ```
 
-默认的 `references` 模式没有 `keyframing`／`kf_review`，下文「审核 2」仅 `keyframe` 模式出现。任一生成态可能进入 `failed`，也可能出现单镜 `failed`，读每镜状态和 `failed_task`，不能只看整期。
+API 缺省的 `references` 模式没有 `keyframing`／`kf_review`（Web 界面默认是 `keyframe`），下文「审核 2」仅 `keyframe` 模式出现。任一生成态可能进入 `failed`，也可能出现单镜 `failed`，读每镜状态和 `failed_task`，不能只看整期。
 
 - 单次观察最多 60 秒，约 5 秒查询一次。仍未完成就报告阶段、待处理镜头和作品 ID，保留恢复入口，等待超时不等于失败。
 - 服务负责阶段推进、自动重试与队列调度，Agent 不另起生成循环。
@@ -62,7 +62,7 @@ draft → scripting → script_review → assets → (keyframing → kf_review �
 | 某镜成品要重做 | `/regen`，明确 `regen_stage`；用已有 prompt |
 | 某镜视频明显坏了 | `/report-bad`（每镜第一次免费），不额外收积分 |
 | 返工同时要改 prompt，且在 `clip_review`／`done` | 改不了。`keyframe` 模式：先对该镜 `regen_stage=keyframe` 回到 `kf_review`，在那里改 prompt 再继续。`references` 模式：只能用已有 prompt 重做，如实告知 |
-| 某镜或某阶段 `failed` | 读 `failed_task`，告诉用户是哪一步，用户决定后 `/retry`（期级，不分镜） |
+| 某镜或某阶段 `failed` | 读 `failed_tasks`（`failed_task` 为其中最近一个），告诉用户是哪几镜哪一步，用户决定后 `/retry`；不带参数只重试最近一个，`shot_no` 指定单镜，`all` 一次重试当前阶段全部失败镜头 |
 | 仍在生成 | 只观察，不叠加任务 |
 | 成片要重剪 | 在 `done` 用 `/recompose`；合成失败用 `/retry` |
 | 旧期（无 `cut_policy=fixed_1s`）想用新剪辑 | 向用户说明所有镜要重审，用户同意才 `/convert-cuts` |
