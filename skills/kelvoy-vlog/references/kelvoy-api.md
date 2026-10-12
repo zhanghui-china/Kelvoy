@@ -42,7 +42,7 @@ POST /api/episodes
 {"persona_id":"…","destination_id":"…","template_id":"…","tone":"安静的旅行记录","video_source":"references"}
 ```
 
-必需三个 ID。可选：`name`、`requirements`、`aspect`（`9:16` 默认）、`video_source`（`references` 或 `keyframe`；不传时服务端缺省为 `references`）、`candidate_count`、`series_id`、`season`、`tone`、`banned`（字符串数组）、`outfit_override`。`mode` 只接受 `per_shot`。服务派生 owner、版本快照、`cut_policy=fixed_1s`、30 秒、render，并自动入队 brief。
+必需三个 ID。可选：`name`、`requirements`、`aspect`（`9:16` 默认）、`video_source`（`references` 或 `keyframe`；不传时服务端缺省为 `references`）、`candidate_count`、`series_id`、`season`、`tone`、`banned`（字符串数组）、`outfit_override`（仅记录，不影响生成）、`outfit_id`（选用该角色的一套穿搭，须出现在角色当前版本的 `outfits` 里；不传用默认穿搭，未知返回 400 `outfit_not_found`）。`mode` 只接受 `per_shot`。服务派生 owner、版本快照、`cut_policy=fixed_1s`、30 秒、render，并自动入队 brief。
 
 **默认值差异**：服务端缺省 `video_source=references`（API 契约，不随 Web 界面变化）；Web 新建页的界面默认是 `keyframe`。因此依赖直出路径（无关键帧审核）或依赖关键帧路径的调用方，都应显式传 `video_source`，不要依赖缺省值。
 
@@ -148,6 +148,10 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 
 本生产技能仍只使用已发布的目录，不自动创建、上传或发布素材。缺目的地时，引导用户在 `/destinations` 的“创建目的地”“我的草稿”完善地标实景照片并发布，完成后重新读取目录。目的地草稿操作不扣积分，建期仍可能返回 402。维护者的完整新增接口说明见仓库 `docs/api/destination-drafts.md`。
 
+
+## 角色穿搭
+
+角色对象可带 `outfits`（缺省 = 只有默认穿搭）：每项 `outfit_id`、`name`、`desc`、`seasons`、`refs`。建期时用 `outfit_id` 选一套，选中的穿搭图替代角色第 1 张参考图生成，所以它才真正改变成片里的衣服；`outfit_override` 文字不会。本技能不上传或编辑穿搭，没有合适穿搭时引导用户到 `/personas/<persona_id>/edit` 添加。新增字段为加法，`api_contract` 仍为 2。
 
 ## 角色退出可选库
 

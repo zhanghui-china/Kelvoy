@@ -6,7 +6,7 @@
 
 1. 确认服务地址和会话，`GET /api/me` 验证，并读余额与 `api_contract`。`api_contract` 不是 2 就停止并告知用户。
 2. 读角色、目的地、模板。名称不是 ID，同名对象展示 ID 与必要描述让用户选。角色须有可用参考图；自定义角色不可用时引导到 `/personas/<persona_id>/edit`。目的地须有地标和实景参考，模板按用户要求选，未指定时展示与目的地类型对应的候选让用户选。
-3. 提交前简述角色、目的地、模板、风格、穿搭、`video_source`（API 缺省 `references`；Web 界面默认 `keyframe`）。只追问未确定项。
+3. 角色带 `outfits` 时，把可选穿搭（名称、`seasons`、描述）列给用户选，按本期季节指出哪套适合，不替用户决定；用户不选就是默认穿搭。提交前简述角色、目的地、模板、风格、穿搭（`outfit_id`）、`video_source`（API 缺省 `references`；Web 界面默认 `keyframe`）。只追问未确定项。
 4. 读 `estimate` 的 `credit_quote` 告诉用户预计总积分，与余额比较；不够就先说，不要建期。
 5. 建期，记录 `episode_id`。
 
