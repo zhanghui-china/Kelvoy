@@ -24,7 +24,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   const refs = [...(used.persona ? [used.persona.key] : []), ...(used.landmark ? [used.landmark.key] : [])];
   // What the model is told, not just the script's kf_prompt: image roles are named (ADR-0016).
   const prompt = buildKeyframePrompt({ kf_prompt: shot.kf_prompt, landmarkName: used.landmark?.name ?? null,
-    personOmitted: used.person_omitted });
+    personOmitted: used.person_omitted, personKind: used.persona?.kind ?? "photo" });
   const seed = generationSeed(context.generation_id, shot.shot_id ?? shotNo, "image");
   const generated: GeneratedAsset[] = [];
   for (let candidateNo = 0; candidateNo < candidateCount; candidateNo++) {
