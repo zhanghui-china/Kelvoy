@@ -3,7 +3,11 @@ export interface PersonaStyle {
   title_style: string; // e.g. "serif-center"
 }
 
-/** 每角色最多几套自建穿搭，每套几张参考图（脸型锁定由基础图 refs 承担，所以不要求 3–7）。 */
+/** 角色基础参考图张数（FR-03）：1 张全身照即可建作品，更多角度可选。 */
+export const PERSONA_REFS_MIN = 1;
+export const PERSONA_REFS_MAX = 7;
+
+/** 每角色最多几套自建穿搭，每套几张参考图（脸型锁定由基础图 refs 承担，所以穿搭图不要求 PERSONA_REFS_MIN 以上）。 */
 export const PERSONA_OUTFITS_MAX = 6;
 export const OUTFIT_REFS_MIN = 1;
 export const OUTFIT_REFS_MAX = 3;

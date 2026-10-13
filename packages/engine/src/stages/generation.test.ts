@@ -55,6 +55,13 @@ test("assets checks real references before allowing keyframing", async () => {
   })).rejects.toThrow("地标");
 });
 
+test("assets accepts a persona with one reference but rejects none", async () => {
+  const one = await runAssets(episode(), undefined, { persona: { ...persona, refs: ["persona/front.png"] }, destination });
+  expect(one.status).toBe("keyframing");
+  await expect(runAssets(episode(), undefined, { persona: { ...persona, refs: [] }, destination }))
+    .rejects.toThrow("角色参考图不足 1 张");
+});
+
 test("direct reference episodes skip keyframes after validating person and scene", async () => {
   const next = await runAssets(episode({ video_source: "references" }), undefined,
     { persona, destination });

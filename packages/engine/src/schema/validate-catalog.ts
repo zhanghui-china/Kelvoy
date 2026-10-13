@@ -1,6 +1,6 @@
 import type { ChangePasswordRequest, CreateEpisodeRequest, CreatePersonaRequest, CreateTemplateRequest, LoginRequest, PersonaPatch } from "./api";
 import type { DestinationType } from "./destination";
-import type { Persona, PersonaStyle } from "./persona";
+import { PERSONA_REFS_MAX, PERSONA_REFS_MIN, type Persona, type PersonaStyle } from "./persona";
 import type { Template } from "./template";
 import { SETTINGS_CANDIDATES_MAX, SETTINGS_CANDIDATES_MIN, type UserSettings } from "./user";
 import type { ValidationResult } from "./validate";
@@ -51,8 +51,8 @@ export function validatePersona(input: unknown): ValidationResult<Persona> {
   if (typeof p.desc !== "string") errors.push("desc: 必须是字符串");
   if (!isStringArray(p.locked)) errors.push("locked: 必须是字符串数组");
   if (!isNonEmptyString(p.default_outfit)) errors.push("default_outfit: 缺失或为空");
-  if (!isStringArray(p.refs) || p.refs.length < 3 || p.refs.length > 7) {
-    errors.push("refs: 必须是 3–7 张参考图路径的数组（FR-03）");
+  if (!isStringArray(p.refs) || p.refs.length < PERSONA_REFS_MIN || p.refs.length > PERSONA_REFS_MAX) {
+    errors.push(`refs: 必须是 ${PERSONA_REFS_MIN}–${PERSONA_REFS_MAX} 张参考图路径的数组（FR-03）`);
   }
   if (p.style !== undefined) validatePersonaStyle(p.style, errors);
   else errors.push("style: 缺失");
@@ -66,7 +66,7 @@ export function validatePersona(input: unknown): ValidationResult<Persona> {
  * Validates apps/web's POST /api/personas request body. Deliberately
  * excludes refs — a persona can be created with zero reference images and
  * filled in afterwards via POST /api/personas/:id/refs, which is where the
- * FR-03 3–7 张 count is actually enforced (see M2-4 commit for why: forcing
+ * FR-03 PERSONA_REFS_MIN–PERSONA_REFS_MAX count is actually enforced (see M2-4 commit for why: forcing
  * the count at creation would make the two-step "create, then upload"
  * flow impossible).
  */
@@ -94,7 +94,7 @@ export function validateCreatePersonaRequest(input: unknown): ValidationResult<C
 /**
  * Validates apps/web's PATCH /api/personas/:id request body. refs isn't
  * patchable here on purpose — only through POST /api/personas/:id/refs, so
- * the 3–7 张 count check lives in exactly one place.
+ * the PERSONA_REFS_MIN–PERSONA_REFS_MAX count check lives in exactly one place.
  */
 export function validatePersonaPatchRequest(input: unknown): ValidationResult<PersonaPatch> {
   const errors: string[] = [];

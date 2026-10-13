@@ -14,7 +14,7 @@ afterEach(() => close());
 
 test("imports only valid official personas and lets the store own revisions", async () => {
   expect((await importOfficialPersona({ ...raw, owner_id: "u_1" })).ok).toBe(false);
-  expect((await importOfficialPersona({ ...raw, refs: raw.refs.slice(0, 2) })).ok).toBe(false);
+  expect((await importOfficialPersona({ ...raw, refs: [] })).ok).toBe(false);
   expect(await getPersona(raw.persona_id)).toBeNull();
   const { version: _version, ...withoutVersion } = raw;
   const first = await importOfficialPersona(withoutVersion);

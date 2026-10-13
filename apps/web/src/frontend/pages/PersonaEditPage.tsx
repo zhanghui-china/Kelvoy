@@ -1,6 +1,6 @@
 import { type ChangeEvent, type DragEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import type { Persona } from "@kelvoy/engine";
+import { PERSONA_REFS_MAX, PERSONA_REFS_MIN, type Persona } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
 import { GuideTip } from "../GuideTip";
 import {
@@ -23,11 +23,6 @@ import { selectDraftPersona } from "./episode-draft";
 // 取消勾选（不做自由文本新增，设计稿只画了这三个可勾选标签）。
 const DEFAULT_LOCKED_TRAITS = ["脸型", "发型", "体态"];
 
-// 跟 personas.ts 的 MIN_REFS/MAX_REFS 同值——没有共享常量可 import（后端那
-// 两个是路由文件内的局部量），跟 DestinationsPage.tsx 的 MIN_LANDMARK_REFS
-// 一样各自本地定义一份。
-const MIN_REFS = 3;
-const MAX_REFS = 7;
 
 /**
  * M2-13 (#41)：角色新建 `/personas/new` + 编辑 `/personas/:id/edit` 共用同
@@ -146,7 +141,7 @@ export default function PersonaEditPage() {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * 提交前的张数校验，跟 personas.ts 的 [MIN_REFS, MAX_REFS] 语义对齐，纯
+   * 提交前的张数校验，跟 personas.ts 的 [PERSONA_REFS_MIN, PERSONA_REFS_MAX] 语义对齐，纯
    * 前端算，不发请求——issue 验收"传 2 张就提交：前端拦下，不发请求"。
    * 编辑页不选新文件（pendingFiles 为空）时跳过：那就是纯改资料，不动
    * 参考图，角色现有张数不够也不该拦住这次保存（"编辑页可以补传"是可选
@@ -159,8 +154,8 @@ export default function PersonaEditPage() {
     }
     const existingCount = current?.refs.length ?? 0;
     const total = existingCount + pendingFiles.length;
-    if (total < MIN_REFS || total > MAX_REFS) {
-      return `参考图总数必须在 ${MIN_REFS}–${MAX_REFS} 张之间（当前已有 ${existingCount} 张，本次选择 ${pendingFiles.length} 张，合计 ${total} 张）`;
+    if (total < PERSONA_REFS_MIN || total > PERSONA_REFS_MAX) {
+      return `参考图总数必须在 ${PERSONA_REFS_MIN}–${PERSONA_REFS_MAX} 张之间（当前已有 ${existingCount} 张，本次选择 ${pendingFiles.length} 张，合计 ${total} 张）`;
     }
     return null;
   }
@@ -338,13 +333,13 @@ export default function PersonaEditPage() {
           <p className="k-card-meta">
             允许上传真人照片，肖像权与合规责任由上传者自行确认并承担；系统不凭空生成与上传图无关的真实人物肖像。
           </p>
-          <p className="k-card-meta">建议包含正 / 侧 / 全身 / 细节各至少一张，共 3–7 张。第 1 张会作为生成时的人物参考，建议用全身、姿态自然的照片；只有半身照时，全身镜头的下半身衣服可能前后不一致。</p>
+          <p className="k-card-meta">至少 1 张，最多 7 张；1 张全身照即可，想要更稳可再补正 / 侧 / 细节等角度。第 1 张会作为生成时的人物参考，建议用全身、姿态自然的照片；只有半身照时，全身镜头的下半身衣服可能前后不一致。</p>
 
           {current && current.refs.length > 0 && (
             <>
               <div className="k-card-meta">
                 已上传 {current.refs.length} 张
-                {current.refs.length < MIN_REFS && (
+                {current.refs.length < PERSONA_REFS_MIN && (
                   <span className="k-pill k-persona-edit-insufficient">参考图不足</span>
                 )}
               </div>

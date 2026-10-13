@@ -3,17 +3,13 @@ import "./ResourceLibrary.css";
 import { useCallback, useMemo, useState } from "react";
 import { Card, EmptyState, ErrorState, LoadingState, PageHeading, Status } from "../ui";
 import { Link, useNavigate } from "react-router-dom";
-import type { Persona } from "@kelvoy/engine";
+import { PERSONA_REFS_MIN, type Persona } from "@kelvoy/engine";
 import { AssetImage } from "../AssetImage";
 import { GuideTip } from "../GuideTip";
 import { deletePersona, listPersonas } from "../api/client";
 import { useApiResource } from "../hooks/useApiResource";
 import { canEditPersona } from "../persona-access";
 import { personaDeletion } from "./persona-deletion";
-
-// 跟 personas.ts 的 MIN_REFS 同值（M2-13, #41）——本地定义一份，跟
-// DestinationsPage.tsx 的 MIN_LANDMARK_REFS 一样，没有共享常量可 import。
-const MIN_REFS = 3;
 
 export function PersonaCard({ persona: p, onRefresh }: {
   persona: Persona; onRefresh?: (message?: string) => void;
@@ -45,7 +41,7 @@ export function PersonaCard({ persona: p, onRefresh }: {
           {p.name} <span className="k-pill">v{p.version}</span>
         </div>
         {p.owner_id === null && <Status tone="info">官方角色</Status>}
-        {p.refs.length < MIN_REFS && <Status tone="warning">参考图不足</Status>}
+        {p.refs.length < PERSONA_REFS_MIN && <Status tone="warning">参考图不足</Status>}
       </div>
       {p.desc && <div className="k-card-meta">{p.desc}</div>}
       {p.locked.length > 0 && (
@@ -108,7 +104,7 @@ export default function PersonasPage() {
         </Link>
       </PageHeading>
       {notice && <p role="status">{notice}</p>}
-      <GuideTip section="personas">官方角色可直接用于新建一期。自己的角色建议用 3–7 张多视角参考图，锁定特征帮助跨期保持一致；编辑后版本号会更新。</GuideTip>
+      <GuideTip section="personas">官方角色可直接用于新建一期。自己的角色 1 张全身参考图即可建作品（最多 7 张，多角度更稳），锁定特征帮助跨期保持一致；编辑后版本号会更新。</GuideTip>
       <div className="k-library-source" role="group" aria-label="角色来源">
         {(["mine", "official"] as const).map(value => <button key={value} type="button" aria-pressed={source === value} className={`k-btn ${source === value ? "k-btn-primary" : "k-btn-secondary"}`} onClick={() => setSource(value)}>{value === "mine" ? "我的角色" : "官方角色"}</button>)}
       </div>

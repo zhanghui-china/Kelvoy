@@ -157,9 +157,9 @@ export function patchPersona(personaId: string, patch: PersonaPatch) {
   });
 }
 
-/** files.length 必须落在 [3, 7]（合上角色已有的张数）——后端校验，见
+/** 合计张数必须落在 [PERSONA_REFS_MIN, PERSONA_REFS_MAX]（合上角色已有的张数）——后端校验，见
  * personas.ts；这里只管把 multipart 请求发出去，数量校验留给调用方在提交
- * 前做，好给出"至少 3 张 / 最多 7 张"这种即时反馈，不用等一趟网络。 */
+ * 前做，好给出"至少 1 张 / 最多 7 张"这种即时反馈，不用等一趟网络。 */
 export function uploadPersonaRefs(personaId: string, files: File[]) {
   const form = new FormData();
   for (const file of files) form.append("files", file);

@@ -266,8 +266,12 @@ describe("validatePersona", () => {
     expect(validatePersona(validPersona()).valid).toBe(true);
   });
 
-  test("rejects fewer than 3 reference images", () => {
-    const p = { ...validPersona(), refs: ["a.png", "b.png"] };
+  test("accepts a single reference image", () => {
+    expect(validatePersona({ ...validPersona(), refs: ["a.png"] }).valid).toBe(true);
+  });
+
+  test("rejects zero reference images", () => {
+    const p = { ...validPersona(), refs: [] };
     const result = validatePersona(p);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.errors.some((e) => e.startsWith("refs:"))).toBe(true);
