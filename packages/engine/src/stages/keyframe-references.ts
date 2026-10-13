@@ -41,19 +41,23 @@ export interface KeyframeReferences {
  * sheet is the reference; otherwise the first uploaded image, as before (ADR-0017). An outfit id that
  * no longer resolves in this persona version falls back to the default outfit instead of failing the
  * shot; pinned versions are immutable so that only happens for hand-edited data.
+ *
+ * `photoOnly` skips the sheet and always takes the first uploaded image. Only the direct video
+ * (Ref2VA) path uses it, until the sheet is validated as Picture 1 there (ADR-0017 unverified items).
  */
 export function personaReference(
   persona: Persona | null | undefined,
   outfitId?: string | null,
+  options: { photoOnly?: boolean } = {},
 ): { ref: PersonReference | null; outfit: { id: string; name: string } | null } {
   const outfit = outfitId ? persona?.outfits?.find((item) => item.outfit_id === outfitId) : undefined;
-  const sheet = outfit ? outfitSheetKey(persona, outfit.outfit_id) : outfitSheetKey(persona);
+  const sheet = options.photoOnly ? null : outfit ? outfitSheetKey(persona, outfit.outfit_id) : outfitSheetKey(persona);
   const chosen = outfit && (sheet !== null || outfit.refs.length > 0) ? outfit : undefined;
   const outfitInfo = chosen ? { id: chosen.outfit_id, name: chosen.name } : null;
   if (chosen && sheet) return { ref: { key: sheet, index: 0, total: 1, kind: "sheet" }, outfit: outfitInfo };
   // An outfit without refs and without a ready sheet falls back to the default outfit, whose sheet
   // (if ready) is still preferred.
-  const defaultSheet = chosen ? null : outfitSheetKey(persona);
+  const defaultSheet = chosen || options.photoOnly ? null : outfitSheetKey(persona);
   if (defaultSheet) return { ref: { key: defaultSheet, index: 0, total: 1, kind: "sheet" }, outfit: null };
   const source = chosen ? chosen.refs : persona?.refs ?? [];
   const key = source[0];
