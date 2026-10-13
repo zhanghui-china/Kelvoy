@@ -55,6 +55,13 @@ test("assets checks real references before allowing keyframing", async () => {
   })).rejects.toThrow("地标");
 });
 
+test("assets accepts a persona with one reference but rejects none", async () => {
+  const one = await runAssets(episode(), undefined, { persona: { ...persona, refs: ["persona/front.png"] }, destination });
+  expect(one.status).toBe("keyframing");
+  await expect(runAssets(episode(), undefined, { persona: { ...persona, refs: [] }, destination }))
+    .rejects.toThrow("角色参考图不足 1 张");
+});
+
 test("direct reference episodes skip keyframes after validating person and scene", async () => {
   const next = await runAssets(episode({ video_source: "references" }), undefined,
     { persona, destination });
@@ -158,6 +165,35 @@ test("direct video sends person and landmark images without a generated keyframe
   expect(next.shots[0]?.clip).toBe("clip/01_task-direct.mp4");
   expect((inputSeen as { refs: string[] }).refs).toEqual(["persona/front.png", "dest/a.jpg"]);
   expect(next.shots[0]?.kf_selected).toBeNull();
+});
+
+test("a ready sheet is the keyframe person reference, while direct video keeps the photo", async () => {
+  const sheetPersona = { ...persona, views_status: "ready", views: { sheet: "persona/sheet.jpg" } } as unknown as Persona;
+  const keyframeRefs: string[][] = [];
+  const keyframeContext: StageContext = {
+    persona: sheetPersona, destination, generation_id: "task-sheet-kf",
+    keyframe: { async generate(input) {
+      keyframeRefs.push(input.refs);
+      return { key: `kf/01_${input.candidate_no}.png`, model: "Qwen-Image-2.1",
+        version: "hash1", seed: input.seed, seconds: 40, ref_hashes: ["h1", "h2"] };
+    } },
+  };
+  await runKeyframe(episode({ status: "keyframing", shots: [shot({ status: "generating_kf" })] }), 1, keyframeContext);
+  expect(keyframeRefs[0]).toEqual(["persona/sheet.jpg", "dest/a.jpg"]);
+
+  let directRefs: string[] | undefined;
+  const directContext: StageContext = {
+    persona: sheetPersona, destination, generation_id: "task-sheet-direct", attempt: 1,
+    h3PromptWriter: mockH3PromptWriter,
+    video: { async generate(input) {
+      directRefs = (input as { refs: string[] }).refs;
+      return { key: "clip/direct.mp4", model: "MiniMax-H3", version: "dual",
+        seed: input.seed, seconds: 60, ref_hashes: ["person-hash", "scene-hash"] };
+    } },
+  };
+  await runVideo(episode({ video_source: "references", status: "clipping",
+    shots: [shot({ status: "generating_clip" })] }), 1, directContext);
+  expect(directRefs).toEqual(["persona/front.png", "dest/a.jpg"]);
 });
 
 test("finishing one of several shots leaves the episode generating and preserves other shots", async () => {
@@ -279,4 +315,65 @@ test("keyframe prompt names the image roles; an empty shot with a landmark sends
     shots: [shot({ status: "generating_kf", kf_prompt: "无人物出镜", person_visible: false })] }), 1, context);
   expect(seen[1]!.refs).toEqual(["dest/a.jpg"]);
   expect(seen[1]!.prompt).toBe("图1是「灵山大佛」的实景参考图，画面中没有人物。无人物出镜");
+});
+
+const sheetViews = (sheet: string) => ({ front: `${sheet}.f`, side: `${sheet}.s`, back: `${sheet}.b`, sheet });
+const sheetGen = { provider: "local", model: "m", version: "1", seed: 1 };
+const sheetPersona = {
+  ...persona, views_status: "ready", views: sheetViews("persona/sheet.jpg"), views_gen: sheetGen,
+  outfits: [
+    { outfit_id: "o1", name: "秋日风衣", desc: "", seasons: ["秋"], refs: [], source: "outfit/o1.png",
+      views_status: "ready", views: sheetViews("outfit/o1_sheet.jpg"), views_gen: sheetGen },
+  ],
+} as unknown as Persona;
+
+test("a ready sheet is the single person image for keyframes (prompt names it) and not direct video; empty shots omit it", async () => {
+  const seen: Array<{ prompt: string; refs: string[] }> = [];
+  const context: StageContext = {
+    persona: sheetPersona, destination, generation_id: "t-sheet",
+    keyframe: { async generate(input) {
+      seen.push({ prompt: input.prompt, refs: input.refs });
+      return { key: `kf/${input.candidate_no}.png`, model: "Qwen", version: "1", seed: input.seed, seconds: 1, ref_hashes: [] };
+    } },
+  };
+  const brief = { ...episode().brief, outfit_id: "o1" };
+  await runKeyframe(episode({ brief, status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf" })] }), 1, context);
+  expect(seen[0]!.refs).toEqual(["outfit/o1_sheet.jpg", "dest/a.jpg"]);
+  expect(seen[0]!.prompt).toContain("图1是出镜人物的三视图设定图");
+  // No outfit chosen: the persona default sheet.
+  await runKeyframe(episode({ status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf" })] }), 1, context);
+  expect(seen[1]!.refs).toEqual(["persona/sheet.jpg", "dest/a.jpg"]);
+  // Empty shot: no person image, no sheet wording.
+  await runKeyframe(episode({ brief, status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf", person_visible: false })] }), 1, context);
+  expect(seen[2]!.refs).toEqual(["dest/a.jpg"]);
+  expect(seen[2]!.prompt).not.toContain("设定图");
+  // Not ready: old photo wording and refs[0].
+  const pending = { ...sheetPersona, views_status: "pending", views: undefined } as unknown as Persona;
+  await runKeyframe(episode({ status: "keyframing", candidate_count: 1,
+    shots: [shot({ status: "generating_kf" })] }), 1, { ...context, persona: pending });
+  expect(seen[3]!.refs).toEqual(["persona/front.png", "dest/a.jpg"]);
+  expect(seen[3]!.prompt).not.toContain("设定图");
+
+  let videoInput: unknown;
+  await runVideo(episode({ brief, video_source: "references", status: "clipping",
+    shots: [shot({ status: "generating_clip" })] }), 1, {
+    persona: sheetPersona, destination, generation_id: "t-sheet-v", h3PromptWriter: mockH3PromptWriter,
+    video: { async generate(input) {
+      videoInput = input;
+      return { key: "clip/x.mp4", model: "H3", version: "dual", seed: input.seed, seconds: 1, ref_hashes: [] };
+    } },
+  });
+  // Direct video stays on the photo until the sheet is replayed as Picture 1 (ADR-0017).
+  expect((videoInput as { refs: string[] }).refs[0]).not.toContain("sheet");
+});
+
+test("assets accepts a source-only outfit once its sheet is ready, rejects it when not", async () => {
+  const run = (p: Persona) => runAssets(episode({ brief: { ...episode().brief, outfit_id: "o1" } }), undefined,
+    { persona: p, destination });
+  expect((await run(sheetPersona)).status).toBe("keyframing");
+  const notReady = { ...sheetPersona, outfits: [{ ...sheetPersona.outfits![0]!, views_status: "pending", views: undefined }] } as unknown as Persona;
+  await expect(run(notReady)).rejects.toThrow("没有参考图");
 });

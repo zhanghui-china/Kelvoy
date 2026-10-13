@@ -33,7 +33,7 @@ function usage(): never {
   console.error("  kelvoy create-user <username> <password>");
   console.error("  kelvoy set-password <username> <password>");
   console.error("  kelvoy grant-credits <username> <amount> <grant-id>");
-  console.error("  kelvoy set-credit-price <script|image|video|compose> <price>");
+  console.error("  kelvoy set-credit-price <script|image|video|compose|persona_view> <price>");
   process.exit(1);
 }
 
@@ -148,7 +148,7 @@ async function runGrantCredits(argv: string[]): Promise<void> {
 
 function runSetCreditPrice(argv: string[]): void {
   const [kind, priceText] = argv;
-  if (!kind || !priceText || !["script", "image", "video", "compose"].includes(kind)) usage();
+  if (!kind || !priceText || !["script", "image", "video", "compose", "persona_view"].includes(kind)) usage();
   setCreditPrice(kind as CreditKind, Number(priceText));
   console.log(`${kind} 单价已更新为 ${priceText} 积分`);
 }

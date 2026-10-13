@@ -1,0 +1,9 @@
+/* 穿搭三视图区块（ViewsPanel.tsx）。 */
+.k-views { display: grid; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--color-border); }
+.k-views-title { margin: 0; font-size: 0.9rem; }
+.k-views-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; }
+.k-views-grid .k-media, .k-views-grid .k-media-missing { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; }
+.k-views-progress { display: grid; gap: 0.4rem; justify-items: start; }
+.k-views-progress progress { width: 100%; }
+.k-views-confirm { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.k-views-confirm p { flex-basis: 100%; margin: 0; }

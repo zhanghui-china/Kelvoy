@@ -1,7 +1,14 @@
 import { getDb } from "./db";
 import { hasEpisodeDeletion } from "./episode-deletion";
 
-export type CreditKind = "script" | "image" | "video" | "compose";
+export type CreditKind = "script" | "image" | "video" | "compose" | "persona_view";
+
+/**
+ * 没有 credit_prices 行时的单价。新增 kind 不往已有的 credit_prices 表补种子行：部署闸门（infra/dgx/schema_compat.py）
+ * 只放行新表 / 新索引 / 新迁移 id，已有表的行增加会被判为非加性变更。运营用 setCreditPrice 改价时才落行。
+ * persona_view = 3：占位，按「一次三视图 ≈ 3 次 image」估，待 GX10 实测校准（与 PRD 占位口径一致）。
+ */
+const DEFAULT_CREDIT_PRICES: Partial<Record<CreditKind, number>> = { persona_view: 3 };
 export type CreditBalance = { available: number; reserved: number };
 export type CreditAction = {
   action_id: string;
@@ -42,8 +49,9 @@ export function getCreditPrice(kind: CreditKind): number {
   const row = getDb().query<{ price: number }, [string]>(
     "select price from credit_prices where kind = ?",
   ).get(kind);
-  if (!row) throw new Error(`missing credit price: ${kind}`);
-  return row.price;
+  const price = row?.price ?? DEFAULT_CREDIT_PRICES[kind];
+  if (price === undefined) throw new Error(`missing credit price: ${kind}`);
+  return price;
 }
 
 export function estimateCreditQuote(candidates: number, shotCount = 7,
@@ -57,7 +65,9 @@ export function estimateCreditQuote(candidates: number, shotCount = 7,
 
 export function setCreditPrice(kind: CreditKind, price: number): void {
   if (!Number.isSafeInteger(price) || price < 0) throw new Error("price must be a nonnegative integer");
-  getDb().query("update credit_prices set price = ? where kind = ?").run(price, kind);
+  getDb().query(
+    "insert into credit_prices (kind, price) values (?, ?) on conflict(kind) do update set price = excluded.price",
+  ).run(kind, price);
 }
 
 /** Team-issued grant with an external idempotency key. No public route calls this. */

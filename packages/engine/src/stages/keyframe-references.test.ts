@@ -17,7 +17,7 @@ const destination = {
 
 test("uses the first persona image and the first image of the shot's landmark", () => {
   expect(keyframeReferences(persona, destination, { landmark: "l1" })).toEqual({
-    persona: { key: "persona/front.png", index: 0, total: 3 },
+    persona: { key: "persona/front.png", index: 0, total: 3, kind: "photo" },
     outfit: null,
     person_omitted: false,
     landmark: { id: "l1", name: "灵山大佛", key: "dest/a.jpg", index: 0, total: 4 },
@@ -55,7 +55,7 @@ const withOutfits = {
 
 test("a chosen outfit's first image replaces the base image, never joins it", () => {
   const refs = keyframeReferences(withOutfits, destination, { landmark: "l1" }, "o1");
-  expect(refs.persona).toEqual({ key: "persona/o1_a.png", index: 0, total: 2 });
+  expect(refs.persona).toEqual({ key: "persona/o1_a.png", index: 0, total: 2, kind: "photo" });
   expect(refs.outfit).toEqual({ id: "o1", name: "秋日风衣" });
   expect(refs.landmark?.key).toBe("dest/a.jpg");
 });
@@ -98,4 +98,67 @@ test("an empty shot with no usable landmark image keeps the person reference (th
 test("person_visible true or missing never omits the person", () => {
   expect(keyframeReferences(persona, destination, { landmark: "l1", person_visible: true }).person_omitted).toBe(false);
   expect(keyframeReferences(persona, destination, { landmark: "l1" }).person_omitted).toBe(false);
+});
+
+const views = (sheet: string) => ({ front: `${sheet}_f`, side: `${sheet}_s`, back: `${sheet}_b`, sheet });
+const gen = { provider: "local", model: "m", version: "1", seed: 1 };
+const withSheets = {
+  ...persona,
+  views_status: "ready", views: views("persona/default_sheet.jpg"), views_gen: gen,
+  outfits: [
+    { outfit_id: "o1", name: "秋日风衣", desc: "", seasons: ["秋"], refs: ["outfit/o1.png"], source: "outfit/o1.png",
+      views_status: "ready", views: views("outfit/o1_sheet.jpg"), views_gen: gen },
+    { outfit_id: "o_src", name: "只有原图", desc: "", seasons: [], refs: [], source: "outfit/src.png",
+      views_status: "ready", views: views("outfit/src_sheet.jpg"), views_gen: gen },
+    { outfit_id: "o_pending", name: "生成中", desc: "", seasons: [], refs: ["outfit/p.png"], source: "outfit/p.png",
+      views_status: "pending" },
+    { outfit_id: "o_pending_src", name: "只有原图未就绪", desc: "", seasons: [], refs: [], source: "outfit/ps.png",
+      views_status: "failed" },
+  ],
+} as unknown as Persona;
+
+test("a chosen outfit with a ready sheet uses only that sheet (total 1), not the persona default sheet", () => {
+  const refs = keyframeReferences(withSheets, destination, { landmark: "l1" }, "o1");
+  expect(refs.persona).toEqual({ key: "outfit/o1_sheet.jpg", index: 0, total: 1, kind: "sheet" });
+  expect(refs.outfit).toEqual({ id: "o1", name: "秋日风衣" });
+  expect(refs.landmark?.key).toBe("dest/a.jpg");
+});
+
+test("a source-only outfit works through its sheet", () => {
+  const refs = personaReference(withSheets, "o_src");
+  expect(refs.ref?.key).toBe("outfit/src_sheet.jpg");
+  expect(refs.outfit?.id).toBe("o_src");
+});
+
+test("no outfit chosen uses the persona default sheet", () => {
+  const refs = keyframeReferences(withSheets, destination, { landmark: null });
+  expect(refs.persona).toEqual({ key: "persona/default_sheet.jpg", index: 0, total: 1, kind: "sheet" });
+  expect(refs.outfit).toBeNull();
+});
+
+test("an outfit whose views are not ready falls back to its own photo, never the persona sheet", () => {
+  const refs = keyframeReferences(withSheets, destination, { landmark: null }, "o_pending");
+  expect(refs.persona).toEqual({ key: "outfit/p.png", index: 0, total: 1, kind: "photo" });
+  expect(refs.outfit?.id).toBe("o_pending");
+});
+
+test("an unknown outfit id or an outfit with neither photo nor sheet falls back to the default (sheet if ready)", () => {
+  for (const id of ["gone", "o_pending_src"]) {
+    const refs = keyframeReferences(withSheets, destination, { landmark: null }, id);
+    expect(refs.persona?.key).toBe("persona/default_sheet.jpg");
+    expect(refs.persona?.kind).toBe("sheet");
+    expect(refs.outfit).toBeNull();
+  }
+});
+
+test("old data without views keeps the photo behaviour and is marked photo", () => {
+  expect(keyframeReferences(withOutfits, destination, { landmark: null }).persona?.kind).toBe("photo");
+  expect(keyframeReferences({ ...withSheets, views_status: "none", views: undefined } as Persona, destination,
+    { landmark: null }).persona).toEqual({ key: "persona/front.png", index: 0, total: 3, kind: "photo" });
+});
+
+test("an empty shot with a landmark image never sends the sheet either", () => {
+  const refs = keyframeReferences(withSheets, destination, { landmark: "l1", person_visible: false }, "o1");
+  expect(refs.persona).toBeNull();
+  expect(refs.person_omitted).toBe(true);
 });

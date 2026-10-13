@@ -1,4 +1,5 @@
 import type { Destination, Persona, Shot } from "../schema";
+import { outfitSheetKey } from "../rules/outfit-sheet";
 
 export interface KeyframeReference {
   key: string;
@@ -7,9 +8,19 @@ export interface KeyframeReference {
   total: number;
 }
 
+/**
+ * `sheet` = the three-view character sheet (ADR-0017, one image, total 1); `photo` = the first
+ * uploaded image of the outfit / persona (ADR-0015).
+ */
+export type PersonReferenceKind = "sheet" | "photo";
+export type PersonReference = KeyframeReference & { kind: PersonReferenceKind };
+
 export interface KeyframeReferences {
-  /** The person reference: the chosen outfit's first image, else the persona's first image. */
-  persona: KeyframeReference | null;
+  /**
+   * The person reference: the chosen outfit's (else the default's) ready three-view sheet, otherwise
+   * the outfit's first image, otherwise the persona's first image.
+   */
+  persona: PersonReference | null;
   /** Set when `persona` comes from a custom outfit; null = default outfit (persona.refs). */
   outfit: { id: string; name: string } | null;
   /** Set only when the shot names a landmark that has a usable reference image. */
@@ -24,23 +35,33 @@ export interface KeyframeReferences {
 }
 
 /**
- * The person reference for generation. A chosen outfit's image *replaces* the
- * persona's base image — it is never sent together with it, because the model
- * then draws two people (ADR-0015). An outfit id that no longer resolves in this
- * persona version falls back to the default outfit instead of failing the shot;
- * pinned versions are immutable so that only happens for hand-edited data.
+ * The person reference for generation. A chosen outfit's reference *replaces* the persona's base
+ * image — they are never sent together, because the model then draws two people (ADR-0015). When
+ * the outfit (or, with none chosen, the persona default) has a ready three-view sheet, that single
+ * sheet is the reference; otherwise the first uploaded image, as before (ADR-0017). An outfit id that
+ * no longer resolves in this persona version falls back to the default outfit instead of failing the
+ * shot; pinned versions are immutable so that only happens for hand-edited data.
+ *
+ * `photoOnly` skips the sheet and always takes the first uploaded image. Only the direct video
+ * (Ref2VA) path uses it, until the sheet is validated as Picture 1 there (ADR-0017 unverified items).
  */
 export function personaReference(
   persona: Persona | null | undefined,
   outfitId?: string | null,
-): { ref: KeyframeReference | null; outfit: { id: string; name: string } | null } {
+  options: { photoOnly?: boolean } = {},
+): { ref: PersonReference | null; outfit: { id: string; name: string } | null } {
   const outfit = outfitId ? persona?.outfits?.find((item) => item.outfit_id === outfitId) : undefined;
-  const source = outfit && outfit.refs.length > 0 ? outfit.refs : persona?.refs ?? [];
+  const sheet = options.photoOnly ? null : outfit ? outfitSheetKey(persona, outfit.outfit_id) : outfitSheetKey(persona);
+  const chosen = outfit && (sheet !== null || outfit.refs.length > 0) ? outfit : undefined;
+  const outfitInfo = chosen ? { id: chosen.outfit_id, name: chosen.name } : null;
+  if (chosen && sheet) return { ref: { key: sheet, index: 0, total: 1, kind: "sheet" }, outfit: outfitInfo };
+  // An outfit without refs and without a ready sheet falls back to the default outfit, whose sheet
+  // (if ready) is still preferred.
+  const defaultSheet = chosen || options.photoOnly ? null : outfitSheetKey(persona);
+  if (defaultSheet) return { ref: { key: defaultSheet, index: 0, total: 1, kind: "sheet" }, outfit: null };
+  const source = chosen ? chosen.refs : persona?.refs ?? [];
   const key = source[0];
-  return {
-    ref: key ? { key, index: 0, total: source.length } : null,
-    outfit: outfit && outfit.refs.length > 0 ? { id: outfit.outfit_id, name: outfit.name } : null,
-  };
+  return { ref: key ? { key, index: 0, total: source.length, kind: "photo" } : null, outfit: outfitInfo };
 }
 
 /**

@@ -75,7 +75,7 @@ apps/web/src/server/
 └── routes/
     ├── auth.ts              # POST /login /logout（DECOY_HASH 防时序探测）
     ├── me.ts                # 账号信息 / 设置 / 积分 / 改密码
-    ├── personas.ts          # 角色 CRUD + 参考图 multipart 上传（3–7 张）
+    ├── personas.ts          # 角色 CRUD + 参考图 multipart 上传（1–7 张）
     ├── destinations.ts      # 目的地库 + 地标实景参考图
     ├── templates.ts         # 模板列表 / 新建 / 删除
     ├── episodes.ts          # 建期 / 列表 / 概览 / 用量 / 估价 / 详情
@@ -223,7 +223,7 @@ Web 不自建存储：所有读写经 `@kelvoy/store`（唯一拥有 SQLite 连�
 
 ### 6.4 上传边界
 
-参考图上传走 `multipart/form-data`：`parseBoundedMultipart` 先按 `Content-Length` 限流再解析，总量上限 = 7×10MB + 1MB，单张 ≤ 10MB，总数 3–7 张，超限精确报错（当前张数 / 本次张数 / 合计）。
+参考图上传走 `multipart/form-data`：`parseBoundedMultipart` 先按 `Content-Length` 限流再解析，总量上限 = 7×10MB + 1MB，单张 ≤ 10MB，总数 1–7 张，超限精确报错（当前张数 / 本次张数 / 合计）。
 
 ---
 

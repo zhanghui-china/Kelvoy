@@ -1,6 +1,6 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { validateCreatePersonaRequest, validatePersonaPatchRequest } from "@kelvoy/engine";
+import { PERSONA_REFS_MAX, PERSONA_REFS_MIN, validateCreatePersonaRequest, validatePersonaPatchRequest } from "@kelvoy/engine";
 import type { Persona } from "@kelvoy/engine";
 import { appendPersonaRefs, deletePersona, getPersona, insertPersona, listPersonas, updatePersona } from "@kelvoy/store";
 import { Hono } from "hono";
@@ -24,7 +24,7 @@ personas.post("/", async (c) => {
     persona_id: `c_${crypto.randomUUID()}`,
     owner_id: c.get("ownerId"),
     version: 1,
-    refs: [], // 参考图走 POST /:id/refs 单独上传，3–7 张的校验在那一条路径上做
+    refs: [], // 参考图走 POST /:id/refs 单独上传，参考图张数的校验在那一条路径上做
     ...result.value,
   };
   await insertPersona(persona);
@@ -65,10 +65,8 @@ export function projectsRoot(): string {
   return process.env.KELVOY_PROJECTS_ROOT ?? "projects";
 }
 
-const MIN_REFS = 3;
-const MAX_REFS = 7;
 export const MAX_REF_BYTES = 10 * 1024 * 1024;
-const MAX_UPLOAD_BYTES = MAX_REFS * MAX_REF_BYTES + 1024 * 1024;
+const MAX_UPLOAD_BYTES = PERSONA_REFS_MAX * MAX_REF_BYTES + 1024 * 1024;
 
 /** Bound the entire multipart body before FormData parsing allocates File objects. */
 export async function parseBoundedMultipart(request: Request, maxBytes: number): Promise<
@@ -129,12 +127,12 @@ personas.post("/:id/refs", async (c) => {
   // "先攒着、之后再校验"的中间态，简化了 FR-03 这条校验该在什么时机触发
   // 的问题（M2-4 issue 验收里"少于 3 张 / 超过 7 张"两条边界都在这里查）。
   const total = current.refs.length + files.length;
-  if (total < MIN_REFS || total > MAX_REFS) {
+  if (total < PERSONA_REFS_MIN || total > PERSONA_REFS_MAX) {
     return c.json(
       {
         ok: false,
         error: "invalid_ref_count",
-        message: `参考图总数必须在 ${MIN_REFS}–${MAX_REFS} 张之间（当前已有 ${current.refs.length} 张，本次上传 ${files.length} 张，合计 ${total} 张）`,
+        message: `参考图总数必须在 ${PERSONA_REFS_MIN}–${PERSONA_REFS_MAX} 张之间（当前已有 ${current.refs.length} 张，本次上传 ${files.length} 张，合计 ${total} 张）`,
       },
       400,
     );
@@ -160,7 +158,7 @@ personas.post("/:id/refs", async (c) => {
       await Bun.write(join(projectsRoot(), relPath), file);
     }
     const updated = appendPersonaRefs({ persona_id: personaId, owner_id: c.get("ownerId"),
-      refs: newRefs, min: MIN_REFS, max: MAX_REFS });
+      refs: newRefs, min: PERSONA_REFS_MIN, max: PERSONA_REFS_MAX });
     if (!updated.ok) {
       await Promise.all(newRefs.map((ref) => rm(join(projectsRoot(), ref), { force: true })));
       return c.json({ ok: false, error: updated.error }, updated.error === "not_found" ? 404 : 400);

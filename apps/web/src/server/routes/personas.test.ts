@@ -189,14 +189,12 @@ test("official personas are listed but browser patch and upload return 404", asy
   expect(uploaded.status).toBe(404);
 });
 
-test("uploading refs below the minimum is rejected", async () => {
+test("uploading zero refs is rejected", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
   const app = buildApp();
 
   const form = new FormData();
-  form.append("files", pngFile("a.png"));
-  form.append("files", pngFile("b.png"));
   const res = await app.request("/api/personas/c_mine/refs", {
     method: "POST",
     headers: { cookie },
@@ -204,7 +202,20 @@ test("uploading refs below the minimum is rejected", async () => {
   });
   expect(res.status).toBe(400);
   const body = (await res.json()) as { ok: boolean; error: string };
-  expect(body.error).toBe("invalid_ref_count");
+  expect(body.error).toBe("no_files");
+});
+
+test("uploading a single ref is accepted", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
+  const app = buildApp();
+
+  const form = new FormData();
+  form.append("files", pngFile("full.png"));
+  const res = await app.request("/api/personas/c_mine/refs", { method: "POST", headers: { cookie }, body: form });
+  expect(res.status).toBe(201);
+  const body = (await res.json()) as { ok: boolean; persona: Persona };
+  expect(body.persona.refs.length).toBe(1);
 });
 
 test("uploading refs above the maximum is rejected and nothing is written", async () => {
@@ -225,7 +236,7 @@ test("uploading refs above the maximum is rejected and nothing is written", asyn
   expect(persona?.refs).toEqual([]);
 });
 
-test("uploading 3-7 refs saves the files and appends to Persona.refs", async () => {
+test("uploading 1-7 refs saves the files and appends to Persona.refs", async () => {
   const { cookie, ownerId } = await login("dannei");
   await insertPersona({ ...fixture("c_mine", ownerId), refs: [] });
   const app = buildApp();

@@ -8,6 +8,7 @@ import type {
   EpisodePatch,
   EstimateCostResult,
   Persona,
+  PersonaOutfit,
   OutfitPatch,
   PersonaPatch,
   RegenStage,
@@ -19,6 +20,7 @@ import type {
 } from "@kelvoy/engine";
 import type { EpisodeOverview } from "../../shared/episode-overview";
 import type { UsageSummary } from "../../shared/usage";
+import type { ViewsJobView } from "../../shared/views-job";
 
 // Typed wrapper around the /api/* routes apps/web/src/server/routes/*.ts
 // actually serve. M2-7 scoped this to read-only pages (auth +
@@ -157,9 +159,9 @@ export function patchPersona(personaId: string, patch: PersonaPatch) {
   });
 }
 
-/** files.length 必须落在 [3, 7]（合上角色已有的张数）——后端校验，见
+/** 合计张数必须落在 [PERSONA_REFS_MIN, PERSONA_REFS_MAX]（合上角色已有的张数）——后端校验，见
  * personas.ts；这里只管把 multipart 请求发出去，数量校验留给调用方在提交
- * 前做，好给出"至少 3 张 / 最多 7 张"这种即时反馈，不用等一趟网络。 */
+ * 前做，好给出"至少 1 张 / 最多 7 张"这种即时反馈，不用等一趟网络。 */
 export function uploadPersonaRefs(personaId: string, files: File[]) {
   const form = new FormData();
   for (const file of files) form.append("files", file);
@@ -170,13 +172,39 @@ export function uploadPersonaRefs(personaId: string, files: File[]) {
 }
 
 // 穿搭：每次写入都会让角色版本 +1，响应里带最新的 persona。
-export function createOutfit(personaId: string, input: { name: string; desc: string; seasons: string[]; files: File[] }) {
+// ADR-0017：每套穿搭只上传 1 张全身照（source），三视图由它异步生成。
+export function createSourceOutfit(personaId: string, input: { name: string; desc: string; seasons: string[]; file: File }) {
   const form = new FormData();
   form.append("name", input.name);
   form.append("desc", input.desc);
   for (const season of input.seasons) form.append("seasons", season);
-  for (const file of input.files) form.append("files", file);
-  return apiFetchMultipart<{ persona: Persona }>(`/api/personas/${encodeURIComponent(personaId)}/outfits`, form);
+  form.append("files", input.file);
+  return apiFetchMultipart<{ persona: Persona; outfit: PersonaOutfit }>(
+    `/api/personas/${encodeURIComponent(personaId)}/outfits/source`, form);
+}
+
+function viewsPath(personaId: string, suffix = ""): string {
+  return `/api/personas/${encodeURIComponent(personaId)}/views${suffix}`;
+}
+
+/** outfitId 为 null = 默认穿搭（角色自身 refs[0]）；已 ready 时必须 regenerate: true。repeated = 复用了在途 job。 */
+export function createViewsJob(personaId: string, outfitId: string | null, regenerate: boolean) {
+  return apiFetch<{ job: ViewsJobView; repeated: boolean }>(viewsPath(personaId), {
+    method: "POST", body: JSON.stringify({ outfit_id: outfitId, regenerate }),
+  });
+}
+
+export function listViewsJobs(personaId: string) {
+  return apiFetch<{ jobs: ViewsJobView[] }>(viewsPath(personaId, "/jobs"));
+}
+
+export function getViewsJob(personaId: string, jobId: string) {
+  return apiFetch<{ job: ViewsJobView }>(viewsPath(personaId, `/jobs/${encodeURIComponent(jobId)}`));
+}
+
+export function cancelViewsJob(personaId: string, jobId: string) {
+  return apiFetch<{ job: ViewsJobView; repeated: boolean }>(
+    viewsPath(personaId, `/jobs/${encodeURIComponent(jobId)}/cancel`), { method: "POST" });
 }
 
 export function patchOutfit(personaId: string, outfitId: string, patch: OutfitPatch) {

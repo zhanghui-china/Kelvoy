@@ -34,6 +34,7 @@ test("outfit editor lists outfits with counts and the add form", () => {
   expect(out).toContain("1 / 6");
   expect(out).toContain("风衣");
   expect(out).toContain("追加图片（1/3）");
+  expect(out).toContain("选择全身照");
   expect(out).toContain("添加穿搭");
 });
 
@@ -41,5 +42,44 @@ test("outfit editor stops offering the add form at 6 outfits", () => {
   const six = Array.from({ length: 6 }, (_, i) => outfit(`o_${i}`, `套${i}`, []));
   const out = html(<PersonaOutfits persona={persona(six)} onChange={() => {}} />);
   expect(out).toContain("已达 6 套上限");
-  expect(out).not.toContain("选择图片");
+  expect(out).not.toContain("选择全身照");
+});
+
+const sourceOutfit = (id: string, status?: "none" | "pending" | "ready" | "failed"): Persona["outfits"] extends (infer O)[] | undefined ? O : never => ({
+  outfit_id: id, name: `套${id}`, desc: "", seasons: ["秋"], refs: [], source: `persona/c_1/${id}_src.png`,
+  ...(status ? { views_status: status } : {}),
+  ...(status === "ready" ? { views: { front: `persona/c_1/${id}_f.png`, side: "s", back: "b", sheet: "sh" },
+    views_gen: { provider: "p", model: "m", version: "1", seed: 1 } } : {}),
+});
+
+test("picker disables source outfits whose three views are not ready, uses the front view as thumbnail", () => {
+  const out = html(<OutfitPicker persona={persona([sourceOutfit("a", "ready"), sourceOutfit("b", "pending"),
+    sourceOutfit("c", "failed"), sourceOutfit("d"), outfit("old", "老穿搭", [])])} season="" value="" onChange={() => {}} />);
+  expect(out).toContain("a_f.png");
+  expect(out.match(/disabled=""/g)).toHaveLength(3);
+  expect(out).toContain("三视图生成中");
+  expect(out).toContain("三视图生成失败");
+  expect(out).toContain("三视图未生成");
+  expect(out).toContain("未生成三视图");
+});
+
+test("outfit card shows source photo and generate button with estimated credits", () => {
+  const out = html(<PersonaOutfits persona={persona([sourceOutfit("a")])} onChange={() => {}} />);
+  expect(out).toContain("a_src.png");
+  expect(out).toContain("生成三视图（预估 3 积分）");
+  expect(out).not.toContain("追加图片");
+});
+
+test("outfit card in each views state", () => {
+  const ready = html(<PersonaOutfits persona={persona([sourceOutfit("a", "ready")])} onChange={() => {}} />);
+  expect(ready).toContain("a_f.png");
+  expect(ready).toContain("重新生成");
+  const pending = html(<PersonaOutfits persona={persona([sourceOutfit("a", "pending")])} onChange={() => {}} />);
+  expect(pending).toContain("取消生成");
+  expect(pending).toContain('aria-live="polite"');
+  const failed = html(<PersonaOutfits persona={persona([sourceOutfit("a", "failed")])} onChange={() => {}} />);
+  expect(failed).toContain("重试（预估 3 积分）");
+  expect(failed).toContain('role="alert"');
+  const legacy = html(<PersonaOutfits persona={persona([outfit("old", "老", [])])} onChange={() => {}} />);
+  expect(legacy).toContain("旧式穿搭");
 });
