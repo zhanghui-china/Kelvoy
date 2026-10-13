@@ -167,6 +167,35 @@ test("direct video sends person and landmark images without a generated keyframe
   expect(next.shots[0]?.kf_selected).toBeNull();
 });
 
+test("a ready sheet is the keyframe person reference, while direct video keeps the photo", async () => {
+  const sheetPersona = { ...persona, views_status: "ready", views: { sheet: "persona/sheet.jpg" } } as unknown as Persona;
+  const keyframeRefs: string[][] = [];
+  const keyframeContext: StageContext = {
+    persona: sheetPersona, destination, generation_id: "task-sheet-kf",
+    keyframe: { async generate(input) {
+      keyframeRefs.push(input.refs);
+      return { key: `kf/01_${input.candidate_no}.png`, model: "Qwen-Image-2.1",
+        version: "hash1", seed: input.seed, seconds: 40, ref_hashes: ["h1", "h2"] };
+    } },
+  };
+  await runKeyframe(episode({ status: "keyframing", shots: [shot({ status: "generating_kf" })] }), 1, keyframeContext);
+  expect(keyframeRefs[0]).toEqual(["persona/sheet.jpg", "dest/a.jpg"]);
+
+  let directRefs: string[] | undefined;
+  const directContext: StageContext = {
+    persona: sheetPersona, destination, generation_id: "task-sheet-direct", attempt: 1,
+    h3PromptWriter: mockH3PromptWriter,
+    video: { async generate(input) {
+      directRefs = (input as { refs: string[] }).refs;
+      return { key: "clip/direct.mp4", model: "MiniMax-H3", version: "dual",
+        seed: input.seed, seconds: 60, ref_hashes: ["person-hash", "scene-hash"] };
+    } },
+  };
+  await runVideo(episode({ video_source: "references", status: "clipping",
+    shots: [shot({ status: "generating_clip" })] }), 1, directContext);
+  expect(directRefs).toEqual(["persona/front.png", "dest/a.jpg"]);
+});
+
 test("finishing one of several shots leaves the episode generating and preserves other shots", async () => {
   const second = shot({ no: 2, landmark: null, status: "draft" });
   const context: StageContext = {
@@ -298,7 +327,7 @@ const sheetPersona = {
   ],
 } as unknown as Persona;
 
-test("a ready sheet is the single person image for keyframes (prompt names it) and direct video; empty shots omit it", async () => {
+test("a ready sheet is the single person image for keyframes (prompt names it) and not direct video; empty shots omit it", async () => {
   const seen: Array<{ prompt: string; refs: string[] }> = [];
   const context: StageContext = {
     persona: sheetPersona, destination, generation_id: "t-sheet",
@@ -337,7 +366,8 @@ test("a ready sheet is the single person image for keyframes (prompt names it) a
       return { key: "clip/x.mp4", model: "H3", version: "dual", seed: input.seed, seconds: 1, ref_hashes: [] };
     } },
   });
-  expect((videoInput as { refs: string[] }).refs).toEqual(["outfit/o1_sheet.jpg", "dest/a.jpg"]);
+  // Direct video stays on the photo until the sheet is replayed as Picture 1 (ADR-0017).
+  expect((videoInput as { refs: string[] }).refs[0]).not.toContain("sheet");
 });
 
 test("assets accepts a source-only outfit once its sheet is ready, rejects it when not", async () => {
