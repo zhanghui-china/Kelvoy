@@ -17,7 +17,7 @@ uv run pytest
 
 ## ComfyUI 图像与视频
 
-`/image/` 使用 Qwen-Image 2.1 的单参考图（角色）或双参考图（角色、地标）工作流；
+`/image/` 使用 Qwen-Image 2.1 的单参考图（角色；也用于据一张全身照生成穿搭三视图，ADR-0017）或双参考图（角色或三视图设定图、地标）工作流；
 `/video/` 使用 MiniMax H3：一张参考图走已审核关键帧生视频，两张参考图依次作为角色和场景走双参考直出。两条路径都支持 `size: "9:16"` 或 `"16:9"`，`params.duration_s` 可设为 3、4、5 秒。
 两者读取 `comfyui-bridge` 中的 API 工作流文件，调用 `KELVOY_COMFYUI_BASE_URL`
 （默认 `http://127.0.0.1:8188`）。请求里的 `refs` 必须是
