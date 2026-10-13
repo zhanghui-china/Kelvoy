@@ -35,6 +35,14 @@ test("add rejects 0 or 4 images", () => {
     .toEqual({ ok: false, error: "invalid_ref_count" });
 });
 
+test("a source-only outfit (ADR-0017) needs no refs; refs above the cap are still refused", async () => {
+  const sourceOnly = { ...outfit("o_s", []), source: "persona/c_1/o_s-src.png" };
+  expect(addPersonaOutfit({ ...ids, outfit: sourceOnly }).ok).toBe(true);
+  expect(await canReadPersonaAsset("c_1", "persona/c_1/o_s-src.png", "u_1")).toBe(true);
+  expect(addPersonaOutfit({ ...ids, outfit: { ...outfit("o_t", ["1", "2", "3", "4"]), source: "s.png" } }))
+    .toEqual({ ok: false, error: "invalid_ref_count" });
+});
+
 test("patch changes text only; append respects the 3-image cap; remove drops it from latest only", async () => {
   addPersonaOutfit({ ...ids, outfit: outfit("o_1") });
   const patched = patchPersonaOutfit({ ...ids, outfit_id: "o_1", patch: { name: "改名", seasons: ["冬"] } });

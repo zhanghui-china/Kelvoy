@@ -80,6 +80,15 @@ async function ownedPersonaId(ownerId: string, id: string): Promise<string | nul
   return current && current.owner_id === ownerId ? current.persona_id : null;
 }
 
+function outfitFields(form: FormData): Omit<PersonaOutfit, "outfit_id" | "refs"> | { errors: string[] } {
+  const fields = validateCreateOutfitRequest({
+    name: form.get("name"),
+    desc: form.get("desc") ?? "",
+    seasons: form.getAll("seasons").filter((v): v is string => typeof v === "string"),
+  });
+  return fields.valid ? fields.value : { errors: fields.errors };
+}
+
 // multipart: name, desc?, seasons?（可重复字段）, files（1–3 张）
 outfits.post("/:id/outfits", async (c) => {
   const personaId = await ownedPersonaId(c.get("ownerId"), c.req.param("id"));
@@ -87,16 +96,32 @@ outfits.post("/:id/outfits", async (c) => {
   const upload = await readUpload(c.req.raw);
   if (!upload.ok || !upload.form) return c.json(upload.ok ? { ok: false, error: "invalid_form" } : upload.body,
     upload.ok ? 400 : upload.status);
-  const form = upload.form;
-  const fields = validateCreateOutfitRequest({
-    name: form.get("name"),
-    desc: form.get("desc") ?? "",
-    seasons: form.getAll("seasons").filter((v): v is string => typeof v === "string"),
-  });
-  if (!fields.valid) return c.json({ ok: false, errors: fields.errors }, 400);
-  const outfit: Omit<PersonaOutfit, "refs"> = { outfit_id: `o_${crypto.randomUUID()}`, ...fields.value };
+  const fields = outfitFields(upload.form);
+  if ("errors" in fields) return c.json({ ok: false, errors: fields.errors }, 400);
+  const outfit: Omit<PersonaOutfit, "refs"> = { outfit_id: `o_${crypto.randomUUID()}`, ...fields };
   const result = await storeAndCommit(personaId, upload.files, (refs) =>
     addPersonaOutfit({ persona_id: personaId, owner_id: c.get("ownerId"), outfit: { ...outfit, refs } }));
+  if (!result.ok) return c.json({ ok: false, error: result.error }, STATUS[result.error]);
+  return c.json({ ok: true, persona: result.persona, outfit: result.outfit }, 201);
+});
+
+// ADR-0017 三视图穿搭：只上传一张全身照，记作 source，refs 为空；之后由 persona-views 路由生成三视图。
+// multipart: name, desc?, seasons?（可重复字段）, files（恰好 1 张）
+outfits.post("/:id/outfits/source", async (c) => {
+  const personaId = await ownedPersonaId(c.get("ownerId"), c.req.param("id"));
+  if (!personaId) return c.json({ ok: false, error: "not_found" }, 404);
+  const upload = await readUpload(c.req.raw);
+  if (!upload.ok || !upload.form) return c.json(upload.ok ? { ok: false, error: "invalid_form" } : upload.body,
+    upload.ok ? 400 : upload.status);
+  if (upload.files.length !== 1) {
+    return c.json({ ok: false, error: "invalid_ref_count", message: "全身照只需上传 1 张图" }, 400);
+  }
+  const fields = outfitFields(upload.form);
+  if ("errors" in fields) return c.json({ ok: false, errors: fields.errors }, 400);
+  const outfit: Omit<PersonaOutfit, "refs" | "source"> = { outfit_id: `o_${crypto.randomUUID()}`, ...fields };
+  const result = await storeAndCommit(personaId, upload.files, ([source]) =>
+    addPersonaOutfit({ persona_id: personaId, owner_id: c.get("ownerId"),
+      outfit: { ...outfit, refs: [], source } }));
   if (!result.ok) return c.json({ ok: false, error: result.error }, STATUS[result.error]);
   return c.json({ ok: true, persona: result.persona, outfit: result.outfit }, 201);
 });
