@@ -56,8 +56,8 @@ test("create reserves credits, marks the default outfit pending and bumps the pe
   const job = await created();
   expect(job).toMatchObject({ status: "pending", attempt: 1, outfit_id: null, source_key: "persona/c_1/base.png",
     persona_version: 3, credit_action_id: job.job_id });
-  expect(getCreditBalance(owner)).toEqual({ available: 17, reserved: 3 });
-  expect(getCreditAction(job.job_id)).toMatchObject({ kind: "persona_view", price: 3, status: "reserved" });
+  expect(getCreditBalance(owner)).toEqual({ available: 19, reserved: 1 });
+  expect(getCreditAction(job.job_id)).toMatchObject({ kind: "persona_view", price: 1, status: "reserved" });
   expect(await getPersona("c_1")).toMatchObject({ version: 3, views_status: "pending" });
   expect((await getPersonaVersion("c_1", 3))?.views_status).toBe("pending");
 });
@@ -74,11 +74,11 @@ test("creating twice for the same target is idempotent and reserves once", async
   const first = await create();
   const second = await create();
   expect(first.ok && second.ok && second.repeated && second.job.job_id === first.job.job_id).toBe(true);
-  expect(getCreditBalance(owner)).toEqual({ available: 17, reserved: 3 });
+  expect(getCreditBalance(owner)).toEqual({ available: 19, reserved: 1 });
   expect((await getPersona("c_1"))!.version).toBe(3); // outfit add (2) + one pending bump
   expect(await listViewsJobs("c_1", owner)).toHaveLength(1);
   await created("o_1"); // a different target is independent
-  expect(getCreditBalance(owner).reserved).toBe(6);
+  expect(getCreditBalance(owner).reserved).toBe(2);
 });
 
 test("the partial unique index rejects a second in-flight row for the same target and source", async () => {
@@ -106,13 +106,13 @@ test("rejections: other tenant, official persona, missing outfit, missing source
 });
 
 test("insufficient credits roll back the whole creation", async () => {
-  getDb().query("update credit_accounts set available = 2 where user_id = ?").run(owner);
+  getDb().query("update credit_accounts set available = 0 where user_id = ?").run(owner);
   const before = (await getPersona("c_1"))!.version;
   expect(await create()).toEqual({ ok: false, error: "insufficient_credits" });
   expect(await getPersona("c_1")).toMatchObject({ version: before });
   expect((await getPersona("c_1"))!.views_status).toBeUndefined();
   expect(await listViewsJobs("c_1", owner)).toHaveLength(0);
-  expect(getCreditBalance(owner)).toEqual({ available: 2, reserved: 0 });
+  expect(getCreditBalance(owner)).toEqual({ available: 0, reserved: 0 });
 });
 
 test("a job is invisible to other tenants", async () => {
@@ -131,7 +131,7 @@ test("claim then complete writes ready views, settles credits and finishes the j
   const persona = (await getPersona("c_1"))!;
   expect(persona).toMatchObject({ views_status: "ready", views: views("a"), views_gen: gen, version: 4 });
   expect(outfitSheetKey(persona, null)).toBe("v/a-sheet.jpg");
-  expect(getCreditBalance(owner)).toEqual({ available: 17, reserved: 0 });
+  expect(getCreditBalance(owner)).toEqual({ available: 19, reserved: 0 });
   expect(getCreditAction(job.job_id)?.status).toBe("settled");
   expect(await claimViewsJob()).toBeNull();
 });
@@ -149,7 +149,7 @@ test("complete is fenced by lease token, job version and expiry", async () => {
   expect(await renewViewsJobLease(claimed.job_id, claimed.lease_token)).toBe(false);
   expect(await completeViewsJob({ ...args, lease_token: claimed.lease_token, expected_version: claimed.version }))
     .toEqual({ ok: false, error: "lease_lost" });
-  expect(getCreditBalance(owner).reserved).toBe(3);
+  expect(getCreditBalance(owner).reserved).toBe(1);
 });
 
 test("a malformed result is rejected without side effects", async () => {
@@ -159,7 +159,7 @@ test("a malformed result is rejected without side effects", async () => {
     expected_version: claimed.version, views: { ...views("a"), sheet: "" }, views_gen: gen });
   expect(result).toEqual({ ok: false, error: "invalid_result" });
   expect((await getPersona("c_1"))!.views_status).toBe("pending");
-  expect(getCreditBalance(owner).reserved).toBe(3);
+  expect(getCreditBalance(owner).reserved).toBe(1);
 });
 
 test("failure retries once, then fails terminally, releases credits and marks the target failed", async () => {
@@ -167,7 +167,7 @@ test("failure retries once, then fails terminally, releases credits and marks th
   const first = (await claimViewsJob())!;
   const r1 = await failViewsJob({ job_id: first.job_id, lease_token: first.lease_token, error: "gpu busy" });
   expect(r1).toMatchObject({ ok: true, outcome: "requeued", job: { status: "pending", attempt: 2, error: "gpu busy" } });
-  expect(getCreditBalance(owner).reserved).toBe(3);
+  expect(getCreditBalance(owner).reserved).toBe(1);
   expect((await getPersona("c_1"))!.views_status).toBe("pending");
   const second = (await claimViewsJob())!;
   expect(second.attempt).toBe(VIEWS_JOB_MAX_ATTEMPTS);

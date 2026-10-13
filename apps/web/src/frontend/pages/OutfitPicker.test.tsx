@@ -66,7 +66,7 @@ test("picker disables source outfits whose three views are not ready, uses the f
 test("outfit card shows source photo and generate button with estimated credits", () => {
   const out = html(<PersonaOutfits persona={persona([sourceOutfit("a")])} onChange={() => {}} />);
   expect(out).toContain("a_src.png");
-  expect(out).toContain("生成三视图（预估 3 积分）");
+  expect(out).toContain("生成三视图（预估 1 积分）");
   expect(out).not.toContain("追加图片");
 });
 
@@ -78,7 +78,7 @@ test("outfit card in each views state", () => {
   expect(pending).toContain("取消生成");
   expect(pending).toContain('aria-live="polite"');
   const failed = html(<PersonaOutfits persona={persona([sourceOutfit("a", "failed")])} onChange={() => {}} />);
-  expect(failed).toContain("重试（预估 3 积分）");
+  expect(failed).toContain("重试（预估 1 积分）");
   expect(failed).toContain('role="alert"');
   const legacy = html(<PersonaOutfits persona={persona([outfit("old", "老", [])])} onChange={() => {}} />);
   expect(legacy).toContain("旧式穿搭");

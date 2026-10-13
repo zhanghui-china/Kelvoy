@@ -1,3 +1,5 @@
+> 注：V1 三次生成已被单次三格版本取代，本文保留作历史，现行方案见 ADR-0017 修订节。
+
 # 三视图可行性实验（T0）
 
 日期 2026-10-13，GX10，ComfyUI 单参考图（`1_1_SingleRef2IMG`）与双参考图（`1_2_DualRef2IMG`）工作流。脚本 `three_views_experiment.py`，对照图在 `out/`。

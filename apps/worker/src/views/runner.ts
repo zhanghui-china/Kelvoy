@@ -9,7 +9,7 @@ import { removePersonaFiles } from "./publish";
  * Consumes persona_asset_jobs (ADR-0017). Attempt counting, requeue-or-fail and credit handling all live in
  * @kelvoy/store (VIEWS_JOB_MAX_ATTEMPTS); this file only reports one outcome per claim.
  */
-export const VIEWS_JOB_TIMEOUT_MS = 20 * 60 * 1000; // 3 sequential image calls + stitching
+export const VIEWS_JOB_TIMEOUT_MS = 20 * 60 * 1000; // one image call + splitting
 export const VIEWS_HEARTBEAT_MS = 10_000; // lease is 90s; renew doubles as cancellation detection
 
 export interface ViewsRunnerDeps extends Partial<GenerateDeps> {
@@ -60,7 +60,7 @@ export async function runViewsJob(job: ClaimedViewsJob, shutdown?: AbortSignal, 
     const published = await generateThreeViews(
       { job_id: job.job_id, persona_id: job.persona_id, generation_id: job.generation_id,
         source_key: job.source_key, attempt: job.attempt },
-      { call: deps.call ?? callInference, backend, ...(deps.compose ? { compose: deps.compose } : {}) },
+      { call: deps.call ?? callInference, backend, ...(deps.splitter ? { splitter: deps.splitter } : {}) },
       execution.signal);
     execution.signal.throwIfAborted();
     const done = await completeViewsJob({ job_id: job.job_id, lease_token: job.lease_token,

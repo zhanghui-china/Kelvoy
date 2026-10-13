@@ -10,7 +10,8 @@ import {
 } from "@kelvoy/store";
 import type { CallInferenceResult } from "../inference-client";
 import type { GenerationBackend } from "../generation/local";
-import { viewPrompt, viewsSeed } from "./generate";
+import sharp from "sharp";
+import { sheetPrompt, viewsSeed } from "./generate";
 import { runNextViewsJob, type ViewsRunnerDeps } from "./runner";
 
 let root = "";
@@ -38,11 +39,14 @@ const call = (behaviour?: (n: number, args: Call) => Promise<CallInferenceResult
     calls.push(args);
     return behaviour ? behaviour(calls.length, args) : okResponse(args[1].seed!);
   };
-const compose: NonNullable<ViewsRunnerDeps["compose"]> = async (views, output) => {
-  expect(views).toHaveLength(3);
-  await writeFile(output, "jpeg-sheet");
+const splitter: NonNullable<ViewsRunnerDeps["splitter"]> = async (source, outDir) => {
+  expect(existsSync(source)).toBe(true); // the staged model output, handed over by path
+  const out = { front: join(outDir, "front.png"), side: join(outDir, "side.png"),
+    back: join(outDir, "back.png"), sheet: join(outDir, "sheet.jpg") };
+  for (const path of Object.values(out)) await writeFile(path, "view");
+  return out;
 };
-const deps = (extra: ViewsRunnerDeps = {}): ViewsRunnerDeps => ({ backend, compose, call: call(), ...extra });
+const deps = (extra: ViewsRunnerDeps = {}): ViewsRunnerDeps => ({ backend, splitter, call: call(), ...extra });
 const create = async () => {
   const r = await createViewsJob({ persona_id: "c_1", owner_id: owner, outfit_id: null });
   if (!r.ok) throw new Error(r.error);
@@ -71,15 +75,15 @@ test("idle queue: nothing to run", async () => {
   expect(await runNextViewsJob(undefined, deps())).toBe(false);
 });
 
-test("success: V1 prompts, one fixed seed, four append-only keys, persona ready, credits settled", async () => {
+test("success: one 16:9 sheet call, one fixed seed, four append-only keys, persona ready, credits settled", async () => {
   const job = await create();
   expect(await runNextViewsJob(undefined, deps())).toBe(true);
 
-  expect(calls.map(([route]) => route)).toEqual(["/image/", "/image/", "/image/"]);
-  expect(calls.map(([, body]) => body.prompt)).toEqual([viewPrompt("front"), viewPrompt("side"), viewPrompt("back")]);
-  expect(calls[0]![1].prompt).toBe("把人物改为全身角色设定图：面向镜头正面站立，纯白背景，人物居中，全身入镜，双臂自然下垂，保持人物的脸型、发型、服装、鞋子和背包的款式与颜色完全不变");
+  expect(calls.map(([route]) => route)).toEqual(["/image/"]);
+  expect(calls[0]![1].prompt).toBe(sheetPrompt());
+  expect(sheetPrompt()).toContain("从左到右依次为：正面站立、标准90度侧面站立且身体转向画面右侧、背面站立");
   const seed = viewsSeed(job.generation_id);
-  for (const [, body] of calls) expect(body).toMatchObject({ refs: ["persona/c_1/base.png"], seed, size: "9:16", count: 1 });
+  expect(calls[0]![1]).toMatchObject({ refs: ["persona/c_1/base.png"], seed, size: "16:9", count: 1 });
 
   const done = (await getViewsJob(job.job_id, owner))!;
   expect(done.status).toBe("succeeded");
@@ -93,7 +97,7 @@ test("success: V1 prompts, one fixed seed, four append-only keys, persona ready,
     expect(existsSync(join(root, key))).toBe(true);
   }
   expect(stored.views!.sheet.endsWith("sheet.jpg")).toBe(true);
-  expect(getCreditBalance(owner)).toEqual({ available: 17, reserved: 0 });
+  expect(getCreditBalance(owner)).toEqual({ available: 19, reserved: 0 });
   // Staged inference outputs are discarded after publishing.
   expect(await readdir(join(root, "inference/image"))).toEqual([]);
 });
@@ -116,12 +120,12 @@ test("one failure requeues, the retry succeeds and the credits settle once", asy
   expect(await runNextViewsJob(undefined, flaky)).toBe(true);
   const requeued = (await getViewsJob(job.job_id, owner))!;
   expect(requeued).toMatchObject({ status: "pending", attempt: 2 });
-  expect(getCreditBalance(owner)).toEqual({ available: 17, reserved: 3 });
+  expect(getCreditBalance(owner)).toEqual({ available: 19, reserved: 1 });
 
   expect(await runNextViewsJob(undefined, flaky)).toBe(true);
   expect((await getViewsJob(job.job_id, owner))!.status).toBe("succeeded");
   expect((await getPersona("c_1"))!.views_status).toBe("ready");
-  expect(getCreditBalance(owner)).toEqual({ available: 17, reserved: 0 });
+  expect(getCreditBalance(owner)).toEqual({ available: 19, reserved: 0 });
 });
 
 test("two failures end in failed, release credits and never leak backend details", async () => {
@@ -136,12 +140,12 @@ test("two failures end in failed, release credits and never leak backend details
   expect(failed.error).toBeTruthy();
   expect((await getPersona("c_1"))!.views_status).toBe("failed");
   expect(getCreditBalance(owner)).toEqual({ available: 20, reserved: 0 });
-  expect(calls).toHaveLength(2); // each attempt stops at the first failed view
+  expect(calls).toHaveLength(2); // one image call per attempt, no third attempt
 });
 
-test("a failure after publishing (sheet stitch) removes the partial files", async () => {
+test("a failure after publishing (sheet split) removes the partial files", async () => {
   const job = await create();
-  await runNextViewsJob(undefined, deps({ compose: async () => { throw new Error("ffmpeg exit 1 /secret"); } }));
+  await runNextViewsJob(undefined, deps({ splitter: async () => { throw new Error("split exit 1 /secret"); } }));
   expect((await getViewsJob(job.job_id, owner))!.status).toBe("pending");
   expect(existsSync(join(root, "persona"))).toBe(false);
   expect(await readdir(join(root, "inference/image"))).toEqual([]);
@@ -163,9 +167,10 @@ test("user cancel during generation: heartbeat aborts the call, nothing is publi
 
 test("lease lost before commit: result is dropped and files are removed", async () => {
   const job = await create();
-  const expiring = deps({ heartbeatMs: 60_000, compose: async (_v, output) => {
-    await writeFile(output, "jpeg");
+  const expiring = deps({ heartbeatMs: 60_000, splitter: async (source, outDir) => {
+    const out = await splitter(source, outDir);
     getDb().query("update persona_asset_jobs set lease_until = 1 where job_id = ?").run(job.job_id);
+    return out;
   } });
   await runNextViewsJob(undefined, expiring);
   expect(await readdir(join(root, "persona", "c_1"))).toEqual([]);
@@ -175,9 +180,10 @@ test("lease lost before commit: result is dropped and files are removed", async 
 
 test("source changed during generation: the store abandons the job and the files are removed", async () => {
   const job = await create();
-  const edited = deps({ compose: async (_v, output) => {
-    await writeFile(output, "jpeg");
+  const edited = deps({ splitter: async (source, outDir) => {
+    const out = await splitter(source, outDir);
     await updatePersona("c_1", { refs: ["persona/c_1/new.png"] });
+    return out;
   } });
   await runNextViewsJob(undefined, edited);
   expect(await getViewsJob(job.job_id, owner)).toMatchObject({ status: "cancelled", error: "source changed" });
@@ -213,4 +219,54 @@ test("rejects a source key outside the persona's own directory", async () => {
   await runNextViewsJob(undefined, deps());
   expect(calls).toHaveLength(0);
   expect((await getViewsJob(job.job_id, owner))!.status).toBe("pending");
+});
+
+/** A 16:9 sheet with three solid figures on white; `figures` are [left, width] pairs in sheet pixels. */
+async function writeSheet(path: string, figures: [number, number][], colors = ["#ff0000", "#00ff00", "#0000ff"]) {
+  const layers = await Promise.all(figures.map(async ([left, width], i) => ({
+    input: await sharp({ create: { width, height: 600, channels: 3, background: colors[i]! } }).png().toBuffer(),
+    left, top: 80,
+  })));
+  await sharp({ create: { width: 1376, height: 768, channels: 3, background: "#ffffff" } })
+    .composite(layers).png().toFile(path);
+}
+const sheetCall = (figures: [number, number][]) => call(async (_n, args) => {
+  const response = await okResponse(args[1].seed!);
+  if (!response.ok) throw new Error("fixture");
+  await writeSheet(join(root, response.response.paths[0]!), figures);
+  return response;
+});
+
+test("real split: left=front, middle=side, right=back are published as separate files", async () => {
+  await create();
+  // Cells are 458px wide; figures sit off-centre inside their own cell.
+  await runNextViewsJob(undefined, { backend, call: sheetCall([[40, 200], [560, 200], [1100, 200]]) });
+  const views = (await getPersona("c_1"))!.views!;
+  const centre = async (key: string) => {
+    const { data, info } = await sharp(join(root, key)).raw().toBuffer({ resolveWithObject: true });
+    const at = (x: number) => [...data.subarray((300 * info.width + x) * info.channels).subarray(0, 3)];
+    return { size: [info.width, info.height], pixel: at(Math.floor(info.width / 2)) };
+  };
+  const front = await centre(views.front), side = await centre(views.side), back = await centre(views.back);
+  expect(front.size).toEqual([458, 768]);
+  expect(front.pixel).toEqual([255, 0, 0]);
+  expect(side.pixel).toEqual([0, 255, 0]);
+  expect(back.pixel).toEqual([0, 0, 255]);
+  const sheet = await sharp(join(root, views.sheet)).metadata();
+  expect([sheet.format, sheet.width, sheet.height]).toEqual(["jpeg", 1376, 768]);
+});
+
+test("real split failure (figure straddles a cell border) requeues, publishes nothing and leaks no path", async () => {
+  const job = await create();
+  const straddling = { backend, call: sheetCall([[40, 200], [400, 600], [1100, 200]]) };
+  await runNextViewsJob(undefined, straddling);
+  const requeued = (await getViewsJob(job.job_id, owner))!;
+  expect(requeued).toMatchObject({ status: "pending", attempt: 2 });
+  expect(existsSync(join(root, "persona"))).toBe(false);
+  expect(await readdir(join(root, "inference/image"))).toEqual([]);
+  await runNextViewsJob(undefined, straddling);
+  const failed = (await getViewsJob(job.job_id, owner))!;
+  expect(failed.status).toBe("failed");
+  expect(failed.error).not.toContain(root);
+  expect(getCreditBalance(owner)).toEqual({ available: 20, reserved: 0 });
 });

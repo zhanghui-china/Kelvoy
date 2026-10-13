@@ -31,7 +31,7 @@
 
 ## 穿搭三视图（ADR-0017）
 
-用户上传一张全身照（`source`），系统生成正 / 侧 / 背三张并拼成一张设定图（`views.sheet`）作人物参考。生成是异步任务：`POST` 创建 job，worker 领取后写回结果。默认穿搭的 source 是角色 `refs[0]`，三视图记在角色自身；自建穿搭的 source 记在该穿搭上。`views_status` 取值 `none`（缺省）/ `pending` / `ready` / `failed`，只有 `ready` 时 `views` 与 `views_gen` 存在。
+用户上传一张全身照（`source`），系统生成一张正 / 侧 / 背三格并排的设定图（`views.sheet`，16:9，单次生成）再裁成三张，作人物参考（见 ADR-0017 修订节）。生成是异步任务：`POST` 创建 job，worker 领取后写回结果。默认穿搭的 source 是角色 `refs[0]`，三视图记在角色自身；自建穿搭的 source 记在该穿搭上。`views_status` 取值 `none`（缺省）/ `pending` / `ready` / `failed`，只有 `ready` 时 `views` 与 `views_gen` 存在。
 
 没有单独的"采用"接口：生成成功即 `ready` 可用；重新生成失败或被取消时，目标还原为旧的三视图（store 负责）。
 
