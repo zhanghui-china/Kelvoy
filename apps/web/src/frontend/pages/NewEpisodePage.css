@@ -48,3 +48,4 @@
 @media (max-width: 600px) { .k-create-form-panel, .k-create-personas { padding: 1rem; } .k-create-submit .k-btn { width: 100%; } }
 @media (max-width: 600px) { .k-create-row { grid-template-columns: 1fr; } }
 .k-outfit-picker { display: grid; gap: 0.6rem; margin: 1rem 0; }
+.k-create-persona-card:disabled { opacity: 0.55; cursor: not-allowed; }

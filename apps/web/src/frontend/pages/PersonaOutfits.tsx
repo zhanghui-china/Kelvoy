@@ -1,106 +1,18 @@
-import { type FormEvent, useState } from "react";
-import { OUTFIT_REFS_MAX, OUTFIT_REFS_MIN, PERSONA_OUTFITS_MAX } from "@kelvoy/engine";
-import type { Persona, PersonaOutfit } from "@kelvoy/engine";
-import { AssetImage } from "../AssetImage";
-import { assetUrl, createOutfit, deleteOutfit, patchOutfit, uploadOutfitRefs } from "../api/client";
+import { type FormEvent, useRef, useState } from "react";
+import { PERSONA_OUTFITS_MAX } from "@kelvoy/engine";
+import type { Persona } from "@kelvoy/engine";
+import { PERSONA_VIEW_CREDITS_ESTIMATE } from "../../shared/usage";
+import { createSourceOutfit } from "../api/client";
 import { describeWriteError } from "../review/errors";
+import OutfitCard from "./OutfitCard";
 import { parseSeasons } from "./outfit-helpers";
 
 const ACCEPT = "image/png,image/jpeg,image/webp";
 
-function OutfitCard({ persona, outfit, onSaved }: {
-  persona: Persona; outfit: PersonaOutfit; onSaved: (persona: Persona) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(outfit.name);
-  const [desc, setDesc] = useState(outfit.desc);
-  const [seasons, setSeasons] = useState(outfit.seasons.join("、"));
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function run(request: () => ReturnType<typeof deleteOutfit>, after?: () => void) {
-    setBusy(true);
-    setError(null);
-    const result = await request();
-    setBusy(false);
-    if (!result.ok) {
-      setError(describeWriteError(result));
-      return;
-    }
-    after?.();
-    onSaved(result.persona);
-  }
-
-  return (
-    <li className="k-outfit-card">
-      <div className="k-outfit-refs">
-        {outfit.refs.map((ref, i) => <AssetImage key={ref} src={assetUrl(ref)} alt={`${outfit.name} 第 ${i + 1} 张`} />)}
-      </div>
-      {editing ? (
-        <form className="k-outfit-edit" onSubmit={(e: FormEvent) => {
-          e.preventDefault();
-          void run(() => patchOutfit(persona.persona_id, outfit.outfit_id,
-            { name: name.trim(), desc, seasons: parseSeasons(seasons) }), () => setEditing(false));
-        }}>
-          <label className="k-field">名称<input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} required /></label>
-          <label className="k-field">描述（可选）<input value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={200} /></label>
-          <label className="k-field">适合季节（用顿号分隔）
-            <input value={seasons} onChange={(e) => setSeasons(e.target.value)} placeholder="例如：秋、冬" /></label>
-          <div className="k-outfit-actions">
-            <button type="submit" className="k-btn k-btn-primary k-btn-tiny" disabled={busy}>{busy ? "保存中…" : "保存"}</button>
-            <button type="button" className="k-btn k-btn-secondary k-btn-tiny" disabled={busy} onClick={() => setEditing(false)}>取消</button>
-          </div>
-        </form>
-      ) : (
-        <>
-          <div className="k-outfit-title">{outfit.name}</div>
-          {outfit.desc && <div className="k-card-meta">{outfit.desc}</div>}
-          <div className="k-outfit-seasons">
-            {outfit.seasons.length > 0
-              ? outfit.seasons.map((s) => <span className="k-pill" key={s}>{s}</span>)
-              : <span className="k-card-meta">未标注季节</span>}
-          </div>
-          <div className="k-outfit-actions">
-            <button type="button" className="k-btn k-btn-secondary k-btn-tiny" disabled={busy} onClick={() => setEditing(true)}>编辑</button>
-            <label className={`k-btn k-btn-secondary k-btn-tiny${busy || outfit.refs.length >= OUTFIT_REFS_MAX ? " is-disabled" : ""}`}>
-              追加图片（{outfit.refs.length}/{OUTFIT_REFS_MAX}）
-              <input type="file" accept={ACCEPT} multiple hidden
-                disabled={busy || outfit.refs.length >= OUTFIT_REFS_MAX}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  e.target.value = "";
-                  if (files.length === 0) return;
-                  if (outfit.refs.length + files.length > OUTFIT_REFS_MAX) {
-                    setError(`每套穿搭最多 ${OUTFIT_REFS_MAX} 张图，还能追加 ${OUTFIT_REFS_MAX - outfit.refs.length} 张`);
-                    return;
-                  }
-                  void run(() => uploadOutfitRefs(persona.persona_id, outfit.outfit_id, files));
-                }} />
-            </label>
-            {confirming ? (
-              <>
-                <button type="button" className="k-btn k-btn-primary k-btn-tiny" disabled={busy}
-                  onClick={() => void run(() => deleteOutfit(persona.persona_id, outfit.outfit_id))}>
-                  {busy ? "删除中…" : "确认删除"}
-                </button>
-                <button type="button" className="k-btn k-btn-secondary k-btn-tiny" disabled={busy} onClick={() => setConfirming(false)}>取消</button>
-              </>
-            ) : (
-              <button type="button" className="k-btn k-btn-secondary k-btn-tiny" disabled={busy} onClick={() => setConfirming(true)}>删除</button>
-            )}
-          </div>
-          {confirming && <p className="k-card-meta">已经用它建的作品不受影响，只是以后不能再选这套。</p>}
-        </>
-      )}
-      {error && <p className="k-error" role="alert">{error}</p>}
-    </li>
-  );
-}
-
 /**
- * 角色编辑页的"穿搭"区块（ADR-0015）。独立于主表单：每次增删改都是一次即时保存，
+ * 角色编辑页的"穿搭"区块（ADR-0015 / ADR-0017）。独立于主表单：每次增删改都是一次即时保存，
  * 并让角色版本 +1，所以放在主 <form> 之外，不参与"保存修改"。
+ * 新建穿搭只传 1 张全身照，三视图在各穿搭卡片里生成（OutfitCard → ViewsPanel）。
  */
 export default function PersonaOutfits({ persona, onChange }: {
   persona: Persona; onChange: (persona: Persona) => void;
@@ -109,26 +21,27 @@ export default function PersonaOutfits({ persona, onChange }: {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [seasons, setSeasons] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const full = outfits.length >= PERSONA_OUTFITS_MAX;
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    if (files.length < OUTFIT_REFS_MIN || files.length > OUTFIT_REFS_MAX) {
-      setError(`请选择 ${OUTFIT_REFS_MIN}–${OUTFIT_REFS_MAX} 张这套穿搭的图片`);
+    if (!file) {
+      setError("请选择 1 张这个角色穿这套衣服的全身照");
       return;
     }
     setBusy(true);
     setError(null);
-    const result = await createOutfit(persona.persona_id, { name: name.trim(), desc, seasons: parseSeasons(seasons), files });
+    const result = await createSourceOutfit(persona.persona_id, { name: name.trim(), desc, seasons: parseSeasons(seasons), file });
     setBusy(false);
     if (!result.ok) {
       setError(describeWriteError(result));
       return;
     }
-    setName(""); setDesc(""); setSeasons(""); setFiles([]);
+    setName(""); setDesc(""); setSeasons(""); setFile(null);
     onChange(result.persona);
   }
 
@@ -136,8 +49,8 @@ export default function PersonaOutfits({ persona, onChange }: {
     <section className="k-card k-outfits" aria-labelledby="k-outfits-title">
       <h2 id="k-outfits-title">穿搭 <span className="k-pill">{outfits.length} / {PERSONA_OUTFITS_MAX}</span></h2>
       <p className="k-card-meta">
-        给同一个角色准备不同的穿搭，新建作品时按场景或季节选一套。每套需要这个角色穿这套衣服的
-        {OUTFIT_REFS_MIN}–{OUTFIT_REFS_MAX} 张图（人像清晰、能看到上半身以上最好）；不选穿搭时用上面的参考图。
+        给同一个角色准备不同的穿搭，新建作品时按场景或季节选一套。每套只需上传这个角色穿这套衣服的 1 张全身照
+        （人像清晰、从头到脚完整），再生成正 / 侧 / 背三视图（{PERSONA_VIEW_CREDITS_ESTIMATE} 积分左右）；三视图就绪后才能在新建作品时选用。
       </p>
       {outfits.length === 0
         ? <p className="k-empty">还没有穿搭。</p>
@@ -153,14 +66,15 @@ export default function PersonaOutfits({ persona, onChange }: {
             <label className="k-field">描述（可选）<input value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={200} placeholder="例如：米色长风衣，白色高领毛衣" /></label>
             <label className="k-field">适合季节（可选，用顿号分隔）
               <input value={seasons} onChange={(e) => setSeasons(e.target.value)} placeholder="例如：秋、冬" /></label>
-            <label className="k-btn k-btn-secondary">
-              选择图片（{files.length}/{OUTFIT_REFS_MAX}）
-              <input type="file" accept={ACCEPT} multiple hidden onChange={(e) => {
-                setFiles(Array.from(e.target.files ?? []).slice(0, OUTFIT_REFS_MAX));
-                e.target.value = "";
-              }} />
-            </label>
-            {files.length > 0 && <p className="k-card-meta">{files.map((f) => f.name).join("、")}</p>}
+            {/* 按钮触发隐藏的 input：label+hidden 的写法进不了 Tab 顺序，键盘用户选不了文件。 */}
+            <button type="button" className="k-btn k-btn-secondary" onClick={() => fileInput.current?.click()}>
+              {file ? "更换全身照" : "选择全身照"}
+            </button>
+            <input ref={fileInput} type="file" accept={ACCEPT} hidden aria-label="穿搭全身照" onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              e.target.value = "";
+            }} />
+            {file && <p className="k-card-meta" aria-live="polite">已选：{file.name}</p>}
             {error && <p className="k-error" role="alert">{error}</p>}
             <div><button type="submit" className="k-btn k-btn-primary" disabled={busy}>{busy ? "上传中…" : "添加穿搭"}</button></div>
           </form>
