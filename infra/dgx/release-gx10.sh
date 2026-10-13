@@ -65,8 +65,9 @@ stage_check() {
   git cat-file -e "${BASE}^{commit}" || { echo "本地没有基线提交 $BASE" >&2; exit 1; }
   git merge-base --is-ancestor "$BASE" HEAD || { echo "基线 $BASE 不是 HEAD 的祖先，拒绝发布" >&2; exit 1; }
   BASE_SHORT="$(git rev-parse --short "$BASE")"
-  echo "    节点运行：$CUR_DIR（$BASE_SHORT）"
-  echo "    将发布：  $SHORT（$(git rev-list --count "$BASE..HEAD") 个提交）"
+  # 变量一律加花括号：全角标点紧跟 $VAR 时，部分 bash/locale 会把它吞进变量名（unbound variable）。
+  echo "    节点运行：${CUR_DIR}（${BASE_SHORT}）"
+  echo "    将发布：  ${SHORT}（$(git rev-list --count "$BASE..HEAD") 个提交）"
   [[ "$BASE" != "$HEAD_SHA" ]] || { echo "节点已是最新，无需发布"; exit 0; }
 
   # 不发 spike/ 与 docs/（与历次发布一致）；infra/ 要发，部署脚本本身可能有改动。
@@ -147,7 +148,7 @@ c = sqlite3.connect('file:' + os.path.expanduser('~/$DATA_ROOT_REL/data/kelvoy.d
 print('tasks', c.execute(\"select status,count(*) from tasks where status in ('pending','processing') group by status\").fetchall())
 PY
 "
-  read -r -p "确认切换 GX10 到 $NAME？Web 会短暂不可用 (yes/N) " ok
+  read -r -p "确认切换 GX10 到 ${NAME}？Web 会短暂不可用 (yes/N) " ok
   [[ "$ok" == "yes" ]] || { echo "已取消"; exit 1; }
   local flags=""
   if [[ ${#MIGRATION_ARGS[@]} -gt 0 ]]; then flags="${MIGRATION_ARGS[*]} --expect-empty-new-table"; fi
@@ -173,7 +174,7 @@ c = sqlite3.connect('file:' + os.path.expanduser('~/$DATA_ROOT_REL/data/kelvoy.d
 print('migrations', sorted(r[0] for r in c.execute('select migration_id from schema_migrations')))
 PY
 "
-  echo "==> 期望：web/worker active、restarts=0、wd 为 $NAME、health ok、err 0、drop-in 最后一项含 $NAME"
+  echo "==> 期望：web/worker active、restarts=0、wd 为 ${NAME}、health ok、err 0、drop-in 最后一项含 $NAME"
   echo "    回退：删 kelvoy-{web,worker}.service.d/ 下含 $NAME 的 conf → daemon-reload → 重启 web、worker（不恢复数据库）"
 }
 
