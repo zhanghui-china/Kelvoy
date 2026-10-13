@@ -1,6 +1,7 @@
 import type { CreateOutfitRequest, OutfitPatch } from "./api";
 import { OUTFIT_REFS_MAX, OUTFIT_REFS_MIN, PERSONA_OUTFITS_MAX, type PersonaOutfit } from "./persona";
 import type { ValidationResult } from "./validate";
+import { validateViewsFields } from "./validate-views";
 import { isNonEmptyString, isPlainObject, isStringArray } from "./validation-primitives";
 
 const NAME_MAX = 30;
@@ -70,8 +71,17 @@ export function validatePersonaOutfits(input: unknown, errors: string[]): void {
     else if (seen.has(o.outfit_id)) errors.push(`${prefix}outfit_id: 重复 ${o.outfit_id}`);
     else seen.add(o.outfit_id);
     validateTextFields(o, errors, prefix, true);
-    if (!isStringArray(o.refs) || o.refs.length < OUTFIT_REFS_MIN || o.refs.length > OUTFIT_REFS_MAX) {
-      errors.push(`${prefix}refs: 必须是 ${OUTFIT_REFS_MIN}–${OUTFIT_REFS_MAX} 张参考图路径的数组`);
+    // 三视图穿搭只上传 source、refs 可为空；旧式穿搭没有 source，仍要 OUTFIT_REFS_MIN–OUTFIT_REFS_MAX 张。
+    const hasSource = o.source !== undefined;
+    if (hasSource && !isNonEmptyString(o.source)) errors.push(`${prefix}source: 必须是非空图片路径`);
+    const refsOk = isStringArray(o.refs) && o.refs.length <= OUTFIT_REFS_MAX
+      && (o.refs.length >= OUTFIT_REFS_MIN || hasSource);
+    if (!refsOk) {
+      errors.push(hasSource
+        ? `${prefix}refs: 必须是最多 ${OUTFIT_REFS_MAX} 张参考图路径的数组`
+        : `${prefix}refs: 必须是 ${OUTFIT_REFS_MIN}–${OUTFIT_REFS_MAX} 张参考图路径的数组（或提供 source）`);
     }
+    validateViewsFields(o, errors, prefix);
+    if (o.views !== undefined && !hasSource) errors.push(`${prefix}views: 三视图穿搭必须有 source`);
   });
 }

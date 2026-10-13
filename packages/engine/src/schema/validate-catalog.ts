@@ -5,6 +5,7 @@ import type { Template } from "./template";
 import { SETTINGS_CANDIDATES_MAX, SETTINGS_CANDIDATES_MIN, type UserSettings } from "./user";
 import type { ValidationResult } from "./validate";
 import { validatePersonaOutfits } from "./validate-outfit";
+import { validateViewsFields } from "./validate-views";
 import { isFiniteNumber, isNonEmptyString, isPlainObject, isStringArray } from "./validation-primitives";
 
 const DESTINATION_TYPES: DestinationType[] = ["mountain_summit", "city_night", "theme_town", "scenic_area", "water_town", "island"];
@@ -56,6 +57,7 @@ export function validatePersona(input: unknown): ValidationResult<Persona> {
   }
   if (p.style !== undefined) validatePersonaStyle(p.style, errors);
   else errors.push("style: 缺失");
+  validateViewsFields(p, errors, "");
   validatePersonaOutfits(p.outfits, errors);
 
   if (errors.length > 0) return { valid: false, errors };
