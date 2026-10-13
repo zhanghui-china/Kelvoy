@@ -33,6 +33,7 @@ export function open(path: string = process.env.KELVOY_DB_PATH ?? DEFAULT_PATH):
     db!.query("insert or ignore into schema_migrations (migration_id) values (?)").run("episode_deletions_v1");
     db!.query("insert or ignore into schema_migrations (migration_id) values (?)").run("prompt_traces_v1");
     db!.query("insert or ignore into schema_migrations (migration_id) values (?)").run("prompt_traces_v2");
+    db!.query("insert or ignore into schema_migrations (migration_id) values (?)").run("persona_asset_jobs_v1");
   }).immediate();
   migrateLegacyCatalogVersions(db);
   migrateShotIdentities(db);

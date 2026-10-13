@@ -1,6 +1,7 @@
 import { OUTFIT_REFS_MAX, OUTFIT_REFS_MIN, PERSONA_OUTFITS_MAX } from "@kelvoy/engine";
 import type { OutfitPatch, Persona, PersonaOutfit } from "@kelvoy/engine";
 import { getDb } from "./db";
+import { cancelViewsJobsForPersona } from "./persona-views-jobs";
 
 /**
  * Persona storage (M2-1). Persona.version lives inside the doc itself
@@ -211,6 +212,8 @@ export async function deletePersona(personaId: string, ownerId: string, version:
     if (row.version !== version) return { ok: false, error: "version_conflict" } as const;
     database.query("update personas set deleted_at = coalesce(deleted_at, datetime('now')) where persona_id = ?")
       .run(personaId);
+    // 软删除不级联到历史修订与文件，但在途的三视图生成要停并退还预留积分（ADR-0017）。
+    cancelViewsJobsForPersona(personaId);
     return { ok: true } as const;
   }).immediate();
 }
@@ -223,13 +226,23 @@ export async function canReadPersonaAsset(personaId: string, key: string, ownerI
   ).get(personaId);
   if (!row || (row.owner_id !== null && row.owner_id !== ownerId)) return false;
   // Outfit images live in the same document ($.outfits[*].refs), so a pinned
-  // older version keeps authorizing exactly the files it referenced.
-  return database.query<{ found: number }, [string, string, string, string]>(
+  // older version keeps authorizing exactly the files it referenced. ADR-0017:
+  // 三视图的 source 与 views 四个 key（默认穿搭在 Persona 自身，自建穿搭在 outfits[*]）同理。
+  // 只比对这些明确的路径，不用 json_tree 全文匹配，避免 name/desc 等自由文本冒充授权。
+  const viewKeys = ["front", "side", "back", "sheet"];
+  const personaMatch = viewKeys.map((k) => `json_extract(v.doc, '$.views.${k}') = ?`).join(" or ");
+  const outfitMatch = ["source", ...viewKeys.map((k) => `views.${k}`)].map((k) => `json_extract(o.value, '$.${k}') = ?`).join(" or ");
+  return database.query<{ found: number }, string[]>(
     `select 1 as found from persona_versions v, json_each(v.doc, '$.refs') r
        where v.persona_id = ? and r.value = ?
      union all
      select 1 from persona_versions v, json_each(v.doc, '$.outfits') o, json_each(o.value, '$.refs') r
        where v.persona_id = ? and r.value = ?
+     union all
+     select 1 from persona_versions v where v.persona_id = ? and (${personaMatch})
+     union all
+     select 1 from persona_versions v, json_each(v.doc, '$.outfits') o
+       where v.persona_id = ? and (${outfitMatch})
      limit 1`,
-  ).get(personaId, key, personaId, key) !== null;
+  ).get(personaId, key, personaId, key, personaId, ...viewKeys.map(() => key), personaId, ...[key, ...viewKeys.map(() => key)]) !== null;
 }

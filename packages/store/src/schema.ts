@@ -192,6 +192,36 @@ create table if not exists prompt_trace_rejections (
   primary key (task_id, attempt, seq)
 );
 create index if not exists idx_prompt_trace_rejections_episode on prompt_trace_rejections(episode_id);
+
+-- ADR-0017：穿搭三视图生成任务。独立加性新表（不放宽 tasks.episode_id）。persona_id 不设外键：
+-- 角色是软删除（personas.deleted_at），删除时由 deletePersona 在同一事务里取消在途 job 并释放积分。
+-- 同一目标（persona_id + outfit_id，null=默认穿搭）+ 同一 source_key 至多一个在途 job，由部分唯一索引兜底。
+create table if not exists persona_asset_jobs (
+  job_id text primary key,
+  persona_id text not null,
+  owner_id text not null,
+  outfit_id text,
+  persona_version integer not null,
+  source_key text not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'processing', 'succeeded', 'failed', 'cancelled')),
+  attempt integer not null default 1,
+  lease_until integer,
+  lease_token text,
+  generation_id text not null,
+  credit_action_id text not null,
+  error text,
+  result_json text,
+  prior_views_json text,
+  version integer not null default 1,
+  created_at text not null default (datetime('now')),
+  updated_at text not null default (datetime('now'))
+);
+create unique index if not exists idx_persona_asset_jobs_active_target
+  on persona_asset_jobs(persona_id, coalesce(outfit_id, ''), source_key)
+  where status in ('pending', 'processing');
+create index if not exists idx_persona_asset_jobs_claim on persona_asset_jobs(status, created_at, lease_until);
+create index if not exists idx_persona_asset_jobs_persona on persona_asset_jobs(persona_id, owner_id, created_at);
 `;
 
 /**
