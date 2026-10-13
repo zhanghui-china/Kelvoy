@@ -336,3 +336,37 @@ Spark 未发布。未做的验证：浏览器走查（新建页默认值、选�
 | 切换后 | web／worker／inference active、重启 0、健康 `ok`、web 工作目录为新发布、近 3 分钟日志 0 条 error |
 
 未做：Spark 上没有建作品做端到端验证（验证只在 GX10 做过）。回退：部署脚本已自动备份；需要时删除 drop-in `…-person-outfits-orient-20261012-ac47bb0.conf`（web 与 worker 各一份），`daemon-reload` 后重启，回到 `h3-round2-20261011-05753a6`；已写入的 `outfits` 字段旧代码会忽略。
+
+## 十九、GX10：穿搭三视图（2026-10-13）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/three-views-20261013-5335b9c`（基于 `person-orientation` 之后的线上版本，以节点 worker 的 `RELEASE.json` 为基线） |
+| 源码 | `main@5335b9c`（ADR-0017） |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-three-views-20261013-5335b9c-20261013T114205Z` |
+| 迁移 | 加性：新表 `persona_asset_jobs`、迁移 id `persona_asset_jobs_v1`；闸门参数 `--allow-new-table persona_asset_jobs --allow-migration persona_asset_jobs_v1 --expect-empty-new-table`，`rehearse-migration.py` 在生产库副本上两遍幂等 |
+| 变更 | 穿搭三视图生成（`sharp` 0.35.5 拼图、直出视频照片兜底）；未就绪的三视图穿搭拒绝建作品（409 `outfit_not_ready`） |
+| 切换后 | web／worker／inference active、重启 0、健康 `ok`；迁移表共 5 项（含 `persona_asset_jobs_v1`） |
+
+发布中踩到的坑（已固化进 `release-gx10.sh`，见第二十节）：
+- 非交互 SSH 的 `PATH` 没有 bun，且 `bun … | tail` 在无 `pipefail` 时吞掉失败，导致首次包里的前端未重建；重建后重新 `dist_stamp`。
+- 打包的 `RELEASE.json` 缺 `commit` 字段，`deploy-web-worker.py` 在停服务前读它，`KeyError` 中止；已在节点补字段，并删除那次留下的空备份目录 `…T113951Z`，再重新部署成功。
+- 判断迁移是否生效不能只看排序后的最后两项，要核对完整列表。
+
+未做：真实三视图生成的端到端验证（真实照片的脸漂、拼图观感）。Spark 未发布，仍在 `ac47bb0`。回退：删除 `kelvoy-{web,worker}.service.d/` 下含 `three-views-20261013-5335b9c` 的 drop-in，`daemon-reload` 后重启 web、worker；新表与迁移记录保留，旧代码不使用。
+
+## 二十、GX10：地标表单填写说明与一键发布脚本（2026-10-13）
+
+| 项 | 内容 |
+| --- | --- |
+| 发布目录 | `~/kelvoy-releases/landmark-hints-20261013-9f4f88f`（基线 `5335b9c`，3 个提交，9 个文件，无删除，无迁移） |
+| 源码 | `main@9f4f88f`（`d3bb6c7` 地标表单、`a019cce` 发布脚本、`9f4f88f` 脚本修复） |
+| 数据库备份（UTC） | `/home/huntun/kelvoy-backups/pre-landmark-hints-20261013-9f4f88f-20261013T121410Z` |
+| 变更 | 目的地草稿编辑页「最佳机位／时段」「必须保真的特征」补说明、占位示例、折叠的填写指南、按类型的时段候选（点击才追加，不预填）；「发布准备」缺项可点击定位；纯前端，文案明确 `best_time` 不影响生成画面 |
+| 切换前 | 无排队／运行中任务；节点根分区 97%（约 27G 可用） |
+| 节点验证 | 前端重建并 `dist_stamp stamp/verify` 通过；类型检查 5 包通过；测试 1377 通过 / 1 跳过 / 0 失败（本机 1378 通过） |
+| 切换后 | web／worker／inference active、重启 0；web、worker 工作目录为新发布，inference 仍为 `video-fix-20261010-v2`；健康 `ok`；线上 JS `index-01MamCpV.js`；近 3 分钟日志 0 条 error；迁移表 5 项不变 |
+
+发布方式：首次使用 `infra/dgx/release-gx10.sh landmark-hints prepare`，再 `switch`（分阶段，切换前需手输 `yes`）。该脚本固化第十九节的坑：显式 `PATH`、`pipefail`、`RELEASE.json` 带 `commit`、`COPYFILE_DISABLE`、基线取节点正在运行的 `RELEASE.json`、前端节点上重建并 `dist_stamp`、`schema.ts` 有改动时强制要求迁移闸门参数。首跑暴露一个脚本缺陷：`$VAR` 紧跟全角标点时被 bash 并入变量名（`unbound variable`），`9f4f88f` 改为 `${VAR}`。
+
+未做：真实浏览器目视（说明与占位、候选追加、缺项定位、角色页 1–7 提示）；时段候选文案待产品审定。Spark 未发布。磁盘提醒：每次发布 `cp -a` 一份发布目录，节点根分区已 97%，需清理旧发布目录。回退：删除含 `landmark-hints-20261013-9f4f88f` 的 drop-in，`daemon-reload` 后重启 web、worker，回到 `three-views-20261013-5335b9c`；无迁移，无需动数据库。

@@ -1,3 +1,5 @@
+2026-10-13 GX10 已发布穿搭三视图（`5335b9c`，加性迁移 `persona_asset_jobs_v1`）与地标表单填写说明（`9f4f88f`，纯前端），并新增一键发布脚本 [`release-gx10.sh`](release-gx10.sh)（分 check／prepare／switch／verify 阶段）；Spark 仍在 `ac47bb0`。过程、踩坑与回退见 [H3 改写修复发布记录](h3-fixes-deployment-20261011.md) 第十九、二十节。
+
 2026-10-11 无人镜头校验放宽（`person_visible`）、运镜升降词与被拒原文记录已准备发布（`05753a6`，含加性迁移 `prompt_traces_v2`）：GX10 已切换，Spark 待切换。重放 8/8、迁移预演两遍幂等，回退与磁盘提醒见 [H3 改写修复发布记录](h3-fixes-deployment-20261011.md) 第八节。
 
 2026-10-11 H3 格式类失败自动重试一次已按 Spark → GX10 发布（`fe5b52b`，无迁移，由子代理按手册执行并经独立核对）。见 [H3 改写修复发布记录](h3-fixes-deployment-20261011.md) 第七节。
