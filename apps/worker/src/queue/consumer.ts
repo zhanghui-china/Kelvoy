@@ -33,6 +33,7 @@ import { createLocalGenerationProviders, snapshotGenerationBackend, type Generat
 import { createH3PromptWriter } from "../generation/h3-prompt-writer";
 import { createPromptTraceCollector } from "../generation/prompt-trace-collector";
 import { handleStoryboardSuggestion } from "../generation/storyboard-suggestion";
+import { runNextViewsJob } from "../views/runner";
 import { executeLeasedTask } from "./execution";
 
 /**
@@ -69,6 +70,8 @@ export async function consumeLoop(signal?: AbortSignal): Promise<void> {
   while (!signal?.aborted) {
     const task = await dequeueTask();
     if (!task) {
+      // Persona three-view jobs (ADR-0017) only run when no stage task is waiting, so they never delay an episode.
+      if (await runNextViewsJob(signal)) continue;
       await Bun.sleep(POLL_INTERVAL_MS);
       continue;
     }

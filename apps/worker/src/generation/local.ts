@@ -134,7 +134,7 @@ async function hashKey(key: string): Promise<string> {
   return createHash("sha256").update(await readFile(await resolveKey(key))).digest("hex");
 }
 
-async function requestOne(
+export async function requestOne(
   call: InferenceCall,
   route: "/image/" | "/video/",
   body: Parameters<InferenceCall>[1],

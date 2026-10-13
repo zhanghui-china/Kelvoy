@@ -48,6 +48,8 @@ flowchart LR
 
 待定项见 PRD 第 11 节和各 ADR。
 
+穿搭三视图（ADR-0017）：Worker 在没有阶段任务时领取 `persona_asset_jobs`（`apps/worker/src/views/`），对 job 的 source 用提示词 V1 调 `/image` 生成正／侧／背，经 ffmpeg 横拼为设定图，以只追加的新 key 发布到 `persona/<persona_id>/views_<generation_id>_<随机>/` 后提交给 store。每 10 秒续租并兼作取消检测，单个 job 20 分钟总超时；尝试次数与积分结算全部由 store 的 `claimViewsJob`／`failViewsJob`／`completeViewsJob` 决定，Worker 不自行重试。拼图用 ffmpeg 是因为 Worker 没有图像库依赖，是否改用 sharp 待定。
+
 目的地共享发布：engine 定义草稿内容与发布完整性校验；store 独占私有草稿与发布快照的 SQLite 事务；web 负责会话、上传与路径授权；worker 继续读取旧期冻结的目的地版本。协议见 [草稿 API](api/destination-drafts.md)。
 
 ### 提示词记录（ADR-0012）
