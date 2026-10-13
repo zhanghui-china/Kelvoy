@@ -27,3 +27,5 @@ export * from "./task-diagnostics";
 export * from "./episode-deletion";
 
 export * from "./prompt-traces";
+
+export * from "./persona-views-jobs";
