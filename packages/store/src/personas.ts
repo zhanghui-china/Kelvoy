@@ -135,7 +135,12 @@ export function addPersonaOutfit(input: {
 }): OutfitMutationResult {
   return mutateOutfits(input.persona_id, input.owner_id, (outfits) => {
     if (outfits.length >= PERSONA_OUTFITS_MAX) return "too_many_outfits";
-    if (input.outfit.refs.length < OUTFIT_REFS_MIN || input.outfit.refs.length > OUTFIT_REFS_MAX) return "invalid_ref_count";
+    // 三视图穿搭（有 source）可以没有 refs；旧式穿搭仍要 1–3 张。与 engine validateOutfit 同一规则。
+    const { refs, source } = input.outfit;
+    const refsOk = source !== undefined
+      ? refs.length <= OUTFIT_REFS_MAX
+      : refs.length >= OUTFIT_REFS_MIN && refs.length <= OUTFIT_REFS_MAX;
+    if (!refsOk) return "invalid_ref_count";
     return { outfits: [...outfits, input.outfit], outfit: input.outfit };
   });
 }
