@@ -31,7 +31,9 @@ export function emptyShot(scene: string): StoryboardDraft {
 
 /** Empty inputs are missing fields, never supplied constraints for the model. */
 export function suggestionFields(draft: StoryboardDraft): Partial<StoryboardDraft> {
-  return Object.fromEntries(Object.entries(draft).filter(([, value]) => value !== null && value !== undefined &&
+  // duration_s / person_visible are the reviewer's own call, not something the suggestion model fills in.
+  return Object.fromEntries(Object.entries(draft).filter(([key, value]) => key !== "duration_s" && key !== "person_visible" &&
+    value !== null && value !== undefined &&
     (typeof value !== "string" || value.trim() !== ""))) as Partial<StoryboardDraft>;
 }
 

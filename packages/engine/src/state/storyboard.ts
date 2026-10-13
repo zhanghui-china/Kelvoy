@@ -1,18 +1,27 @@
+import { h3ClipSeconds } from "../rules/clip-seconds";
 import { checkContent } from "../rules/content";
 import type { Destination } from "../schema/destination";
 import type { Episode, ShotDraft, StoryboardPatch, Shot } from "../schema";
 
 const FIELDS = ["scene", "size", "beat", "caption", "camera", "landmark", "kf_prompt", "motion_prompt"] as const;
-const VISUAL = ["scene", "size", "beat", "camera", "landmark", "kf_prompt"] as const;
+// duration_s / person_visible are validated separately: they are not text, and only the latter is "visual".
+const EXTRA = ["duration_s", "person_visible"] as const;
+const VISUAL = ["scene", "size", "beat", "camera", "landmark", "kf_prompt", "person_visible"] as const;
+export const SUGGESTED_DURATION_RANGE = { min: 3, max: 6 } as const;
 export function storyboardEditable(episode: Episode): boolean {
   return episode.mode === "per_shot" && ["script_review", "assets", "keyframing", "kf_review", "clipping", "clip_review", "compose_ready", "composing", "done", "failed"].includes(episode.status);
 }
 export function validStoryboardPatch(value: unknown, complete = false): value is StoryboardPatch {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const patch = value as Record<string, unknown>;
-  if (Object.keys(patch).some(key => !FIELDS.includes(key as typeof FIELDS[number]))) return false;
+  if (Object.keys(patch).some(key => !FIELDS.includes(key as typeof FIELDS[number]) && !EXTRA.includes(key as typeof EXTRA[number]))) return false;
   if (complete && FIELDS.filter(key => key !== "caption").some(key => !(key in patch))) return false;
   for (const [key, val] of Object.entries(patch)) {
+    if (key === "duration_s") {
+      if (typeof val !== "number" || !Number.isFinite(val) || val < SUGGESTED_DURATION_RANGE.min || val > SUGGESTED_DURATION_RANGE.max) return false;
+      continue;
+    }
+    if (key === "person_visible") { if (typeof val !== "boolean") return false; continue; }
     if (key === "landmark") { if (val !== null && typeof val !== "string") return false; }
     else if (typeof val !== "string") return false;
     if (typeof val === "string" && (val.length > (key === "caption" ? 120 : 2000) || (["beat", "kf_prompt", "motion_prompt"].includes(key) && !val.trim()))) return false;
@@ -34,9 +43,12 @@ export function editStoryboard(episode: Episode, edit: StoryboardEdit): Episode 
     const index = edit.after_shot_id === null ? -1 : shots.findIndex(s => s.shot_id === edit.after_shot_id);
     if (edit.after_shot_id !== null && index < 0) throw new Error("not_found");
     if (!scenes.length) scenes = [{ id: "scene_default", name: "默认场景", time: "morning", landmarks: [] }];
-    const draft = { ...edit.shot, scene: edit.shot.scene || scenes[0].id };
+    const { person_visible, duration_s, ...fields } = edit.shot;
+    const draft = { ...fields, scene: edit.shot.scene || scenes[0].id };
     if (!scenes.some(s => s.id === draft.scene)) throw new Error("invalid_scene");
-    shots.splice(index + 1, 0, { ...draft, shot_id: edit.shot_id, no: 0, duration_s: episode.cut_policy === "long_3_6" ? 4 : 1,
+    // Only an explicit `false` is stored (see Shot.person_visible).
+    shots.splice(index + 1, 0, { ...draft, ...(person_visible === false ? { person_visible } : {}), shot_id: edit.shot_id, no: 0,
+      duration_s: duration_s ?? (episode.cut_policy === "long_3_6" ? 4 : 1),
       candidates: [], kf_selected: null, clip: null, trim_start_s: null, status: "draft",
       regen_stage: null, bad_shot_reported: false, model: {} });
   } else if (edit.type === "reorder") {
@@ -49,10 +61,14 @@ export function editStoryboard(episode: Episode, edit: StoryboardEdit): Episode 
     else {
       const shot = shots[index];
       if (edit.patch.scene !== undefined && !scenes.some(s => s.id === edit.patch.scene)) throw new Error("invalid_scene");
-      const updated: Shot = { ...shot, ...edit.patch };
+      const { person_visible, ...rest } = edit.patch;
+      const updated: Shot = { ...shot, ...rest };
+      if (person_visible === false) updated.person_visible = false;
+      else if (person_visible === true) delete updated.person_visible;
       if (VISUAL.some(key => updated[key] !== shot[key])) Object.assign(updated, {
         candidates: [], kf_selected: null, clip: null, trim_start_s: null, model: {}, status: "draft", regen_stage: null });
-      else if (updated.motion_prompt !== shot.motion_prompt) Object.assign(updated, {
+      // A suggested-duration change only matters to generation when it moves the H3 clip length (4 s vs 5 s).
+      else if (updated.motion_prompt !== shot.motion_prompt || h3ClipSeconds(updated.duration_s) !== h3ClipSeconds(shot.duration_s)) Object.assign(updated, {
         clip: null, trim_start_s: null, model: { ...(shot.model.image ? { image: shot.model.image } : {}) },
         status: episode.video_source === "references" ? "draft" : shot.kf_selected ? "kf_selected" : shot.candidates.length ? "kf_ready" : "draft", regen_stage: null });
       shots[index] = updated;
@@ -66,6 +82,8 @@ export function editStoryboard(episode: Episode, edit: StoryboardEdit): Episode 
 
 export function validateStoryboardFields(episode: Episode, fields: unknown, destination: Destination | null, complete = false): string[] {
   if (!validStoryboardPatch(fields, complete)) return ["invalid_fields"];
+  // Only long_3_6 uses duration_s as a suggestion; fixed_1s is pinned and beat-policy episodes keep their own cut.
+  if (fields.duration_s !== undefined && episode.cut_policy !== "long_3_6") return ["invalid_fields"];
   const errors: string[] = [];
   if (fields.scene !== undefined && !(complete && !episode.scenes.length && !fields.scene) && !episode.scenes.some(scene => scene.id === fields.scene)) errors.push("invalid_scene");
   if (fields.landmark && (!destination || !destination.landmarks.some(landmark => landmark.id === fields.landmark))) errors.push("invalid_landmark");

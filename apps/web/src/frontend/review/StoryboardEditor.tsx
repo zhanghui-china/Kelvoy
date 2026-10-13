@@ -35,8 +35,11 @@ export default function StoryboardEditor({ episode, destination, mutation, busy 
     if (result?.ok && editor && "id" in editor && editor.id === shotIdentity(shot)) setEditor(null);
   }
   function form(current: Editor, shot?: Shot) {
-    const initial = shot ? { scene: shot.scene, size: shot.size, beat: shot.beat, caption: shot.caption ?? "", camera: shot.camera,
-      landmark: shot.landmark, kf_prompt: shot.kf_prompt ?? "", motion_prompt: shot.motion_prompt ?? "" } : emptyShot(episode.scenes[0]?.id ?? "");
+    const longCut = episode.cut_policy === "long_3_6";
+    const initial: StoryboardDraft = shot ? { scene: shot.scene, size: shot.size, beat: shot.beat, caption: shot.caption ?? "", camera: shot.camera,
+      landmark: shot.landmark, kf_prompt: shot.kf_prompt ?? "", motion_prompt: shot.motion_prompt ?? "",
+      ...(longCut ? { duration_s: shot.duration_s } : {}), ...(shot.person_visible === false ? { person_visible: false } : {}) }
+      : { ...emptyShot(episode.scenes[0]?.id ?? ""), ...(longCut ? { duration_s: 4 } : {}) };
     return <StoryboardShotForm key={current.kind === "insert" ? `insert-${current.after}` : `${current.kind}-${current.id}`}
       episode={episode} destination={destination} initial={initial} mutation={mutation} locked={locked}
       afterId={current.kind === "insert" ? current.after : undefined} price={prices?.script}
@@ -44,7 +47,8 @@ export default function StoryboardEditor({ episode, destination, mutation, busy 
         const result = await mutation.run((version) => current.kind === "insert"
           ? insertStoryboardShot(episode.episode_id, version, current.after, draft)
           : patchStoryboardShot(episode.episode_id, current.id, version, current.kind === "caption" ? { caption: draft.caption } :
-            { scene: draft.scene, size: draft.size, beat: draft.beat, camera: draft.camera, landmark: draft.landmark, kf_prompt: draft.kf_prompt, motion_prompt: draft.motion_prompt }));
+            { scene: draft.scene, size: draft.size, beat: draft.beat, camera: draft.camera, landmark: draft.landmark, kf_prompt: draft.kf_prompt, motion_prompt: draft.motion_prompt,
+              person_visible: draft.person_visible !== false, ...(draft.duration_s !== undefined ? { duration_s: draft.duration_s } : {}) }));
         return Boolean(result?.ok);
       }} />;
   }
@@ -52,7 +56,7 @@ export default function StoryboardEditor({ episode, destination, mutation, busy 
     <div className="k-desk-toolbar"><div className="k-card-title">分镜编辑</div><span className="k-nav-spacer" />
       <button type="button" className="k-btn k-btn-secondary" disabled={disabled} onClick={() => setEditor({ kind: "insert", after: null })}>在开头添加一镜</button>
     </div>
-    <p className="k-card-meta">当前 {episode.shots.length} 镜 · 预计 {storyboardDuration(episode.shots, episode.cut_policy).toFixed(1)} 秒。镜头数量自由，支持保存空故事板；手工编辑免费。</p>
+    <p className="k-card-meta">当前 {episode.shots.length} 镜 · 预计 {storyboardDuration(episode.shots, episode.cut_policy).toFixed(1)} 秒{episode.cut_policy === "long_3_6" ? `（目标约 ${episode.brief.duration_s} 秒，含片头片尾；各镜时长为建议值）` : ""}。镜头数量自由，支持保存空故事板；手工编辑免费。</p>
     {prices && <p className="k-card-meta">待生成素材预计 {pendingGenerationEstimate(episode, prices)} 积分（已保留的素材不重复生成）。图片 {prices.image} 积分 / 张 · 视频 {prices.video} 积分 / 镜 · 合成 {prices.compose} 积分。</p>}
     {locked && <p role="status">生成任务正在处理中，暂时锁定分镜修改；完成后可继续编辑。</p>}
     {warnings.map((warning, index) => <p className="k-card-meta" key={index}>{warning}</p>)}
@@ -72,7 +76,7 @@ export default function StoryboardEditor({ episode, destination, mutation, busy 
             <div className="k-card-title">第 {shot.no} 镜 · {SHOT_SIZE_LABELS[shot.size]}</div>
             <div className="k-card-meta">{episode.scenes.find((scene) => scene.id === shot.scene)?.name ?? shot.scene} · 拖动卡片调整顺序，或使用上移 / 下移</div>
             <p>{shot.beat || "尚未填写画面动作"}</p>
-            <p className="k-card-meta">字幕：{shot.caption || "无"}</p>
+            <p className="k-card-meta">字幕：{shot.caption || "无"}{shot.person_visible === false ? " · 空镜（无人物）" : ""}</p>
             <details><summary>画面描述</summary><p>{shot.kf_prompt || "尚未填写关键帧描述"}</p><p>{shot.motion_prompt || "尚未填写运动描述"}</p></details>
             <div className="k-desk-actions">
               <button type="button" className="k-btn k-btn-secondary k-btn-tiny" aria-label={`第 ${shot.no} 镜上移`} disabled={disabled || index === 0} onClick={() => move(id, -1)}>上移</button>

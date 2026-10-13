@@ -34,7 +34,7 @@ export default function ScriptReview({ episode, destination, mutation, busy = fa
             <thead><tr><th>#</th><th>场景</th><th>景别</th><th>动作 beat</th><th>字幕</th>{episode.cut_policy === "long_3_6" && <th>建议时长</th>}<th>机位</th><th>关键帧描述</th></tr></thead>
             <tbody>{episode.shots.map((shot) => <tr key={(shot as typeof shot & { shot_id?: string }).shot_id ?? shot.no}>
               <td>{shot.no}</td><td>{episode.scenes.find((scene) => scene.id === shot.scene)?.name ?? shot.scene}</td>
-              <td>{SHOT_SIZE_LABELS[shot.size]}</td><td>{shot.beat}</td><td>{shot.caption || "—"}</td>{episode.cut_policy === "long_3_6" && <td>{shot.duration_s} 秒</td>}<td>{SHOT_CAMERA_LABELS[shot.camera]}</td><td>{shot.kf_prompt || "—"}</td>
+              <td>{SHOT_SIZE_LABELS[shot.size]}</td><td>{shot.beat}{shot.person_visible === false && <span className="k-card-meta"> · 空镜</span>}</td><td>{shot.caption || "—"}</td>{episode.cut_policy === "long_3_6" && <td>{shot.duration_s} 秒</td>}<td>{SHOT_CAMERA_LABELS[shot.camera]}</td><td>{shot.kf_prompt || "—"}</td>
             </tr>)}</tbody>
           </table></div>
         </>}

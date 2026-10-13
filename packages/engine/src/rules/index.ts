@@ -6,4 +6,5 @@ export * from "./review";
 export * from "./subtitles";
 
 export * from "./long-cuts";
+export * from "./clip-seconds";
 export * from "./outfit-sheet";

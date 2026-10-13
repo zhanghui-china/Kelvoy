@@ -1,3 +1,4 @@
+import { h3ClipSeconds } from "../rules/clip-seconds";
 import type { Episode } from "../schema";
 import { transitionEpisode, transitionShot } from "../state";
 import { generationSeed } from "./generation-seed";
@@ -26,7 +27,7 @@ export async function runVideo(episode: Episode, shotNo?: number, context?: Stag
   const sceneRef = landmark?.refs[0];
   if (direct && (!personRef || !sceneRef)) throw new Error(`第 ${shotNo} 镜缺少人物或场景参考图`);
   const refs = direct ? [personRef!, sceneRef!] : undefined;
-  const duration_s = Math.max(4, Math.min(5, Math.ceil(shot.duration_s)));
+  const duration_s = h3ClipSeconds(shot.duration_s);
   const rewritten = await context.h3PromptWriter.write({ episode_id: episode.episode_id,
     context: { mode: direct ? "Ref2VA" : "I2VA", aspect: episode.brief.aspect, duration_s,
       size: shot.size, camera: shot.camera, beat: shot.beat,

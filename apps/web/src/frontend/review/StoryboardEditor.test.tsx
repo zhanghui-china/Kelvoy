@@ -44,3 +44,15 @@ test("edited storyboard keeps previous final clearly labeled", () => {
   const html = renderToStaticMarkup(<StoryboardEditor episode={edited} destination={null} mutation={mutation} />);
   expect(html).toContain("下载与分享仍使用上一版");
 });
+test("person toggle always shows; suggested duration only for long_3_6", () => {
+  const form = (cut_policy: string) => renderToStaticMarkup(<StoryboardShotForm episode={{ ...episode(), cut_policy } as Episode}
+    destination={null} initial={{ ...emptyShot(""), person_visible: false }} mutation={mutation} locked={false} onSave={async () => true} onCancel={() => {}} />);
+  const fixed = form("fixed_1s");
+  expect(fixed).toContain("画面中有人物");
+  expect(fixed).not.toContain("建议时长");
+  expect(fixed).toMatch(/<input type="checkbox"(?![^>]*checked)/);
+  const long = form("long_3_6");
+  expect(long).toContain("建议时长（秒）");
+  expect(long).toContain('min="3"');
+  expect(long).toContain('max="6"');
+});

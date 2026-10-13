@@ -450,7 +450,8 @@ export function assetUrl(key: string): string {
 
 export interface StoryboardPrices { script: number; image: number; video: number; compose: number }
 export type StoryboardDraft = Pick<import("@kelvoy/engine").Shot,
-  "scene" | "size" | "beat" | "camera" | "landmark" | "kf_prompt" | "motion_prompt"> & { caption?: string };
+  "scene" | "size" | "beat" | "camera" | "landmark" | "kf_prompt" | "motion_prompt"> & { caption?: string }
+  & Partial<Pick<import("@kelvoy/engine").Shot, "duration_s" | "person_visible">>;
 function storyboardPath(id: string, suffix = "") { return episodePath(id, `/storyboard${suffix}`); }
 export function insertStoryboardShot(id: string, row_version: number, after_shot_id: string | null, shot: StoryboardDraft) {
   return apiFetch<{ row_version: number; shot_id: string }>(storyboardPath(id), { method: "POST", body: JSON.stringify({ row_version, after_shot_id, shot }) });

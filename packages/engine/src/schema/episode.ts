@@ -84,7 +84,7 @@ export interface Shot {
   motion_prompt: string;
   /**
    * Whether a person is in frame. Only an explicit `false` is stored; absent means visible, so existing
-   * episodes behave exactly as before. Set by the script stage; the storyboard editor does not expose it yet.
+   * episodes behave exactly as before. Set by the script stage; the storyboard editor can flip it (a change clears the shot's products).
    * When false the H3 rewrite is not forced to cite the person reference picture (the picture is still
    * supplied to the video model, which requires two references).
    */
@@ -182,5 +182,8 @@ export interface Episode {
   render: EpisodeRender;
 }
 
-export type ShotDraft = Pick<Shot, "scene" | "size" | "beat" | "caption" | "camera" | "landmark" | "kf_prompt" | "motion_prompt">;
+// `duration_s` (long_3_6 only, suggested cut length) and `person_visible` are optional: omitted means
+// the default (4 s on insert / person visible), and an explicit `person_visible: true` is normalised away.
+export type ShotDraft = Pick<Shot, "scene" | "size" | "beat" | "caption" | "camera" | "landmark" | "kf_prompt" | "motion_prompt">
+  & Partial<Pick<Shot, "duration_s" | "person_visible">>;
 export type StoryboardPatch = Partial<ShotDraft>;

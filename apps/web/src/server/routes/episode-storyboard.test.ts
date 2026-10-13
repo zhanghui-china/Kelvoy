@@ -47,3 +47,22 @@ test.each(["empty", "scene", "landmark", "size", "beat", "content"])("continue s
  expect(await dequeueTask()).toBeNull();
  const saved = await getEpisode(ep.episode_id); expect(saved.ok && saved.row_version).toBe(1);
 });
+
+test("storyboard patch accepts suggested duration only for long_3_6 and stores person_visible=false", async () => {
+ const { cookie, ownerId } = await login("storyboard_extras");
+ await upsertDestination(destinationFixture("d_test"));
+ const ep = fixture("ep_extras", ownerId); ep.status = "script_review"; ep.cut_policy = "long_3_6"; ep.shots = [shotFixture(1, { shot_id: "sh_x" })];
+ await insertEpisode(ep);
+ const app = buildApp(); const headers = { cookie, "content-type": "application/json" };
+ const patch = (row_version: number, body: object) => app.request(`/api/episodes/ep_extras/storyboard/${ep.shots[0].shot_id}`, { method: "PATCH", headers, body: JSON.stringify({ row_version, patch: body }) });
+ expect((await patch(1, { duration_s: 7 })).status).toBe(400);
+ expect((await patch(1, { person_visible: "no" })).status).toBe(400);
+ const ok = await patch(1, { duration_s: 5.5, person_visible: false });
+ expect(ok.status).toBe(200);
+ const saved = await getEpisode("ep_extras"); if (!saved.ok) throw Error("missing");
+ expect(saved.episode.shots[0]).toMatchObject({ duration_s: 5.5, person_visible: false });
+ const fixedEp = fixture("ep_extras_fixed", ownerId); fixedEp.status = "script_review"; fixedEp.cut_policy = "fixed_1s"; fixedEp.shots = [shotFixture(1, { shot_id: "sh_y" })];
+ await insertEpisode(fixedEp);
+ const fixedPatch = await app.request(`/api/episodes/ep_extras_fixed/storyboard/${fixedEp.shots[0].shot_id}`, { method: "PATCH", headers, body: JSON.stringify({ row_version: 1, patch: { duration_s: 4 } }) });
+ expect(fixedPatch.status).toBe(400);
+});

@@ -3,6 +3,7 @@ import type { Destination, Episode } from "@kelvoy/engine";
 import { getStoryboardSuggestion, requestStoryboardSuggestion, type StoryboardDraft } from "../api/client";
 import { SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS } from "../labels";
 import { describeWriteError } from "./errors";
+import StoryboardShotExtras from "./StoryboardShotExtras";
 import { fillMissingSuggestion, suggestionFields } from "./storyboard-model";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
@@ -98,6 +99,7 @@ export default function StoryboardShotForm({ episode, destination, initial, muta
         <label className="k-field">画面动作（beat）<textarea required maxLength={2000} value={draft.beat} onChange={(e) => update("beat", e.target.value)} /></label>
         <label className="k-field">关键帧描述<textarea required maxLength={2000} value={draft.kf_prompt} onChange={(e) => update("kf_prompt", e.target.value)} /></label>
         <label className="k-field">运动描述<textarea required maxLength={2000} value={draft.motion_prompt} onChange={(e) => update("motion_prompt", e.target.value)} /></label>
+        <StoryboardShotExtras draft={draft} longCut={episode.cut_policy === "long_3_6"} onChange={update} />
       </fieldset>
     </>}
     {(captionOnly || afterId !== undefined) && <fieldset disabled={(locked && !taskId) || mutation.pending}><legend>成片字幕</legend>
