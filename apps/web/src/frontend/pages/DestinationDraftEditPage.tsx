@@ -3,10 +3,19 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { DestinationDraft, DestinationDraftContent, Landmark } from "@kelvoy/engine";
 import type { ApiResult } from "../api/client";
 import { destinationDraftAssetUrl, getDestinationDraft, publishDestinationDraft, removeDestinationPhoto, saveDestinationDraft, uploadDestinationPhotos } from "../api/destination-drafts";
-import { destinationDraftError, missingDestinationItems, photoSelectionError } from "../destination-draft-form";
+import { DRAFT_ADD_LANDMARK_ID, DRAFT_CITY_ID, DRAFT_NAME_ID, destinationDraftError, landmarkFieldId, missingDestinationTargets, photoSelectionError } from "../destination-draft-form";
 import { createDraftOperationScope, saveThenMutateDraft } from "../destination-draft-workflow";
+import { BEST_TIME_HELP, BEST_TIME_PLACEHOLDER, BEST_TIME_SUGGESTIONS, MUST_KEEP_HELP, MUST_KEEP_PLACEHOLDER, appendBestTime } from "../destination-hints";
 import { DESTINATION_TYPE_LABELS } from "../labels";
+import LandmarkFillGuide from "./LandmarkFillGuide";
 import "./DestinationDraftEditPage.css";
+
+// 缺项列表点击后把焦点送到对应输入框；控件被禁用（保存/发布中）时 focus() 无效，属预期。
+function focusField(id: string) {
+  const element = document.getElementById(id);
+  element?.scrollIntoView({ block: "center" });
+  element?.focus();
+}
 
 export default function DestinationDraftEditPage() {
   const navigate = useNavigate();
@@ -78,7 +87,7 @@ export default function DestinationDraftEditPage() {
   }
   if (loading || (draft !== null && draft.draft_id !== id)) return <p role="status">加载草稿中…</p>;
   if (!draft || !content) return <div><p className="k-error" role="alert">{error}</p><button onClick={() => setReload(value => value + 1)}>重试</button> <Link to="/destinations/drafts">返回我的草稿</Link></div>;
-  const missing = missingDestinationItems(content);
+  const missing = missingDestinationTargets(content);
   const published = draft.published_version !== null;
   const disabled = !!busy || published || conflict;
   const list = (value: string) => value.split("\n");
@@ -89,21 +98,29 @@ export default function DestinationDraftEditPage() {
     {notice && <p role="status">{notice}</p>}
     {published && <section className="k-card"><h2>已发布到共享库</h2><p>所有用户现在都可选择这个目的地。修改已发布内容请从目的地库进入新的私有编辑草稿。</p><Link className="k-btn k-btn-primary" to={`/episodes/new?destination=${encodeURIComponent(draft.destination_id!)}`}>用这个目的地新建一期 →</Link> <Link to="/destinations">查看共享库</Link></section>}
     <fieldset disabled={disabled} className="k-draft-fields"><legend>景区信息</legend>
-      <label className="k-field">景区名称<input maxLength={4000} value={content.name} onChange={event => patch({ name: event.target.value })} /></label>
-      <label className="k-field">城市<input maxLength={4000} value={content.city} onChange={event => patch({ city: event.target.value })} /></label>
+      <label className="k-field">景区名称<input id={DRAFT_NAME_ID} maxLength={4000} value={content.name} onChange={event => patch({ name: event.target.value })} /></label>
+      <label className="k-field">城市<input id={DRAFT_CITY_ID} maxLength={4000} value={content.city} onChange={event => patch({ city: event.target.value })} /></label>
       <label className="k-field">类型<select value={content.type} onChange={event => patch({ type: event.target.value as DestinationDraftContent["type"] })}>{Object.entries(DESTINATION_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <h2>地标与实景照片</h2><p>每个地标发布时需 3–10 张 JPEG、PNG 或 WebP 照片，每张最多 10MB。草稿可先保存不足 3 张的内容。</p>
+      <LandmarkFillGuide />
       {content.landmarks.map((landmark, index) => <section className="k-card" key={landmark.id}>
         <h3>地标 {index + 1}</h3>
-        <label className="k-field">地标名称<input value={landmark.name} maxLength={4000} onChange={event => patchLandmark(index, { name: event.target.value })} /></label>
-        <label className="k-field">最佳机位／时段<input value={landmark.best_time} maxLength={4000} onChange={event => patchLandmark(index, { best_time: event.target.value })} /></label>
-        <label className="k-field">必须保真的特征（每行一项）<textarea value={(landmark.must_keep ?? []).join("\n")} onChange={event => patchLandmark(index, { must_keep: list(event.target.value) })} /></label>
+        <label className="k-field">地标名称<input id={landmarkFieldId(landmark.id, "name")} value={landmark.name} maxLength={4000} onChange={event => patchLandmark(index, { name: event.target.value })} /></label>
+        <div className="k-draft-field">
+          <label className="k-field">最佳机位／时段<input id={landmarkFieldId(landmark.id, "best_time")} aria-describedby={`${landmarkFieldId(landmark.id, "best_time")}-help`} placeholder={BEST_TIME_PLACEHOLDER} value={landmark.best_time} maxLength={4000} onChange={event => patchLandmark(index, { best_time: event.target.value })} /></label>
+          <p className="k-card-meta" id={`${landmarkFieldId(landmark.id, "best_time")}-help`}>{BEST_TIME_HELP}</p>
+          <div className="k-draft-chips" role="group" aria-label="常用时段，点击加入">{BEST_TIME_SUGGESTIONS[content.type].map(suggestion => <button type="button" className="k-btn k-btn-secondary k-btn-tiny" key={suggestion} onClick={() => patchLandmark(index, { best_time: appendBestTime(landmark.best_time, suggestion) })}>＋ {suggestion}</button>)}</div>
+        </div>
+        <div className="k-draft-field">
+          <label className="k-field">必须保真的特征（每行一项）<textarea id={landmarkFieldId(landmark.id, "must_keep")} aria-describedby={`${landmarkFieldId(landmark.id, "must_keep")}-help`} placeholder={MUST_KEEP_PLACEHOLDER} value={(landmark.must_keep ?? []).join("\n")} onChange={event => patchLandmark(index, { must_keep: list(event.target.value) })} /></label>
+          <p className="k-card-meta" id={`${landmarkFieldId(landmark.id, "must_keep")}-help`}>{MUST_KEEP_HELP}</p>
+        </div>
         <div className="k-draft-photos">{landmark.refs.map((key, photoIndex) => <figure key={key}><img src={destinationDraftAssetUrl(draft.draft_id, key)} alt={`${landmark.name || `地标 ${index + 1}`} 实景照片 ${photoIndex + 1}`} loading="lazy" /><figcaption><button type="button" onClick={() => void run("正在移除照片…", async (saved, commit, notify) => { if (commit(await removeDestinationPhoto(saved, landmark.id, key))) notify("照片已移除，历史版本照片保留。"); })}>移除照片 {photoIndex + 1}</button></figcaption></figure>)}</div>
         <p>{landmark.refs.length} / 10 张照片</p>
-        <label className="k-field">批量上传照片<input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={landmark.refs.length >= 10} onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void upload(index, files); }} /></label>
+        <label className="k-field">批量上传照片<input id={landmarkFieldId(landmark.id, "photos")} type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={landmark.refs.length >= 10} onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void upload(index, files); }} /></label>
         <button type="button" onClick={() => patch({ landmarks: content.landmarks.filter(item => item.id !== landmark.id) })}>移除地标</button>
       </section>)}
-      <button type="button" disabled={content.landmarks.length >= 50} onClick={() => patch({ landmarks: [...content.landmarks, { id: crypto.randomUUID(), name: "", best_time: "", must_keep: [], refs: [] }] })}>添加地标</button>
+      <button type="button" id={DRAFT_ADD_LANDMARK_ID} disabled={content.landmarks.length >= 50} onClick={() => patch({ landmarks: [...content.landmarks, { id: crypto.randomUUID(), name: "", best_time: "", must_keep: [], refs: [] }] })}>添加地标</button>
       <details><summary>选填：介绍、季节、动线和旅行信息</summary>
         <label className="k-field">介绍<textarea maxLength={4000} value={content.description ?? ""} onChange={event => patch({ description: event.target.value })} /></label>
         {([ ["season_best", "最佳季节"], ["route", "动线（按顺序）"], ["food", "地方饮食"] ] as const).map(([key, label]) => <label className="k-field" key={key}>{label}（每行一项）<textarea value={content[key].join("\n")} onChange={event => patch({ [key]: list(event.target.value) })} /></label>)}
@@ -111,7 +128,7 @@ export default function DestinationDraftEditPage() {
         <label className="k-field">住宿<textarea maxLength={4000} value={content.stay} onChange={event => patch({ stay: event.target.value })} /></label>
       </details>
     </fieldset>
-    {!published && <section className="k-card"><h2>发布准备</h2>{missing.length > 0 ? <><p>待补齐：</p><ul>{missing.map(item => <li key={item}>{item}</li>)}</ul></> : <p>必填内容已齐全。</p>}
+    {!published && <section className="k-card"><h2>发布准备</h2>{missing.length > 0 ? <><p>待补齐（点击可跳到对应位置）：</p><ul className="k-draft-missing">{missing.map(item => <li key={item.label}><button type="button" onClick={() => focusField(item.targetId)}>{item.label}</button></li>)}</ul></> : <p>必填内容已齐全。</p>}
       <p>发布无需管理员审核。发布后，目的地内容与实景照片将公开共享，所有用户都可查看、选择并用于新建一期。</p>
       <label><input type="checkbox" checked={sharing} disabled={disabled} onChange={event => setSharing(event.target.checked)} />我同意将这些照片公开共享</label>
       <div className="k-draft-actions"><button className="k-btn k-btn-secondary" disabled={disabled} onClick={() => void run("正在保存…", async (_saved, _commit, notify) => { notify("草稿已保存。"); })}>保存草稿</button>

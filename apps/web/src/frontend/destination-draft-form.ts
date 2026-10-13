@@ -1,17 +1,31 @@
 import type { DestinationDraftContent } from "@kelvoy/engine";
-export function missingDestinationItems(content: DestinationDraftContent): string[] {
-  const missing: string[] = [];
-  if (!content.name.trim()) missing.push("景区名称");
-  if (!content.city.trim()) missing.push("城市");
-  if (!content.landmarks.length) missing.push("至少一个地标");
+/** 表单控件的 DOM id：缺项列表据此把焦点送到对应输入框。 */
+export const DRAFT_NAME_ID = "draft-name";
+export const DRAFT_CITY_ID = "draft-city";
+export const DRAFT_ADD_LANDMARK_ID = "draft-add-landmark";
+export type LandmarkField = "name" | "best_time" | "must_keep" | "photos";
+export function landmarkFieldId(landmarkId: string, field: LandmarkField): string {
+  return `landmark-${landmarkId}-${field}`;
+}
+
+export interface MissingItem { label: string; targetId: string }
+
+export function missingDestinationTargets(content: DestinationDraftContent): MissingItem[] {
+  const missing: MissingItem[] = [];
+  if (!content.name.trim()) missing.push({ label: "景区名称", targetId: DRAFT_NAME_ID });
+  if (!content.city.trim()) missing.push({ label: "城市", targetId: DRAFT_CITY_ID });
+  if (!content.landmarks.length) missing.push({ label: "至少一个地标", targetId: DRAFT_ADD_LANDMARK_ID });
   content.landmarks.forEach((landmark, index) => {
     const prefix = `地标 ${index + 1}`;
-    if (!landmark.name.trim()) missing.push(`${prefix}：名称`);
-    if (!landmark.best_time.trim()) missing.push(`${prefix}：最佳机位／时段`);
-    if (!landmark.must_keep?.some(item => item.trim())) missing.push(`${prefix}：必须保真的特征`);
-    if (landmark.refs.length < 3 || landmark.refs.length > 10) missing.push(`${prefix}：3–10 张实景照片`);
+    if (!landmark.name.trim()) missing.push({ label: `${prefix}：名称`, targetId: landmarkFieldId(landmark.id, "name") });
+    if (!landmark.best_time.trim()) missing.push({ label: `${prefix}：最佳机位／时段`, targetId: landmarkFieldId(landmark.id, "best_time") });
+    if (!landmark.must_keep?.some(item => item.trim())) missing.push({ label: `${prefix}：必须保真的特征`, targetId: landmarkFieldId(landmark.id, "must_keep") });
+    if (landmark.refs.length < 3 || landmark.refs.length > 10) missing.push({ label: `${prefix}：3–10 张实景照片`, targetId: landmarkFieldId(landmark.id, "photos") });
   });
   return missing;
+}
+export function missingDestinationItems(content: DestinationDraftContent): string[] {
+  return missingDestinationTargets(content).map(item => item.label);
 }
 export function photoSelectionError(files: ReadonlyArray<{ size: number; type: string }>, current: number): string | null {
   if (current + files.length > 10) return "每个地标最多 10 张照片。";
