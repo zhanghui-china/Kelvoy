@@ -17,6 +17,7 @@ import { canEditPersona } from "../persona-access";
 import { describeWriteError } from "../review/errors";
 import "./PersonaEditPage.css";
 import PersonaOutfits from "./PersonaOutfits";
+import ViewsPanel from "./ViewsPanel";
 import { selectDraftPersona } from "./episode-draft";
 
 // §4："这三项是锁定的" —— 新建时默认全选；schema 是 string[]，用户可以
@@ -150,7 +151,7 @@ export default function PersonaEditPage() {
   function validateRefsSelection(): string | null {
     if (pendingFiles.length === 0) {
       if (isEdit) return null;
-      return "请至少上传 3 张参考图";
+      return `请至少上传 ${PERSONA_REFS_MIN} 张参考图`;
     }
     const existingCount = current?.refs.length ?? 0;
     const total = existingCount + pendingFiles.length;
@@ -391,6 +392,13 @@ export default function PersonaEditPage() {
           </button>
         </div>
       </form>
+
+      {isEdit && current && (
+        <section className="k-card" aria-label="默认穿搭三视图">
+          <p className="k-card-meta">默认穿搭的三视图由上面的第 1 张参考图生成；建议第 1 张用全身照。</p>
+          <ViewsPanel persona={current} outfit={null} onChange={setSavedPersona} />
+        </section>
+      )}
 
       {isEdit && current && <PersonaOutfits persona={current} onChange={setSavedPersona} />}
     </div>

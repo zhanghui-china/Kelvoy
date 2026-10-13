@@ -25,7 +25,7 @@ import { GuideTip } from "../GuideTip";
 import { DESTINATION_TYPE_LABELS } from "../labels";
 import "./NewEpisodePage.css";
 import OutfitPicker from "./OutfitPicker";
-import { suggestedOutfitId } from "./outfit-helpers";
+import { outfitPickState, suggestedOutfitId } from "./outfit-helpers";
 import { clearDraft, draftForDestinationParam, readDraft, saveDraft, seasonAfterDestinationChange, type EpisodeDraft } from "./episode-draft";
 
 // FR-01 语气快捷 chip，点一下直接填入(替换，不追加)。
@@ -169,12 +169,12 @@ function NewEpisodeForm({ ownerId }: { ownerId: string }) {
     }
   }, [personasRes.loading, personas]);
 
-  // 穿搭：角色或季节变化时，没手动选过就建议第一个适合本季的；旧角色的 outfit_id 在新角色里不存在则清掉。
+  // 穿搭：角色或季节变化时，没手动选过就建议第一个适合本季的；旧角色的 outfit_id 在新角色里不存在、或三视图未就绪（不可选）则清掉。
   useEffect(() => {
     if (!selectedPersona) return;
     const outfits = selectedPersona.outfits ?? [];
     let next = outfitId;
-    if (next && !outfits.some((o) => o.outfit_id === next)) {
+    if (next && !outfits.some((o) => o.outfit_id === next && outfitPickState(o).selectable)) {
       next = "";
       outfitTouched.current = false;
     }

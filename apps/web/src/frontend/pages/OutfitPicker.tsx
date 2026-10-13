@@ -1,7 +1,7 @@
 import type { Persona } from "@kelvoy/engine";
 import { Link } from "react-router-dom";
 import { assetUrl } from "../api/client";
-import { outfitFitsSeason, sortOutfitsForSeason } from "./outfit-helpers";
+import { outfitFitsSeason, outfitPickState, outfitThumbKey, sortOutfitsForSeason } from "./outfit-helpers";
 
 /**
  * 新建作品时选穿搭（ADR-0015）：第一项永远是"默认穿搭"（即角色参考图），
@@ -20,21 +20,28 @@ export default function OutfitPicker({ persona, season, value, onChange }: {
       </p>
     );
   }
+  // 默认穿搭永远可选：三视图没就绪时生成回落到 refs[0]。其余穿搭只有 ready（或无全身照的老穿搭）才可选。
+  const defaultNote = persona.views_status === "ready" ? null : persona.views_status === "pending" ? "三视图生成中，暂用原图" : "未生成三视图";
   const options = [
-    { id: "", name: "默认穿搭", note: persona.default_outfit, image: persona.refs[0], fits: false },
-    ...outfits.map((o) => ({ id: o.outfit_id, name: o.name, note: o.desc || o.seasons.join("、"),
-      image: o.refs[0], fits: outfitFitsSeason(o, season) })),
+    { id: "", name: "默认穿搭", note: persona.default_outfit, image: persona.views?.front ?? persona.refs[0],
+      fits: false, selectable: true, warn: defaultNote },
+    ...outfits.map((o) => {
+      const pick = outfitPickState(o);
+      return { id: o.outfit_id, name: o.name, note: o.desc || o.seasons.join("、"), image: outfitThumbKey(o),
+        fits: outfitFitsSeason(o, season), selectable: pick.selectable, warn: pick.note };
+    }),
   ];
   return (
     <div className="k-outfit-picker" role="group" aria-label="选择穿搭">
-      <div className="k-card-meta">本期穿搭{season ? `（季节：${season}）` : ""}。选中的穿搭图会替代角色的第 1 张参考图。</div>
+      <div className="k-card-meta">本期穿搭{season ? `（季节：${season}）` : ""}。选中穿搭的三视图设定图会作为人物参考；三视图未就绪的穿搭暂不能选。</div>
       {options.map((option) => (
         <button type="button" key={option.id || "default"} aria-pressed={value === option.id}
+          disabled={!option.selectable}
           className={`k-create-persona-card${value === option.id ? " active" : ""}`} onClick={() => onChange(option.id)}>
           <span className="k-create-persona-avatar">
             {option.image ? <img src={assetUrl(option.image)} alt="" /> : option.name.slice(0, 1)}
           </span>
-          <span><strong>{option.name}{option.fits ? " · 适合本季" : ""}</strong><small>{option.note || "—"}</small></span>
+          <span><strong>{option.name}{option.fits ? " · 适合本季" : ""}</strong><small>{option.note || "—"}{option.warn ? ` · ${option.warn}` : ""}</small></span>
           <span className="k-create-persona-check" aria-hidden="true">✓</span>
         </button>
       ))}

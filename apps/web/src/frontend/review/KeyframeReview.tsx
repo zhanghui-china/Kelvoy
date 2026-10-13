@@ -2,6 +2,7 @@ import { ShotFailureNotice, useShotRetry } from "./ShotFailure";
 import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
 import { keyframeReferences, type Destination, type Episode, type Persona, type Shot } from "@kelvoy/engine";
+import { personaReferenceLabel } from "./persona-reference-label";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import { describeWriteError } from "./errors";
@@ -168,7 +169,7 @@ function KeyframeShot({
           {usedRefs.persona && persona && (
             <div>
               <div className="k-card-meta">
-                角色参考 · {persona.name}{usedRefs.outfit ? ` · 穿搭「${usedRefs.outfit.name}」` : ""} · 第 {usedRefs.persona.index + 1} 张 / 共 {usedRefs.persona.total} 张
+                {personaReferenceLabel(persona.name, usedRefs.persona, usedRefs.outfit)}
               </div>
               <ZoomImage src={assetUrl(usedRefs.persona.key)} alt={`${persona.name} 角色参考图`}
                 title={`${persona.name} 角色参考`} />
