@@ -27,6 +27,7 @@ const ERROR_LABELS: Record<string, string> = {
   invalid_target: "这一镜当前不能重试，请刷新后再试",
   too_many_outfits: "穿搭已达 6 套上限，先删除一套再添加",
   outfit_not_found: "这套穿搭已不存在，请刷新后重试",
+  outfit_not_ready: "这套穿搭的三视图还没生成完成，请等待或换一套穿搭",
   invalid_ref_count: "图片数量不符：角色基础参考图 1–7 张；三视图穿搭只需 1 张全身照，旧式穿搭 1–3 张",
   invalid_file_type: "只支持 PNG / JPG / WebP 图片",
   file_too_large: "单张图片不能超过 10MB",

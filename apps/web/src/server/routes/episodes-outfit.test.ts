@@ -32,6 +32,16 @@ test("POST without outfit_id keeps the default outfit (no field written)", async
   expect(((await res.json()) as { episode: Episode }).episode.brief.outfit_id).toBeUndefined();
 });
 
+test("POST rejects a source outfit whose three views are not ready yet", async () => {
+  const cookie = await setup("outfit-pending");
+  await updatePersona("c_1", { outfits: [
+    { outfit_id: "o_src", name: "全身照", desc: "", seasons: ["秋"], refs: [], source: "persona/c_1/src.png", views_status: "pending" },
+  ] });
+  const res = await post(cookie, { outfit_id: "o_src" });
+  expect(res.status).toBe(409);
+  expect(((await res.json()) as { error: string }).error).toBe("outfit_not_ready");
+});
+
 test("POST rejects an unknown outfit_id, including one removed from the latest version", async () => {
   const cookie = await setup("outfit-missing");
   expect((await post(cookie, { outfit_id: "o_nope" })).status).toBe(400);

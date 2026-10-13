@@ -49,3 +49,11 @@ T0 只覆盖 AI 生成的写实图，下列项未验证，验证前不得对外�
 ## 拼图依赖
 
 worker 用 sharp 拼图，不用 ffmpeg。理由：ADR-0004 规定 `compose` 是唯一碰 ffmpeg 的地方、且只在 worker 上跑，拼图若走 ffmpeg 会让这条边界失效；sharp 已是 `apps/web` 的依赖（版本一致，0.35.5），worker 新增它不引入新的库选型。`composeSheet` 的签名与拼图规格不变，只替换实现。
+
+## 已知限制：三视图 job 与分镜任务共用 worker 循环
+
+`apps/worker/src/queue/consumer.ts` 只在没有阶段任务时才领取三视图 job，单个 job 最长 20 分钟（`VIEWS_JOB_TIMEOUT_MS`）。分镜队列持续不空时三视图会饿死，三视图执行期间新提交的分镜任务最多等待 20 分钟。上线初期用户量小，暂接受；若出现排队投诉，给三视图单独并发槽（移除条件：三视图排队时长在线上超过一个阶段任务的耗时）。
+
+## 已知限制：重新生成期间不可用于建作品
+
+对已 ready 的穿搭重新生成时，目标先置为 `pending` 并暂时移除旧 views。此时以该穿搭建作品会被拒绝（`409 outfit_not_ready`），不会静默退回 `refs[0]`。

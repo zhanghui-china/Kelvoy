@@ -102,6 +102,11 @@ episodes.post("/", async (c) => {
   if (req.outfit_id !== undefined && !persona.outfits?.some((o) => o.outfit_id === req.outfit_id)) {
     return c.json({ ok: false, error: "outfit_not_found" }, 400);
   }
+  // 三视图穿搭（有 source）未就绪时拒绝：否则作品会固定在无 views 的版本上，静默退回 refs[0]（ADR-0017）。
+  const chosen = req.outfit_id ? persona.outfits?.find((o) => o.outfit_id === req.outfit_id) : undefined;
+  if (chosen?.source && chosen.views_status !== "ready") {
+    return c.json({ ok: false, error: "outfit_not_ready" }, 409);
+  }
 
   // FR-01"缺字段给默认值"：新期仅开放 per_shot；
   // series_id/season/tone/banned 没有 PRD 原文默认值可抄，这里按合理取舍
