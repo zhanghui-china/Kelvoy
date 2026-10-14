@@ -162,7 +162,6 @@ function ClipShot({
               className="k-media"
               src={episodeFileUrl(episode.episode_id, shot.clip)}
               controls
-              muted
               preload="metadata"
               onLoadedMetadata={(e) => {
                 const duration = e.currentTarget.duration;

@@ -61,6 +61,12 @@ try {
     const info = JSON.parse(await new Response(probe.stdout).text());
     if (await probe.exited !== 0 || !info.streams?.length || Number(info.format.duration) < 3.8 ||
         info.streams[0].width < 864 || info.streams[0].height < 480) throw new Error("invalid original-quality output");
-    await writeFile(join(fixture, `probe-${input.no}.json`), JSON.stringify(info, null, 2));
+    // H3 clips are expected to carry ambient/action sound; report it (not a failure: compose pads silent clips).
+    const audio = Bun.spawn(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+      "stream=codec_name,sample_rate,duration", "-of", "json",
+      join(fixture, "projects", current.episode.episode_id, shot.clip)], { stdout: "pipe", stderr: "pipe" });
+    const audioInfo = JSON.parse(await new Response(audio.stdout).text());
+    console.log(JSON.stringify({ shot_no: input.no, audio_stream: audioInfo.streams?.[0] ?? null }));
+    await writeFile(join(fixture, `probe-${input.no}.json`), JSON.stringify({ ...info, audio: audioInfo.streams ?? [] }, null, 2));
   }
 } finally { close(); }

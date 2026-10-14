@@ -105,3 +105,11 @@ test("long workflow describes actual allocation and never offers one-second conv
   expect(done).toContain("每镜 3–6 秒");
   expect(clips + done).not.toContain("使用新版 1 秒剪辑");
 });
+
+test("clip review player is not muted so reviewers hear the shot's own sound", () => {
+  const withClip = { ...episode, status: "clip_review",
+    shots: [{ ...shot, status: "clip_ready", clip: "clip/01.mp4" }] } as Episode;
+  const html = render(<ClipReview episode={withClip} mutation={mutation} />);
+  expect(html).toContain("<video");
+  expect(html).not.toMatch(/<video[^>]*\smuted/);
+});
