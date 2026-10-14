@@ -5,7 +5,6 @@ import type { Episode, Shot } from "@kelvoy/engine";
 import type { WriteResult } from "../api/client";
 import {
   continueEpisode,
-  convertLegacyCuts,
   episodeFileUrl,
   patchShot,
   regenShot,
@@ -15,6 +14,7 @@ import { describeWriteError } from "./errors";
 import { GuideTip } from "../GuideTip";
 import ReviewQueue from "./ReviewQueue";
 import { ShotFocusNav } from "./ShotFocusNav";
+import UpgradeLongCutsCard, { canUpgradeToLongCuts } from "./UpgradeLongCutsCard";
 import PromptTrace from "./PromptTrace";
 import { videoPromptRefreshKey } from "./prompt-trace-key";
 import { MutationError, ShotHeader } from "./ShotHeader";
@@ -284,25 +284,18 @@ export default function ClipReview({
           <div className="k-card-title">审核 3 · 片段</div>
         </div>
         <GuideTip section="clips">{episode.cut_policy === "fixed_1s"
-          ? "每镜严格截取 1 秒，起点按 30 fps 帧格调整；看完动作并确认五项质量红线后再通过。坏镜可报告并免费重生成一次。"
+          ? "每镜严格截取 1 秒，起点按 30 fps 帧格调整（旧版剪辑，可用下方卡片升级为 3–6 秒长镜头）；看完动作并确认五项质量红线后再通过。坏镜可报告并免费重生成一次。"
           : episode.cut_policy === "long_3_6"
             ? "每镜成片 3–6 秒，最终时长由素材与目标预算分配；起点后至少保留 3 秒素材。逐镜检查动作与五项质量红线，通过后进入合成设置。"
-          : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 1 秒剪辑时，先转换并重新确认。"}</GuideTip>
+          : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 3–6 秒长镜头时，请用下方「旧版剪辑」卡片升级并重新确认。"}</GuideTip>
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />
         <MutationError error={mutation.error} />
         <ShotFailureNotice shot={episode.shots.find(shot => shot.no === activeNo)} failures={shotFailures}
           onRetry={activeNo !== null ? () => void shotRetry.retry(activeNo) : undefined}
           pending={shotRetry.pending} queued={activeNo !== null && shotRetry.isQueued(activeNo)} />
-        {episode.cut_policy !== "fixed_1s" && episode.cut_policy !== "long_3_6" && episode.shots.every((shot) => !!shot.clip) &&
-          <div className="k-card">
-            <div className="k-card-title">旧版剪辑</div>
-            <p className="k-card-meta">可保留现有片段，改为每镜严格 1 秒。转换后需要重新确认每镜起点和质量。</p>
-            <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending}
-              onClick={() => mutation.run((rowVersion) => convertLegacyCuts(episode.episode_id, rowVersion))}>
-              使用新版 1 秒剪辑
-            </button>
-          </div>}
+        {canUpgradeToLongCuts(episode) && <UpgradeLongCutsCard episode={episode} mutation={mutation}
+          title="旧版剪辑" hint="可保留现有片段，升级为每镜 3–6 秒的长镜头。升级后需要重新确认每镜起点和质量。" />}
 
         {episode.shots.map((shot) => (
           <ClipShot

@@ -105,7 +105,7 @@ draft → scripting → script_review → assets ─┬→ keyframing → kf_rev
 | 坏镜免费重做 | `POST /api/episodes/<id>/shots/<no>/report-bad` | 同 `/regen` 的 body 与约束，仅视频阶段、每镜第一次免费 |
 | 重试失败任务 | `POST /api/episodes/<id>/retry` `{"row_version":7}` | 不带 `shot_no`／`all` 时取最近一个可重试的失败任务（`failed_task`）；没有则 400 `no_failed_task`。可选 `shot_no`（正整数）只重试该镜，`all:true` 重试全部可重试失败（二者互斥，否则 400 `invalid_target`）；成功返回 `queued`／`skipped` 明细。先读 `GET` 详情里的 `failed_tasks`（`[{stage,shot_no}]`，全部可重试失败）告诉用户哪几步失败，`failed_task` 仍是最近一个。完整说明见 `docs/api/retry.md` |
 | 重新合成 | `POST /api/episodes/<id>/recompose` `{"row_version":7}` | 只允许 `done`。合成失败走 `/retry` |
-| 旧期转固定一秒 | `POST /api/episodes/<id>/convert-cuts` `{"row_version":7}` | 仅无 `cut_policy=fixed_1s` 的旧期，且在 `clip_review`／`done` 且全部镜有 clip。转换后所有镜回到 `clip_ready`，须重新审核，让用户决定 |
+| 旧期升级长镜头 | `POST /api/episodes/<id>/upgrade-long-cuts` `{"row_version":7,"duration_s":30}` | 仅 `cut_policy` 为 `fixed_1s`／`beat_aligned` 的旧期，且在 `clip_review`／`done` 且全部镜有 clip。`duration_s` 须满足 镜数×3 ≤ 值 ≤ 镜数×6，否则 400 `duration_infeasible`（返回 `shots`／`min_s`／`max_s`）；缺失或非数值 400 `invalid_duration`。升级后所有镜回到 `clip_ready`、起点清空，旧成片暂停交付，须重新审核，让用户决定。旧 1 秒期约 28 镜，通常需先删镜 |
 
 不合法的组合返回 400 `illegal_transition`，原样告知用户，不用 PATCH 状态绕过。
 

@@ -13,7 +13,7 @@ import {
   submitShotRegeneration,
   submitScriptAction,
   submitFailedTaskRetry,
-  convertLegacyCuts,
+  upgradeToLongCuts,
 } from "@kelvoy/store";
 import { Hono } from "hono";
 import { loadOwnedEpisode, parseRowVersion, patchErrorResponse } from "./episode-common";
@@ -26,14 +26,16 @@ import { loadOwnedEpisode, parseRowVersion, patchErrorResponse } from "./episode
  */
 const review = new Hono();
 
-review.post("/:id/convert-cuts", async (c) => {
+review.post("/:id/upgrade-long-cuts", async (c) => {
   const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
   if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
   const body = await c.req.json().catch(() => null);
   const rowVersion = parseRowVersion(body);
   if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
-  const result = convertLegacyCuts({ episode_id: loaded.episode.episode_id,
-    owner_id: c.get("ownerId"), row_version: rowVersion });
+  const durationS = (body as Record<string, unknown>).duration_s;
+  if (typeof durationS !== "number" || !Number.isFinite(durationS)) return c.json({ ok: false, error: "invalid_duration" }, 400);
+  const result = upgradeToLongCuts({ episode_id: loaded.episode.episode_id,
+    owner_id: c.get("ownerId"), row_version: rowVersion, duration_s: durationS });
   if (!result.ok) return c.json(result, result.error === "version_conflict" ? 409 :
     result.error === "not_found" ? 404 : 400);
   return c.json(result);

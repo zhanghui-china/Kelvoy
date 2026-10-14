@@ -28,7 +28,7 @@ Users pick one virtual on-camera character and one scenic-level destination; the
   - **Keyframe path (default in the new-episode UI)**: 1–3 keyframe candidates per shot → manual selection → image-to-video;
   - **Direct path (selectable in advanced settings)**: character reference image + landmark photo go straight to dual-reference video generation, skipping image generation entirely;
 - Per-shot clip review, trim-point refinement, and quality red-line confirmation;
-- Fixed one-second-per-shot cutting (30 frames @30fps), LUT grading, subtitles, transitions, intro/outro, and AI labeling in the compose stage;
+- Long-shot cutting (3–6 s per shot, ~30 s total; legacy works keep fixed one-second cuts), LUT grading, subtitles, transitions, intro/outro, and AI labeling in the compose stage;
 - Final-cut delivery, versioning, share links, and credit/usage reporting.
 
 Each episode delivers a **travel vlog with freely adjustable shot count and one second per shot in 9:16 portrait (default) or 16:9 landscape**; the same character can be reused across destinations, forming the content of a serialized travel account.
@@ -94,11 +94,11 @@ Kelvoy is not a general-purpose AI video generator — it does exactly one genre
 
 - New projects store `cut_policy: "fixed_1s"`: **exactly 30 frames per shot** on a 30fps timeline; music only covers the full film and never moves cut points;
 - `trim_start_s` snaps to 1/30-second grid; composing uses integer-frame windows, and the Worker validates that selections never run past the clip end;
-- Each shot gets an editable caption (`Shot.caption`); subtitles are burned into the one-second window per shot, with intro offsets naturally carried by the concatenation order;
+- Each shot gets an editable caption (`Shot.caption`); subtitles are burned into each shot's actual window, with intro offsets naturally carried by the concatenation order;
 - Adjacent shots cross-dissolve over 2 frames before/after each cut point with no change in total frame count; subtitles and transitions default on and can be turned off in compose setup;
 - Intro/outro default off and can be selected in compose setup from delivered assets;
 - After clip review the episode enters the `compose_ready` setup stage; composing is enqueued only after the user confirms settings and clicks "Start compose";
-- Old projects fall back to `beat_aligned`, keep their original beat-cut strategy, and can be explicitly converted to the new one-second cutting.
+- Old projects fall back to `beat_aligned`, keep their original beat-cut strategy, and legacy `fixed_1s` / `beat_aligned` works can be explicitly upgraded to long shots via `/upgrade-long-cuts` (a target total duration is required, with 3×shots ≤ duration ≤ 6×shots).
 
 ### 2.5 Credit Accounting and Cost Reports
 
@@ -251,7 +251,7 @@ Any generating state may enter `failed`; marking regeneration in reviews 2/3 mov
 - `cut_policy`: `fixed_1s` (new projects) / `beat_aligned` (backfilled for old projects)
 - `EpisodeMode`: `per_shot` / `grid`; `grid` is read-only for old JSON, new episodes accept only `per_shot`
 - `SceneTime`: morning / noon / afternoon / evening / night; `size` ∈ wide / medium / close / detail / pov; `camera` ∈ static / pan / push / follow
-- `Shot.caption`: per-shot caption (burned by the fixed one-second cutting)
+- `Shot.caption`: per-shot caption (burned in at compose time)
 - `Episode.final`: final-cut metadata (version, duration, resolution, frame rate, size, completion time; written after ffprobe verification)
 
 ### 3.5 Models and Endpoints per Pipeline Stage
@@ -300,7 +300,7 @@ The frontend uses **React built-in state + polling**. Main API endpoints:
 | `/api/episodes/:id/…` | GET / PATCH | Episode detail, edits, file access, save-as-template |
 | `/api/episodes/:id/script/:action` | POST | Script optimize / regenerate |
 | `/api/episodes/:id/shots…` | PATCH / POST | Per-shot edits, reorder, regenerate, remove, bad-shot report |
-| `/api/episodes/:id/continue` / `retry` / `recompose` / `convert-cuts` / `share` | POST | Stage advance, failure retry, re-compose, cut conversion, share toggle |
+| `/api/episodes/:id/continue` / `retry` / `recompose` / `upgrade-long-cuts` / `share` | POST | Stage advance, failure retry, re-compose, long-shot upgrade, share toggle |
 | `/api/share/:slug` · `/:slug/final.mp4` | GET | Public share page and final cut (no login required) |
 | `/api/assets/:path` | GET | Official asset access (row-level owner filtering) |
 
@@ -734,7 +734,7 @@ Play the full cut, download the MP4, and view this episode's estimated and used 
 | Core scenario | Scenic-cultural-IP storytelling | Virtual-character travel content production |
 | Character consistency | Three-view references + fixed art style | Three-view + version snapshots + dual-reference direct video |
 | Generation mode | Fully automatic pipeline | Six stages + human review gates + two creation paths (keyframe default / direct optional) |
-| Editing | Page rhythm with narration | Strict one-second (30-frame) fixed cutting + subtitle burn-in + 2-frame transitions |
+| Editing | Page rhythm with narration | Long-shot cutting (3–6 s per shot; legacy works: strict one-second fixed cutting) + subtitle burn-in |
 | Architecture | Web + FastAPI | Web + Worker + local SQLite + FastAPI inference adapter + ComfyUI |
 | Resource accounting | None | Atomic credit reserve/settle/release + versioned delivery + usage page |
 | Hardware utilization | Full DGX Spark local stack | DGX Spark time-slicing + ComfyUI + API overflow + ffmpeg compose |

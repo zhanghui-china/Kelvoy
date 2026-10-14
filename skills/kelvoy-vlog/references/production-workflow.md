@@ -65,7 +65,7 @@ API 缺省的 `references` 模式没有 `keyframing`／`kf_review`（Web 界面�
 | 某镜或某阶段 `failed` | 读 `failed_tasks`（`failed_task` 为其中最近一个），告诉用户是哪几镜哪一步，用户决定后 `/retry`；不带参数只重试最近一个，`shot_no` 指定单镜，`all` 一次重试当前阶段全部失败镜头 |
 | 仍在生成 | 只观察，不叠加任务 |
 | 成片要重剪 | 在 `done` 用 `/recompose`；合成失败用 `/retry` |
-| 旧期（无 `cut_policy=fixed_1s`）想用新剪辑 | 向用户说明所有镜要重审，用户同意才 `/convert-cuts` |
+| 旧期（`fixed_1s`／`beat_aligned`）想用 3–6 秒长镜头 | 向用户说明所有镜要重审、旧成片暂停交付、需指定目标总时长（镜数×3 ~ 镜数×6），用户同意才 `/upgrade-long-cuts` |
 
 prompt 写入失败就停止，不用旧 prompt 开新任务。局部返工后读作品，核对其他镜的候选、选图、片段未变；被替换的内容重新过对应审核点。重新合成只入队合成，不重跑单镜。所有生成类操作先查余额（见 API 参考「积分」）。
 

@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
 import { subtitlesEnabled, type Episode } from "@kelvoy/engine";
-import { convertLegacyCuts, episodeFileUrl, patchEpisode, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
+import { episodeFileUrl, patchEpisode, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
 import ShareActions from "./ShareActions";
+import UpgradeLongCutsCard, { canUpgradeToLongCuts } from "./UpgradeLongCutsCard";
 import { MutationError } from "./ShotHeader";
 import { tally } from "./tally";
 import type { EpisodeMutation } from "./useEpisodeMutation";
@@ -83,16 +84,8 @@ export default function DoneView({
         </div>
       </div>
       <p className="k-card-meta">{episode.cut_policy === "long_3_6" ? `每镜 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入` : episode.cut_policy === "fixed_1s" ? "每镜 1 秒" : "沿用旧项目的节拍切点"}</p>
-      {episode.cut_policy !== "fixed_1s" && episode.cut_policy !== "long_3_6" && episode.mode === "per_shot" &&
-        episode.shots.length > 0 && episode.shots.every((shot) => !!shot.clip) &&
-        <div className="k-card">
-          <div className="k-card-title">使用新版 1 秒剪辑</div>
-          <p className="k-card-meta">保留片段，逐镜重新确认 1 秒选段。转换后旧成片暂停交付，完成新版合成后可恢复分享。</p>
-          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending}
-            onClick={() => mutation.run((rowVersion) => convertLegacyCuts(episode.episode_id, rowVersion))}>
-            转换并重新确认选段
-          </button>
-        </div>}
+      {canUpgradeToLongCuts(episode) && <UpgradeLongCutsCard episode={episode} mutation={mutation}
+        title="升级为 3–6 秒长镜头" hint="保留片段，逐镜重新确认起点。升级后旧成片暂停交付，完成新版合成后可恢复分享。" />}
 
       <div className="k-card k-share-card">
         <div className="k-card-title">分享</div>

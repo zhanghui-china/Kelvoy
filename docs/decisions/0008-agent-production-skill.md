@@ -35,7 +35,7 @@
 原决策里"首版契约限定已核对旧部署 `c8ab053`"不再成立。GX10 已切到 main `b19ee81`（见 `infra/dgx/gx10-8e22-main-deployment.md`），旧部署不再在线，继续在 Skill 里保留两套契约会让唯一可用的实例触发"遇新版先暂停"而无法使用。按 CLAUDE.md 原则 10，直接删除旧兼容。
 
 - **契约来源**：Skill 的 API 与流程描述以 GitHub main 为准，不再保留 `c8ab053`、`pacing_version`、`music.enabled`、单镜 `/retry`、`/recompose` 接受 failed 等旧部署内容。
-- **新增覆盖**：`compose_ready` 与固定一秒剪辑、积分预留与 402、期级 `/retry`、`/report-bad`、`/script/regenerate|optimize`、`/convert-cuts`、`video_source=references` 默认路径（无关键帧审核）、`episode.final` 成片元数据。积分仍由运维发放，Skill 不发放。
+- **新增覆盖**：`compose_ready` 与固定一秒剪辑、积分预留与 402、期级 `/retry`、`/report-bad`、`/script/regenerate|optimize`、`/upgrade-long-cuts`（原 `/convert-cuts`，2026-10-14 改为升级长镜头）、`video_source=references` 默认路径（无关键帧审核）、`episode.final` 成片元数据。积分仍由运维发放，Skill 不发放。
 - **证据不再随 Skill 发布**：原 API 参考里的证据等级表和提交号随旧契约一并删除。需要追溯时看对应 main 提交的 `apps/web/src/server/routes/` 与 `packages/engine/src/`，不在运行时文档里维护第二份版本史。
 - **版本探测**：在已登录的 `GET /api/me` 响应里增加 `api_contract` 整数（常量 `API_CONTRACT` 定义在 `packages/engine/src/schema/api.ts`，当前为 1）。不放 `/api/health`：该接口匿名，且部署有公网入口，匿名暴露版本等于提供指纹；Skill 本来就需要会话，读 `/api/me` 即可。用递增整数而非 commit，因为客户端要回答的是“是否符合我描述的契约”，哈希不可比较。已有 `/api/*` 请求或响应形状发生会让旧客户端出错的变化时递增；纯新增字段不递增。这是向后兼容的新增字段，不跨模块边界，不另立 ADR。commit 暴露暂不做，真有排查需求再用 systemd drop-in 注入环境变量。
 - **不变**：Skill 仍只经公开 HTTP API 与会话执行，不直写 SQLite、不碰推理或 ComfyUI，三个审核点只能由用户决定；范围仍是已有角色、目的地、模板的单期生产。

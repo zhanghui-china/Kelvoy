@@ -378,8 +378,8 @@ export function retryFailedTask(episodeId: string, rowVersion: number,
   return apiFetch<RetryResponse>(episodePath(episodeId, "/retry"), { method: "POST", body: JSON.stringify(body) });
 }
 
-export function convertLegacyCuts(episodeId: string, rowVersion: number) {
-  return post(episodePath(episodeId, "/convert-cuts"), { row_version: rowVersion });
+export function upgradeToLongCuts(episodeId: string, rowVersion: number, durationS: number) {
+  return post(episodePath(episodeId, "/upgrade-long-cuts"), { row_version: rowVersion, duration_s: durationS });
 }
 
 export function regenerateScript(episodeId: string, rowVersion: number) {

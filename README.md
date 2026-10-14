@@ -29,7 +29,7 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
 - **虚拟角色 × 真实目的地垂直体裁**：角色是账号级资产（人设、外形跨期一致，每期可换穿搭），目的地是共享资产（官方维护景区级符号包 + 地标实景参考图）；
 - **两条创作路径**：Web 新建界面默认走关键帧路径，每镜 1–3 张关键帧候选（Qwen-Image 2.1）逐镜挑选后再生成视频；也可在高级设置选择"人物参考图 + 地标实景图"双参考图直出视频（MiniMax H3），省去图片生成；API 不传 `video_source` 时缺省为直出；
 - **三个人工审核点**：脚本审核（可改、可删、可按指令重生成）、关键帧审核（传统路径）、片段审核（质量红线逐条确认），不确定性压在便宜的静帧阶段；
-- **逐镜剪辑合成**：每镜 3–4 秒，字幕烧录、2 帧片内转场、LUT、片头片尾、AI 标识全部在 ffmpeg 合成阶段完成；
+- **逐镜剪辑合成**：每镜 3–6 秒（旧作品 1 秒），字幕烧录、旧 1 秒作品的 2 帧片内转场、LUT、片头片尾、AI 标识全部在 ffmpeg 合成阶段完成；
 - **成本可控与积分核算**：本地 DGX Spark 自部署为主、国内 API 弹性溢出；动作级积分原子预留 / 结算 / 释放，成片版本化 + ffprobe 验证 + 用量页；
 - **本地优先架构**：SQLite 唯一真源 + 本地磁盘产物 + 无 Redis / Postgres / 对象存储（ADR-0004）。
 
@@ -48,7 +48,7 @@ Kelvoy 是一个面向"虚拟角色 × 真实目的地"旅行内容生产的多�
   → [S2] 角色资产版本快照
   → [S3] 关键帧生成（传统路径，每镜 1–3 候选）── 审核 2：挑关键帧
   → [S4] 视频生成（双参考直出 / 图生视频）── 审核 3：挑片段
-  → [S5] 合成设置 → 合成输出：每镜 3–4 秒 + LUT + 字幕 + 转场 + AI 标识 MP4
+  → [S5] 合成设置 → 合成输出：每镜 3–6 秒 + LUT + 字幕 + 转场 + AI 标识 MP4
 ```
 
 **直出路径（高级设置可选；API 缺省）**：脚本审核通过后，角色参考图 + 地标实景图直接送 MiniMax H3 双参考图生视频工作流，从素材检查直达片段审核，不产生图片候选与关键帧审核。
@@ -250,10 +250,10 @@ make lint         # ruff（Python 侧）
 
 [`kelvoy-vlog`](skills/kelvoy-vlog/SKILL.md) 通过已有 Kelvoy 实例和素材，提供建期、续跑、三个审核点协作、指定镜头返工和重新合成。可用 `$kelvoy-vlog` 调用；`.agents/skills/kelvoy-vlog` 相对符号链接指向仓库内唯一技能目录。
 
-首版契约核对范围是 2026-10-05 GX10 部署记录 `c8ab053` 及相关补丁。当前 main 已新增 `compose_ready`、固定一秒剪辑等能力，不能直接套用首版旧部署流程；使用前按 [API 与版本说明](skills/kelvoy-vlog/references/kelvoy-api.md) 确认目标实例。三个审核点仍需用户决定，素材建设、部署与平台发布不在首版范围。
+首版契约核对范围是 2026-10-05 GX10 部署记录 `c8ab053` 及相关补丁。当前 main 已新增 `compose_ready`、长镜头剪辑等能力，不能直接套用首版旧部署流程；使用前按 [API 与版本说明](skills/kelvoy-vlog/references/kelvoy-api.md) 确认目标实例。三个审核点仍需用户决定，素材建设、部署与平台发布不在首版范围。
 
 提供可访问服务地址并在浏览器登录，避免在聊天中发送密码。例如：“使用 kelvoy-vlog，用已有阿澄、黄山和名山登顶模板做一期安静的旅行 Vlog。”组织决策见 [ADR-0008](docs/decisions/0008-agent-production-skill.md)，检查结果与真实验收待办见 [验收记录](docs/superpowers/specs/2026-10-06-kelvoy-vlog-skill-validation.md)。
 
 ### 官方 H3 提示词编写
 
-所有新视频生成先按固定官方 `h3-prompt-writing` 编写英文提示词，中文编辑原稿保留；新素材为 4–5 秒，成片每镜仍为 1 秒。提示词编写计入已有视频价格，手工保存不调用模型。官方原文、来源散列和许可位于 [skills/h3-prompt-writing](skills/h3-prompt-writing/UPSTREAM.json)，运行与缓存说明见 [Worker 手册](apps/worker/README.md#h3-提示词编写)，职责见 [ADR-0011](docs/decisions/0011-h3-prompt-writing.md)。
+所有新视频生成先按固定官方 `h3-prompt-writing` 编写英文提示词，中文编辑原稿保留；新素材为 4–5 秒，成片每镜 3–6 秒（旧 1 秒作品保持不变）。提示词编写计入已有视频价格，手工保存不调用模型。官方原文、来源散列和许可位于 [skills/h3-prompt-writing](skills/h3-prompt-writing/UPSTREAM.json)，运行与缓存说明见 [Worker 手册](apps/worker/README.md#h3-提示词编写)，职责见 [ADR-0011](docs/decisions/0011-h3-prompt-writing.md)。

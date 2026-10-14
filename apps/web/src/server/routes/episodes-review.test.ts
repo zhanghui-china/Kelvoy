@@ -559,3 +559,19 @@ test("POST /:id/share 400s on a missing enabled flag", async () => {
   });
   expect(res.status).toBe(400);
 });
+
+test("upgrade-long-cuts validates duration, isolates owners and moves a legacy film back to clip review", async () => {
+  const { cookie, ownerId } = await login("upgrade_owner");
+  const other = await login("upgrade_other");
+  const ep = fixture("ep_upgrade", ownerId); ep.status = "done"; ep.cut_policy = "fixed_1s";
+  ep.shots = [shotFixture(1, { clip: "clip/1.mp4", status: "approved" }), shotFixture(2, { clip: "clip/2.mp4", status: "approved" })];
+  await insertEpisode(ep);
+  const app = buildApp(); const headers = { cookie, "content-type": "application/json" };
+  const post = (init: object, h = headers) => app.request("/api/episodes/ep_upgrade/upgrade-long-cuts", { method: "POST", headers: h, body: JSON.stringify(init) });
+  expect((await post({ row_version: 1 })).status).toBe(400);
+  expect((await post({ row_version: 1, duration_s: 30 })).status).toBe(400);
+  expect((await post({ row_version: 1, duration_s: 8 }, { cookie: other.cookie, "content-type": "application/json" })).status).toBe(404);
+  const ok = await post({ row_version: 1, duration_s: 8 });
+  expect(ok.status).toBe(200);
+  expect((await post({ row_version: 1, duration_s: 8 })).status).toBe(409);
+});

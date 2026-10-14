@@ -158,7 +158,7 @@ draft → scripting → script_review → assets → keyframing → kf_review
 | draft / scripting / assets / failed | `ProgressView` | 等待 / 失败重试 |
 | script_review | `ScriptReview` | 改镜、删镜、重排、脚本助手、继续 |
 | keyframing / kf_review | `KeyframeReview` | 选关键帧、改 prompt 重生成、继续 |
-| clipping / clip_review | `ClipReview` | 选 1 秒起点、五项红线确认、坏镜报告 |
+| clipping / clip_review | `ClipReview` | 选起点、五项红线确认、坏镜报告、旧作品升级长镜头 |
 | compose_ready | `ComposeSetup` | 标题 / 字幕 / 转场 / 配乐 / 片头片尾，保存后开始合成 |
 | composing / done | `DoneView` | 播放、下载、分享、重做镜头、重新合成 |
 
@@ -169,7 +169,7 @@ draft → scripting → script_review → assets → keyframing → kf_review
 - **任务下发**：审片台写路由只改期 JSON（审核决策、产物指针）并写任务进 `tasks` 表；`continue` 路由按阶段决定下发整期任务还是逐镜任务（关键帧 / 视频按镜拆分，各带 `shot_no`）；
 - **素材快照**：期详情接口按期记录的 `persona_version` / `destination_version` 返回当时的角色与目的地快照，后续资产修改不影响老期；
 - **失败重试**：`/retry` 按数据库中的失败任务重新入队，使用新动作积分预留并沿用原 `generation_id`，已成功落盘的候选直接复用；
-- **旧项目迁移**：`/convert-cuts` 把旧节拍剪辑转为每镜严格 1 秒，保留片段、逐镜回到待确认状态，旧成片暂停交付。
+- **旧项目升级**：`/upgrade-long-cuts`（需 `duration_s`，须满足 镜数×3 ≤ 时长 ≤ 镜数×6）把旧 1 秒／节拍剪辑升级为 `long_3_6`，保留片段、逐镜回到待确认状态，旧成片暂停交付。
 
 ---
 
@@ -259,7 +259,7 @@ Web 不自建存储：所有读写经 `@kelvoy/store`（唯一拥有 SQLite 连�
 | `EpisodeDetailPage` | 审片台容器：轮询 + 状态分发 + 存为模板入口 |
 | `ScriptReview` | 审核 1：表格 / 故事板双视图、镜编辑、删镜（下限 24）、重排、CSV 导出、脚本助手（优化指令 / 重新生成） |
 | `KeyframeReview` | 审核 2：候选并排点选（顺序即生成顺序，不打分）、地标与角色参考对照、改 prompt 重生成、策划稿查看 |
-| `ClipReview` | 审核 3：播放器 + 起点滑块（1/30s 吸附，拖动实时预览 1 秒）、五项质量红线逐条确认、坏镜报告、旧剪辑转换 |
+| `ClipReview` | 审核 3：播放器 + 起点滑块（旧 1 秒作品 1/30s 吸附）、五项质量红线逐条确认、坏镜报告、旧剪辑升级长镜头 |
 | `ComposeSetup` | 合成设置：标题 / 字幕 / 转场 / 配乐 / 片头片尾，保存后才能开始合成 |
 | `DoneView` | 成片交付：播放校验、下载、分享（复制文案 / 链接 / 平台入口 / 二维码）、成本报告、重做镜头、重新合成 |
 | `ReviewQueue` / `ShotFocusNav` | 待审队列与逐镜导航（上一镜 / 下一镜 / 展开全部） |

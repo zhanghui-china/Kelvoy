@@ -69,8 +69,8 @@ Kelvoy 的护城河不在模型，而在 **角色资产、目的地库和跨期�
 | S1 | 脚本生成 | 5–10 镜分镜 JSON（含逐镜字幕） | 审核 1：改脚本 |
 | S2 | 角色资产 | 参考图集 + 角色卡（版本快照） | — |
 | S3 | 关键帧生成（关键帧路径） | 每镜 1–3 候选 9:16 / 16:9 画面 | 审核 2：挑关键帧 |
-| S4 | 视频生成 | 每镜 3–5 秒片段（供截取 1 秒） | 审核 3：挑片段 |
-| S5 | 合成输出 | 每镜 1 秒卡拍 + LUT + 字幕 + 转场 + 片头片尾 + AI 标识 MP4 | 合成设置确认 |
+| S4 | 视频生成 | 每镜 4–5 秒片段（供选段） | 审核 3：挑片段 |
+| S5 | 合成输出 | 每镜 3–6 秒长镜（旧作品为 1 秒）+ LUT + 字幕 + 转场 + 片头片尾 + AI 标识 MP4 | 合成设置确认 |
 
 **核心设计理念**：不确定性全部压在 S1–S3 的静帧阶段（迭代便宜），S4 只让模型"动一下"，S5 用剪辑节奏收尾。
 
@@ -79,7 +79,7 @@ Kelvoy 的护城河不在模型，而在 **角色资产、目的地库和跨期�
 2026-09 起提供 `video_source: "references"` 直出路径；新建界面默认选择关键帧，直出可在高级设置中选择（API 不传该字段时缺省仍为 `references`）：
 
 - 每镜将 **角色版本快照中的第一张人物参考图** 与 **脚本所指地标的第一张实景参考图**，按顺序送入 MiniMax H3 双参考图生视频工作流（`2_2_DualRef2Video_MinimaxH3`）；未指定地标的镜头使用目的地首个场景参考图；
-- 视频提示词合并画面与动作描述，沿用项目的 9:16 / 16:9 比例，生成 3–4 秒素材供用户截取；
+- 视频提示词合并画面与动作描述，沿用项目的 9:16 / 16:9 比例，生成 4–5 秒素材供用户选段；
 - 从脚本审核经过素材检查直接进入视频生成与片段审核，**不产生图片候选、关键帧审核或图片积分**；
 - 新建页默认 `video_source: "keyframe"` 走关键帧流程，用户可在高级设置中改选直出；旧项目按原流程运行，不自动转换。
 
@@ -91,15 +91,15 @@ Kelvoy 不做通用 AI 视频生成器，只做 **"虚拟角色 × 旅游目的�
 - **目的地是共享资产**：官方维护景区级符号包，每个地标配 3–10 张实景参考图 + 最佳机位 / 时段 + 必须保真特征；首批内置无锡南长街、无锡拈花湾、无锡灵山大佛、泰山、黄山五条；
 - **叙事骨架模板化**：六种 `DestinationType`（名山登顶 / 城市街区夜游 / 主题小镇 / 大型景区 / 古镇水乡 / 海岛）对应六种镜头语法，内置六个官方模板。
 
-### 2.4 固定一秒剪辑与合成工作台
+### 2.4 剪辑策略与合成工作台
 
-- 新项目保存 `cut_policy: "fixed_1s"`：30fps 时间线上 **每镜恰好 30 帧**，音乐只覆盖全片、不移动切点；
-- `trim_start_s` 按 1/30 秒吸附，合成使用整数帧窗口，Worker 验证选段不越过片尾；
-- 每镜生成可编辑字幕（`Shot.caption`），字幕按每镜一秒窗口烧录，片头偏移由拼接顺序自然带入；
-- 相邻镜头切点前后各 2 帧片内淡出 / 淡入，总帧数不变；字幕与转场默认开启、可在合成设置页关闭；
+- 新项目保存 `cut_policy: "long_3_6"`（2026-10-10 起）：每镜 3–6 秒、目标约 30 秒（片头片尾计入，±0.5 秒），各镜实际时长由素材、选段起点、配乐拍点联合分配；历史 `fixed_1s` 作品每镜恰好 30 帧，保留为存量；
+- `trim_start_s` 合成使用整数帧窗口，Worker 验证选段不越过片尾；
+- 每镜生成可编辑字幕（`Shot.caption`），字幕按各镜实际成片窗口烧录，片头偏移由拼接顺序自然带入；
+- 旧 1 秒作品相邻镜头切点前后各 2 帧片内淡出 / 淡入，总帧数不变；长镜头作品不使用转场；字幕默认开启、可在合成设置页关闭；
 - 片头片尾默认关闭，可在合成设置阶段选择已交付的片头、片尾和音乐；
 - 片段审核完成后进入 `compose_ready` 设置阶段，用户确认设置并点"开始合成"才入队；
-- 旧项目缺省回填 `beat_aligned`，保留原节拍切点策略，可显式转换为新版 1 秒剪辑。
+- 旧项目缺省回填 `beat_aligned`；`fixed_1s` / `beat_aligned` 旧作品可通过 `/upgrade-long-cuts` 显式升级为长镜头（需指定目标总时长，满足 镜数×3 ≤ 时长 ≤ 镜数×6）。
 
 ### 2.5 积分核算与成本报告
 
@@ -250,7 +250,7 @@ draft → generating_kf → kf_ready → kf_selected → generating_clip → cli
 - `cut_policy`：`fixed_1s`（新项目）/ `beat_aligned`（旧项目回填）
 - `EpisodeMode`：`per_shot` / `grid`；`grid` 仅用于旧 JSON 读取，新建只接受 `per_shot`
 - `SceneTime`：morning / noon / afternoon / evening / night；`size` ∈ wide / medium / close / detail / pov；`camera` ∈ static / pan / push / follow
-- `Shot.caption`：逐镜字幕（新版固定一秒剪辑烧录用）
+- `Shot.caption`：逐镜字幕（合成烧录用）
 - `Episode.final`：成片版本元数据（版本号、时长、宽高、帧率、大小、完成时间，ffprobe 校验后写入）
 
 ### 3.5 流水线各环节模型与端点配置
@@ -259,8 +259,8 @@ draft → generating_kf → kf_ready → kf_selected → generating_clip → cli
 |------|------|------------|------|
 | 脚本 / 分镜 | `providers/stepfun-llm.ts` | StepFun API（`STEPFUN_API_KEY`） | brief + 目的地包 → 镜数自由的 JSON（首次约 28 镜仅为起点）（含逐镜字幕）；结构化输出 + schema 校验；地标条目必须来自目的地库；支持按指令优化重生成 |
 | 关键帧（关键帧路径） | `services/inference /image/` → ComfyUI | Qwen-Image 2.1（单参考 = 角色；双参考 = 角色 + 地标） | 每镜 1–3 候选；9:16 / 16:9；生成预算 240 秒 |
-| 图生视频（关键帧路径） | `services/inference /video/` → ComfyUI | MiniMax H3 单参考（已审核关键帧） | 3–5 秒素材截取 1 秒；预算 240 秒 |
-| 双参考直出（高级设置可选） | `services/inference /video/` → ComfyUI | MiniMax H3 双参考（角色 + 场景） | 3–5 秒素材截取 1 秒；预算 270 秒；无图片积分 |
+| 图生视频（关键帧路径） | `services/inference /video/` → ComfyUI | MiniMax H3 单参考（已审核关键帧） | 4–5 秒素材按选段截取；预算 240 秒 |
+| 双参考直出（高级设置可选） | `services/inference /video/` → ComfyUI | MiniMax H3 双参考（角色 + 场景） | 4–5 秒素材按选段截取；预算 270 秒；无图片积分 |
 | 视频溢出 | `providers/kling-api.ts`、`jimeng-api.ts` | 可灵 / 即梦 API | 本地重试 ≤ 2 次后自动切换 |
 | 音乐（生成） | `comfyui-bridge /api/music` | ACE-STEP 1.5 XL + **MinimaxMusic 3** | 文生音乐；MinimaxMusic 3 支持风格 + 歌词 + 时长（最长 180s） |
 | 音乐（检索） | `providers/music-library.ts` | 授权素材库 | 按语气检索已有曲目 |
@@ -299,7 +299,7 @@ draft → generating_kf → kf_ready → kf_selected → generating_clip → cli
 | `/api/episodes/:id/…` | GET / PATCH | 期详情、修改、文件访问、存为模板 |
 | `/api/episodes/:id/script/:action` | POST | 脚本优化指令 / 重新生成 |
 | `/api/episodes/:id/shots…` | PATCH / POST | 逐镜编辑、重排、重生成、删除、坏镜报告 |
-| `/api/episodes/:id/continue` / `retry` / `recompose` / `convert-cuts` / `share` | POST | 阶段推进、失败重试、重新合成、剪辑转换、分享开关 |
+| `/api/episodes/:id/continue` / `retry` / `recompose` / `upgrade-long-cuts` / `share` | POST | 阶段推进、失败重试、重新合成、升级长镜头、分享开关 |
 | `/api/share/:slug` · `/:slug/final.mp4` | GET | 公开分享页与成片（不依赖登录态） |
 | `/api/assets/:path` | GET | 官方资产访问（行级 owner 过滤） |
 
