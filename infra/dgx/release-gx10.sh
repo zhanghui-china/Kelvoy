@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# 从本机把当前 main 发布到 GX10（Web + Worker）。Inference 不动。
+# 从本机把当前 main 发布到 DGX 节点（Web + Worker）。Inference 不动。
+# NODE=gx10（默认）或 NODE=spark（黑客松节点，SSH 走公网 6063 端口、密钥 ~/.ssh/kelvoy_dgx，
+# 账号与地址见 infra/dgx/README.md，须通过 GX10_HOST=<user>@<ip> 给出）。惯例先 spark、后 gx10。
 #
 # 用法：
-#   GX10_HOST=<user>@100.80.224.95 infra/dgx/release-gx10.sh <label> [stage] [迁移参数...]
+#   [NODE=spark GX10_HOST=<user>@<ip>] infra/dgx/release-gx10.sh <label> [stage] [迁移参数...]
 #   stage：check | prepare | switch | verify | all（默认 all）
 #   迁移参数（仅当 packages/store/src/schema.ts 有改动时必须给）：
 #     --allow-new-table <表名> --allow-migration <迁移id>   （可重复）
@@ -29,8 +31,14 @@ STAGE="${2:-all}"
 shift $(( $# >= 2 ? 2 : 1 ))
 MIGRATION_ARGS=("$@")
 
-GX10_HOST="${GX10_HOST:-huntun@100.80.224.95}"   # 默认值取自 README 记录的 gx10-8e22 SSH 账号
-KEY="${GX10_KEY:-$HOME/.ssh/visionary_dgx}"
+NODE="${NODE:-gx10}"
+case "$NODE" in
+  gx10)  GX10_HOST="${GX10_HOST:-huntun@100.80.224.95}"   # 默认值取自 README 记录的 gx10-8e22 SSH 账号
+         PORT="${GX10_PORT:-22}";   KEY="${GX10_KEY:-$HOME/.ssh/visionary_dgx}" ;;
+  spark) GX10_HOST="${GX10_HOST:?NODE=spark 需要 GX10_HOST=<user>@<ip>（见 infra/dgx/README.md 黑客松节点一节）}"
+         PORT="${GX10_PORT:-6063}"; KEY="${GX10_KEY:-$HOME/.ssh/kelvoy_dgx}" ;;
+  *) echo "未知 NODE: ${NODE}（gx10 | spark）" >&2; exit 2 ;;
+esac
 DATA_ROOT_REL="kelvoy/apps/web"   # 相对节点 $HOME；其下 data/kelvoy.db 与 projects/
 PATH_FIX='export PATH=$HOME/.bun/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin'
 
@@ -42,7 +50,7 @@ NAME="${LABEL}-$(date +%Y%m%d)-${SHORT}"
 PKG_DIR="${TMPDIR:-/tmp}/kelvoy-release-$NAME"
 TARBALL="$PKG_DIR/$NAME.tgz"
 
-ssh_run() { ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=15 "$GX10_HOST" "$@"; }
+ssh_run() { ssh -i "$KEY" -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$GX10_HOST" "$@"; }
 # 在节点上跑一段脚本：统一 pipefail 与 PATH，N=发布名通过环境传入。
 remote() { ssh_run "N=$NAME bash -se" <<EOF
 set -eo pipefail
@@ -103,7 +111,7 @@ PY
   if tar -tzf "$TARBALL" | grep -q '/\._'; then echo "包里混入 ._* 文件" >&2; exit 1; fi
 
   echo "==> 上传"
-  scp -q -i "$KEY" "$TARBALL" "$GX10_HOST:/tmp/$NAME.tgz"
+  scp -q -P "$PORT" -i "$KEY" "$TARBALL" "$GX10_HOST:/tmp/$NAME.tgz"
 
   echo "==> 节点上建发布目录并验证（线上服务不动）"
   remote "
@@ -148,7 +156,7 @@ c = sqlite3.connect('file:' + os.path.expanduser('~/$DATA_ROOT_REL/data/kelvoy.d
 print('tasks', c.execute(\"select status,count(*) from tasks where status in ('pending','processing') group by status\").fetchall())
 PY
 "
-  read -r -p "确认切换 GX10 到 ${NAME}？Web 会短暂不可用 (yes/N) " ok
+  read -r -p "确认切换 ${NODE} 到 ${NAME}？Web 会短暂不可用 (yes/N) " ok
   [[ "$ok" == "yes" ]] || { echo "已取消"; exit 1; }
   local flags=""
   if [[ ${#MIGRATION_ARGS[@]} -gt 0 ]]; then flags="${MIGRATION_ARGS[*]} --expect-empty-new-table"; fi
