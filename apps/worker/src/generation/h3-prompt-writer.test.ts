@@ -475,5 +475,6 @@ test("system prompt keeps orientation and the landmark anchor, and the writer ve
   expect(system).toContain("keep the subject's orientation and gaze as the source states");
   expect(system).toContain("never turn the subject to face the camera unless the source action says so");
   expect(system).toContain("is visible from 00:00");
-  expect(result.provenance.writer_version).toBe("h3-writer-v3");
+  expect(system).toContain("never write Chinese characters");
+  expect(result.provenance.writer_version).toBe("h3-writer-v4");
 });

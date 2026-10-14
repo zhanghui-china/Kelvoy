@@ -99,7 +99,12 @@ export function validateSections(value: Record<string, string>, context: H3Promp
   const fail = (reason: string, correctable = isCorrectableRule(reason)): never => {
     throw new H3FormatError(`H3 constraint: ${reason}`, correctable, reason);
   };
-  if (/[\u3400-\u9fff]/.test(all)) fail("rewrite must be English");
+  // The source's own proper nouns (landmark / destination / scene name) are Chinese and the model is told to
+  // anchor on the landmark, so copying one verbatim is not a failure to write English. Any other Han text is.
+  const ownNames = [context.landmark, context.destination, context.scene?.name]
+    .filter((name): name is string => !!name && name.length > 0).sort((x, y) => y.length - x.length);
+  const withoutOwnNames = ownNames.reduce((text, name) => text.split(name).join(" "), all);
+  if (/[\u3400-\u9fff]/.test(withoutOwnNames)) fail("rewrite must be English");
   if (/\b(?:I (?:see|observe)|I have (?:seen|viewed)|observed in|the (?:reference )?(?:image|picture|photo) shows)\b/i.test(all)) fail("must not claim image observation");
   if (value.non_diegetic_music !== "N/A") fail("background music must be N/A");
   // The worker's own first-frame sentence ends "(from [Shot 1])" and models echo it; that is a source annotation,

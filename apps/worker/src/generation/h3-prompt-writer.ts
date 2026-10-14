@@ -10,7 +10,7 @@ import { BASE_FIELDS, REF_FIELDS, H3FormatError, normalizePictureLabels, parseSe
 // cache key, so v1 cached rewrites are not reused for the new rules.
 // v3: v2 made the model drop the shot-size and camera words that validateSections requires (GX10 replay:
 // 7 of 8 rewrites rejected with "preserve shot size and camera"), so the sentence now demands them explicitly.
-const WRITER_VERSION = "h3-writer-v3";
+const WRITER_VERSION = "h3-writer-v4";
 interface Options {
   fetch?: (url: string, init: RequestInit) => Promise<Response>;
   timeoutMs?: number;
@@ -31,7 +31,7 @@ function systemPrompt(skill: string, guide: string, context: H3PromptContext): s
   const fields = context.mode === "Ref2VA" ? REF_FIELDS : BASE_FIELDS;
   return `${skill}\n\n${guide}\n\nKelvoy constraints (override examples):
 Rewrite the supplied JSON context as ${context.mode}. Return ONLY a JSON object with these string fields: ${fields.join(", ")}.
-Use English. Preserve the source action, shot size, composition and camera exactly. No dialogue, lyrics, narration, subtitles, captions, visible text or cuts. Do not turn the beat into speech or text.
+Use English only: never write Chinese characters; refer to a named landmark, destination or scene by a short English description or pinyin, and translate any source wording. Preserve the source action, shot size, composition and camera exactly. No dialogue, lyrics, narration, subtitles, captions, visible text or cuts. Do not turn the beat into speech or text.
 Name the shot size (wide / medium / close-up / detail / POV) and the camera movement (static / pan / push / follow) in plain words at the start of [Shot 1], exactly as the source gives them.
 Also keep the subject's orientation and gaze as the source states (for example back to the camera, side-on, looking at the landmark) and never turn the subject to face the camera unless the source action says so. A landmark named in the source is visible from 00:00 and the subject stays positioned relative to it as the source describes.
 One continuous [Shot 1], no other shots. Explicitly end its timeline at 00:0${context.duration_s}.000 (${context.duration_s} seconds): write the timestamp itself, not just "${context.duration_s} seconds". Aspect ${context.aspect}.
