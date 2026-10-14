@@ -1,5 +1,6 @@
 import { musicLibraryProvider } from "../providers/music-library";
 import type { ComposeMediaDurations, ComposePlan, ComposePlanMusic } from "../providers/types";
+import { originalAudioEnabled } from "../rules/original-audio";
 import { subtitlesEnabled } from "../rules/subtitles";
 import { planCuts, planFixedCuts } from "../rules/beat";
 import { CompositionConstraintError, mediaFrameCount, planLongCuts } from "../rules/long-cuts";
@@ -113,6 +114,7 @@ export async function buildComposePlan(episode: Episode, context?: StageContext)
     fps: episode.render.fps,
     subtitles_enabled: subtitlesEnabled(episode.render),
     transitions_enabled: episode.cut_policy === "fixed_1s" && episode.render.transitions_enabled === true,
+    ...(originalAudioEnabled(episode.render) ? { original_audio_enabled: true } : {}),
   };
 }
 

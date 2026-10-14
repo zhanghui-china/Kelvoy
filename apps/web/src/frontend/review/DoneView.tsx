@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { subtitlesEnabled, type Episode } from "@kelvoy/engine";
+import { originalAudioEnabled, subtitlesEnabled, type Episode } from "@kelvoy/engine";
 import { episodeFileUrl, patchEpisode, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
 import { GuideTip } from "../GuideTip";
 import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
@@ -28,14 +28,16 @@ export default function DoneView({
   const [subtitles, setSubtitles] = useState(subtitlesEnabled(episode.render));
   const [musicEnabled, setMusicEnabled] = useState(episode.music.enabled !== false);
   const [musicFile, setMusicFile] = useState(episode.music.file);
+  const [originalAudio, setOriginalAudio] = useState(originalAudioEnabled(episode.render));
   const musicChanged = musicEnabled !== (episode.music.enabled !== false) || musicFile !== episode.music.file;
-  const settingsChanged = subtitles !== subtitlesEnabled(episode.render) || musicChanged;
+  const settingsChanged = subtitles !== subtitlesEnabled(episode.render) || musicChanged ||
+    originalAudio !== originalAudioEnabled(episode.render);
   async function save() {
     if (submitting.current || mutation.pending || !settingsChanged || composeQueued) return;
     submitting.current = true;
     try {
       await mutation.run(rowVersion => patchEpisode(episode.episode_id, rowVersion,
-        { render: { ...episode.render, subtitles_enabled: subtitles },
+        { render: { ...episode.render, subtitles_enabled: subtitles, original_audio_enabled: originalAudio },
           ...(musicChanged ? { music: musicSettingsPatch(episode.music, musicEnabled, musicFile) } : {}) }));
     } finally {
       submitting.current = false;
@@ -184,8 +186,8 @@ export default function DoneView({
         <label><input type="checkbox" checked={subtitles} disabled={mutation.pending || composeQueued}
           onChange={(event) => setSubtitles(event.target.checked)} /> 烧录每镜字幕</label>
         <p className="k-card-meta">已填写字幕 {episode.shots.filter(shot => shot.caption?.trim()).length} / {episode.shots.length} 镜 · 空字幕不显示。{!subtitles && "本次成片不显示每镜字幕。"}</p>
-        <MusicSettings enabled={musicEnabled} file={musicFile} disabled={mutation.pending || composeQueued}
-          onEnabledChange={setMusicEnabled} onFileChange={setMusicFile} />
+        <MusicSettings enabled={musicEnabled} file={musicFile} originalAudio={originalAudio} disabled={mutation.pending || composeQueued}
+          onEnabledChange={setMusicEnabled} onFileChange={setMusicFile} onOriginalAudioChange={setOriginalAudio} />
         <p className="k-card-meta">保存后需合成／重新合成才会更新成片。</p>
         {composeQueued && <p role="status">合成任务已提交，等待后台处理。</p>}
         {settingsChanged && <p role="status">合成设置尚未保存，请先保存设置，再重新合成。</p>}

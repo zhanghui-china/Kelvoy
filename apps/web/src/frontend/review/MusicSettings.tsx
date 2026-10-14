@@ -1,18 +1,22 @@
 import { MUSIC_CATALOG, type Episode } from "@kelvoy/engine";
 
 /** Both settings screens retain the selected track when music is switched off. */
-export default function MusicSettings({ enabled, file, disabled, onEnabledChange, onFileChange }: {
+export default function MusicSettings({ enabled, file, originalAudio, disabled, onEnabledChange, onFileChange, onOriginalAudioChange }: {
   enabled: boolean;
+  originalAudio: boolean;
   file: string;
   disabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
   onFileChange: (file: string) => void;
+  onOriginalAudioChange: (originalAudio: boolean) => void;
 }) {
   const selected = MUSIC_CATALOG.find(track => track.file === file);
   return <>
     <div className="k-compose-options">
       <label><input type="checkbox" aria-label="启用配乐" checked={enabled} disabled={disabled}
         onChange={event => onEnabledChange(event.target.checked)} /> 启用配乐</label>
+      <label><input type="checkbox" aria-label="保留视频原声" checked={originalAudio} disabled={disabled}
+        onChange={event => onOriginalAudioChange(event.target.checked)} /> 保留视频原声（脚步声、环境音）</label>
     </div>
     <label className="k-field">配乐
       <select aria-label="配乐曲目" disabled={disabled || !enabled} value={file}
@@ -24,7 +28,9 @@ export default function MusicSettings({ enabled, file, disabled, onEnabledChange
         </option>)}
       </select>
     </label>
-    {!enabled && <p className="k-card-meta">成片不包含音轨；已选配乐会保留，重新开启后可继续使用。</p>}
+    {!enabled && <p className="k-card-meta">
+      {originalAudio ? "成片只保留视频原声，不含配乐" : "成片不包含音轨"}；已选配乐会保留，重新开启后可继续使用。
+    </p>}
   </>;
 }
 

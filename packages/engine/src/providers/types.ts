@@ -80,6 +80,8 @@ export interface ComposePlan {
   fps: number;
   subtitles_enabled?: boolean;
   transitions_enabled?: boolean;
+  /** Mix each clip's own audio into the final cut (absent = silent apart from music). */
+  original_audio_enabled?: boolean;
 }
 
 export interface ComposePlanMusic {

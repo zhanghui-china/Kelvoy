@@ -26,6 +26,18 @@ test.each([undefined, true, false])("compose and delivery use the same music swi
   }
 });
 
+test("original audio is a switch separate from music and saves independently", () => {
+  for (const on of [undefined, true]) {
+    const episode = { ...base, render: { ...base.render, original_audio_enabled: on } };
+    const html = render(<ComposeSetup episode={episode} mutation={mutation} />);
+    expect(html).toContain('aria-label="保留视频原声"');
+    if (on) expect(html).toContain('aria-label="保留视频原声" checked=""');
+    else expect(html).not.toContain('aria-label="保留视频原声" checked=""');
+  }
+  const off = { ...base, music: { ...base.music, enabled: false }, render: { ...base.render, original_audio_enabled: true } };
+  expect(render(<ComposeSetup episode={off} mutation={mutation} />)).toContain("成片只保留视频原声，不含配乐");
+});
+
 test("compose failure offers settings and a single failed-task retry while preserving a concrete reason", () => {
   const episode = { ...base, status: "failed" as const, failure_reason: "所选配乐素材不可用，请更换配乐或联系管理员" };
   const html = render(<ProgressView episode={episode} mutation={mutation} failedTask={{ stage: "compose", shot_no: null }} />);

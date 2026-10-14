@@ -1,4 +1,5 @@
 import type { ComposePlan } from "@kelvoy/engine";
+import { musicFilter, segmentAudioFilter, type OriginalAudioInputs } from "./ffmpeg-audio";
 
 /**
  * 把 engine 的 ComposePlan 翻译成一条 ffmpeg 命令行（M1-13, FR-07）。
@@ -25,6 +26,8 @@ export interface ComposeInputPaths {
   /** ffprobe 量出来的片头/片尾时长，没有片头片尾时为 0。 */
   intro_duration_s: number;
   outro_duration_s: number;
+  /** 保留片段原声时给出各输入是否带音轨；缺省 = 不保留原声。 */
+  original_audio?: OriginalAudioInputs;
 }
 
 const AUDIO_FADE_OUT_S = 1;
@@ -123,12 +126,22 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
   const args: string[] = ["-y"];
   const filters: string[] = [];
   const concatLabels: string[] = [];
+  const original = paths.original_audio ?? null;
+  if (original && original.clips.length !== plan.cuts.length) {
+    throw new Error(`原声探测数量（${original.clips.length}）与切割表（${plan.cuts.length}）对不上`);
+  }
+  // 与画面一一对应的音频段，顺序同 concatLabels；concat 需要 [v][a] 成对交替输入。
+  const audioLabels: string[] = [];
   let inputIndex = 0;
 
   if (paths.intro !== null) {
     args.push("-i", paths.intro);
     filters.push(`[${inputIndex}:v]${normalizeChain(plan)}${plan.intro_frame_count === undefined ? "" : `,trim=end_frame=${plan.intro_frame_count},setpts=PTS-STARTPTS`}[vintro]`);
     concatLabels.push("[vintro]");
+    if (original) {
+      filters.push(segmentAudioFilter(inputIndex, "aintro", original.intro, paths.intro_duration_s));
+      audioLabels.push("[aintro]");
+    }
     inputIndex += 1;
   }
 
@@ -155,6 +168,13 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
     }
     filters.push(`[${inputIndex}:v]${chain}[vcut${i}]`);
     concatLabels.push(`[vcut${i}]`);
+    if (original) {
+      const trim = cut.trim_start_frame !== undefined && cut.frame_count !== undefined
+        ? { start_s: cut.trim_start_frame / plan.fps, end_s: (cut.trim_start_frame + cut.frame_count) / plan.fps }
+        : undefined;
+      filters.push(segmentAudioFilter(inputIndex, `acut${i}`, original.clips[i]!, cut.duration_s, trim));
+      audioLabels.push(`[acut${i}]`);
+    }
     inputIndex += 1;
   });
 
@@ -162,6 +182,10 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
     args.push("-i", paths.outro);
     filters.push(`[${inputIndex}:v]${normalizeChain(plan)}${plan.outro_frame_count === undefined ? "" : `,trim=end_frame=${plan.outro_frame_count},setpts=PTS-STARTPTS`}[voutro]`);
     concatLabels.push("[voutro]");
+    if (original) {
+      filters.push(segmentAudioFilter(inputIndex, "aoutro", original.outro, paths.outro_duration_s));
+      audioLabels.push("[aoutro]");
+    }
     inputIndex += 1;
   }
 
@@ -179,7 +203,12 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
     return { ...event, index };
   });
 
-  filters.push(`${concatLabels.join("")}concat=n=${concatLabels.length}:v=1:a=0[vcat]`);
+  if (original) {
+    const pairs = concatLabels.map((label, i) => `${label}${audioLabels[i]}`).join("");
+    filters.push(`${pairs}concat=n=${concatLabels.length}:v=1:a=1[vcat][acat]`);
+  } else {
+    filters.push(`${concatLabels.join("")}concat=n=${concatLabels.length}:v=1:a=0[vcat]`);
+  }
 
   // 标题和 AI 标识加在拼接**之后**：标识要覆盖全片（片头片尾也算 AI 生成内容）。
   let videoLabel = "[vcat]";
@@ -207,15 +236,14 @@ export function buildFfmpegArgs(plan: ComposePlan, paths: ComposeInputPaths): st
       plan.cuts.reduce((sum, cut) => sum + cut.duration_s, 0),
   );
   if (musicIndex !== null) {
-    const fadeStartS = roundMs(Math.max(0, totalDurationS - AUDIO_FADE_OUT_S));
-    filters.push(
-      `[${musicIndex}:a]atrim=0:${totalDurationS},asetpts=N/SR/TB,afade=t=out:st=${fadeStartS}:d=${AUDIO_FADE_OUT_S}[aout]`,
-    );
+    filters.push(musicFilter(musicIndex, totalDurationS, AUDIO_FADE_OUT_S, original !== null));
   }
 
   args.push("-filter_complex", filters.join(";"), "-map", videoLabel);
   if (musicIndex !== null) {
     args.push("-map", "[aout]", "-c:a", "aac", "-b:a", "192k");
+  } else if (original) {
+    args.push("-map", "[acat]", "-c:a", "aac", "-b:a", "192k");
   } else {
     args.push("-an");
   }

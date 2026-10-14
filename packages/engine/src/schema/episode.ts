@@ -143,6 +143,11 @@ export interface EpisodeRender {
   ai_label: boolean;
   subtitles_enabled?: boolean;
   transitions_enabled?: boolean;
+  /**
+   * Keep the clips' own audio (footsteps, ambience) in the final cut, independent of music. Missing
+   * = false so recomposing an older episode keeps producing the same silent video; new episodes write true.
+   */
+  original_audio_enabled?: boolean;
 }
 
 export interface FinalArtifact {

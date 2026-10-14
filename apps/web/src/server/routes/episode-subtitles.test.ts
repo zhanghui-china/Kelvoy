@@ -79,3 +79,24 @@ test("subtitle recompose failure retains the old delivery and retry replaces it 
   expect(saved.episode.shots).toEqual(episode.shots);
   expect(await dequeueTask()).toBeNull();
 });
+
+test("toggling original audio marks the delivered final for recompose and rejects non-booleans", async () => {
+  const { cookie, ownerId } = await login("original-audio");
+  const episode = fixture("e_original_audio", ownerId);
+  episode.status = "done";
+  episode.shots = [shotFixture(1, { shot_id: "sh_oa", status: "approved", clip: "clip/1.mp4" })];
+  episode.final = { version: 1, key: "final/old.mp4", duration_s: 3, width: 1080, height: 1920, fps: 30, size_bytes: 10, completed_at: "2026-01-01" };
+  await insertEpisode(episode);
+  const app = buildApp();
+  const save = (version: number, value: unknown) => app.request(`/api/episodes/${episode.episode_id}`, { method: "PATCH",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: version, patch: { render: { ...episode.render, original_audio_enabled: value } } }) });
+  expect((await save(1, "yes")).status).toBe(400);
+  expect((await save(1, false)).status).toBe(200); // missing and false are the same: nothing to recompose
+  let got = await getEpisode(episode.episode_id); if (!got.ok) throw Error("missing");
+  expect(got.episode.final_needs_recompose).not.toBe(true);
+  expect((await save(got.row_version, true)).status).toBe(200);
+  got = await getEpisode(episode.episode_id); if (!got.ok) throw Error("missing");
+  expect(got.episode.final_needs_recompose).toBe(true);
+  expect(got.episode.render.original_audio_enabled).toBe(true);
+});

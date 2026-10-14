@@ -8,6 +8,7 @@ import {
   MUSIC_CATALOG,
   validateCreateEpisodeRequest,
   validatePatchEpisodeRequest,
+  originalAudioEnabled,
   subtitlesEnabled,
 } from "@kelvoy/engine";
 import {
@@ -164,6 +165,7 @@ episodes.post("/", async (c) => {
       ai_label: true,
       subtitles_enabled: true,
       transitions_enabled: true,
+      original_audio_enabled: true,
     },
   };
 
@@ -282,7 +284,8 @@ episodes.patch("/:id", async (c) => {
     loaded.episode.episode_id,
     result.value.row_version,
     { ...result.value.patch,
-      ...(loaded.episode.final && (musicChanged || (render && subtitlesEnabled(render) !== subtitlesEnabled(loaded.episode.render)))
+      ...(loaded.episode.final && (musicChanged || (render && (subtitlesEnabled(render) !== subtitlesEnabled(loaded.episode.render) ||
+        originalAudioEnabled(render) !== originalAudioEnabled(loaded.episode.render))))
         ? { final_needs_recompose: true } : {}) },
   );
   if (!patchResult.ok) return patchErrorResponse(c, patchResult);

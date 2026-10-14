@@ -241,6 +241,7 @@ export function validateRender(input: unknown, path = "render"): string[] {
   if (!isBoolean(r.ai_label)) errors.push(`${path}.ai_label: 必须是布尔值`);
   if (r.subtitles_enabled !== undefined && !isBoolean(r.subtitles_enabled)) errors.push(`${path}.subtitles_enabled: 必须是布尔值`);
   if (r.transitions_enabled !== undefined && !isBoolean(r.transitions_enabled)) errors.push(`${path}.transitions_enabled: 必须是布尔值`);
+  if (r.original_audio_enabled !== undefined && !isBoolean(r.original_audio_enabled)) errors.push(`${path}.original_audio_enabled: 必须是布尔值`);
   return errors;
 }
 

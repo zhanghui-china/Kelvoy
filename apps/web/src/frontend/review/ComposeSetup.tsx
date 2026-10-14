@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { subtitlesEnabled, type Episode } from "@kelvoy/engine";
+import { originalAudioEnabled, subtitlesEnabled, type Episode } from "@kelvoy/engine";
 import { continueEpisode, patchEpisode, retryFailedTask } from "../api/client";
 import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
 import { GuideTip } from "../GuideTip";
@@ -16,6 +16,7 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false }:
   const retryQueued = queuedEpisode === episode;
   const [musicEnabled, setMusicEnabled] = useState(episode.music.enabled !== false);
   const [musicFile, setMusicFile] = useState(episode.music.file);
+  const [originalAudio, setOriginalAudio] = useState(originalAudioEnabled(episode.render));
   const [intro, setIntro] = useState(episode.render.intro);
   const [outro, setOutro] = useState(episode.render.outro);
   const settingsChanged = title !== episode.render.title ||
@@ -23,6 +24,7 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false }:
     transitions !== (episode.render.transitions_enabled === true) ||
     musicFile !== episode.music.file ||
     musicEnabled !== (episode.music.enabled !== false) ||
+    originalAudio !== originalAudioEnabled(episode.render) ||
     intro !== episode.render.intro ||
     outro !== episode.render.outro;
   const fixed = episode.cut_policy === "fixed_1s";
@@ -35,7 +37,7 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false }:
     try {
       const result = await mutation.run(rowVersion => patchEpisode(episode.episode_id, rowVersion,
         { render: { ...episode.render, title: title.trim(), subtitles_enabled: subtitles,
-            transitions_enabled: transitions, intro, outro },
+            transitions_enabled: transitions, original_audio_enabled: originalAudio, intro, outro },
           ...((musicFile !== episode.music.file || musicEnabled !== (episode.music.enabled !== false))
             ? { music: musicSettingsPatch(episode.music, musicEnabled, musicFile) } : {}) }));
       if (result?.ok) setTitle(title.trim());
@@ -77,8 +79,8 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false }:
         {fixed && <label><input type="checkbox" checked={transitions} onChange={(event) => setTransitions(event.target.checked)} /> 切点前后各 2 帧淡出淡入</label>}
       </div>
       <p className="k-card-meta">已填写字幕 {episode.shots.filter(shot => shot.caption?.trim()).length} / {episode.shots.length} 镜 · 空字幕不显示。{!subtitles && "本次成片不显示每镜字幕。"}</p>
-      <MusicSettings enabled={musicEnabled} file={musicFile} disabled={mutation.pending || retryQueued}
-        onEnabledChange={setMusicEnabled} onFileChange={setMusicFile} />
+      <MusicSettings enabled={musicEnabled} file={musicFile} originalAudio={originalAudio} disabled={mutation.pending || retryQueued}
+        onEnabledChange={setMusicEnabled} onFileChange={setMusicFile} onOriginalAudioChange={setOriginalAudio} />
       <div className="k-compose-options">
         <label><input type="checkbox" checked={intro !== null} onChange={(event) => setIntro(event.target.checked ? "intro/kelvoy_open.mp4" : null)} /> {intro && intro !== "intro/kelvoy_open.mp4" ? `原有片头 · ${intro}` : "Kelvoy 片头 · 1.2 秒"}</label>
         <label><input type="checkbox" checked={outro !== null} onChange={(event) => setOutro(event.target.checked ? "outro/kelvoy_close.mp4" : null)} /> {outro && outro !== "outro/kelvoy_close.mp4" ? `原有片尾 · ${outro}` : "Kelvoy 片尾 · 1 秒"}</label>

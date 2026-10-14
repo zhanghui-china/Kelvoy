@@ -3,6 +3,7 @@ export * from "./script";
 export * from "./credits";
 export * from "./content";
 export * from "./review";
+export * from "./original-audio";
 export * from "./subtitles";
 
 export * from "./long-cuts";

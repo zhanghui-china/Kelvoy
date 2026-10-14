@@ -71,6 +71,15 @@ async function probeDurationS(path: string, signal?: AbortSignal): Promise<numbe
   return seconds;
 }
 
+async function hasAudioStream(path: string, signal?: AbortSignal): Promise<boolean> {
+  const { code, stdout } = await runCommand([
+    "ffprobe", "-v", "error", "-select_streams", "a:0",
+    "-show_entries", "stream=codec_type", "-of", "csv=p=0", path,
+  ], signal);
+  if (code !== 0) throw new CompositionError("media_invalid", undefined, code);
+  return stdout.trim() !== "";
+}
+
 async function probeVideoDurationS(path: string, signal?: AbortSignal): Promise<number> {
   const { code, stdout } = await runCommand([
     "ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -171,6 +180,12 @@ async function resolvePaths(plan: ComposePlan, signal?: AbortSignal): Promise<Co
   const fontEnv = process.env.KELVOY_FONT_FILE;
   const font = fontEnv ? await requireFile(fontEnv, "font") : null;
 
+  const original_audio = plan.original_audio_enabled ? {
+    clips: await Promise.all(clips.map((clip) => hasAudioStream(clip, signal))),
+    intro: intro !== null && await hasAudioStream(intro, signal),
+    outro: outro !== null && await hasAudioStream(outro, signal),
+  } : undefined;
+
   return {
     clips,
     intro,
@@ -181,6 +196,7 @@ async function resolvePaths(plan: ComposePlan, signal?: AbortSignal): Promise<Co
     font,
     intro_duration_s: intro !== null ? await probeDurationS(intro, signal) : 0,
     outro_duration_s: outro !== null ? await probeDurationS(outro, signal) : 0,
+    ...(original_audio ? { original_audio } : {}),
   };
 }
 
