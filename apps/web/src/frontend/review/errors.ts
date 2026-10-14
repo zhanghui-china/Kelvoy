@@ -9,6 +9,7 @@ const ERROR_LABELS: Record<string, string> = {
   below_min_shots: "已经是 24 镜下限了，不能再删",
   invalid_order: "镜序不合法：这个阶段不能重排，或者顺序不是一个完整排列",
   landmark_reference: "这个地标不在目的地库里",
+  landmark_ref_invalid: "这张地标参考图不可用：本镜没有地标、图片序号超出范围，或空镜不能选“不使用地标图”",
   destination_not_found: "目的地记录不存在",
   invalid_row_version: "请求缺少版本号，刷新后重试",
   invalid_body: "请求格式不对",

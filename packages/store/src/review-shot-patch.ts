@@ -8,7 +8,7 @@ export type ReviewShotPatchResult =
   | { ok: true; row_version: number }
   | { ok: false; error: "not_found" | "version_conflict" | "action_pending" |
       "invalid_public_patch" | "illegal_transition" | "destination_not_found" |
-      "landmark_reference"; current_row_version?: number }
+      "landmark_reference" | "landmark_ref_invalid"; current_row_version?: number }
   | { ok: false; error: "content_blocked"; violations: ContentViolation[] };
 
 /** The public review edit is checked against the latest owned episode in one write transaction. */
@@ -38,7 +38,7 @@ export function submitReviewShotPatch(input: {
     if (keys.some(key => scriptFields.includes(key)) && !scriptEdit) return {ok:false,error:"invalid_public_patch"} as const;
     const keyframeEdit = (episode.status === "kf_review" || episode.status === "keyframing") &&
       keys.every((key) => (episode.status === "keyframing"
-        ? ["kf_selected", "status"] : ["kf_selected", "status", "kf_prompt", "motion_prompt"]).includes(key)) &&
+        ? ["kf_selected", "status"] : ["kf_selected", "status", "kf_prompt", "motion_prompt", "landmark_ref"]).includes(key)) &&
       (patch.status === undefined || patch.status === "kf_selected") &&
       (patch.status === undefined || shot.status === "kf_ready") &&
       (patch.kf_selected === undefined ||
@@ -59,14 +59,24 @@ export function submitReviewShotPatch(input: {
       ...(patch.motion_prompt !== undefined ? [{ field: "motion_prompt", text: patch.motion_prompt }] : []),
     ]);
     if (violations.length > 0) return { ok: false, error: "content_blocked", violations } as const;
-    if (patch.landmark !== undefined && patch.landmark !== null) {
+    if (patch.landmark_ref !== undefined) {
+      // A visual-input override: it needs a landmark picture to choose from, and "none" on an empty shot
+      // would leave the image workflow with no reference at all (keyframe-references.ts).
+      if (!shot.landmark || (patch.landmark_ref === "none" && shot.person_visible === false)) {
+        return { ok: false, error: "landmark_ref_invalid" } as const;
+      }
+    }
+    if ((patch.landmark !== undefined && patch.landmark !== null) || typeof patch.landmark_ref === "number") {
+      const landmarkId = patch.landmark ?? shot.landmark;
       const revision = getDb().query<{ doc: string }, [string, number]>(
         "select doc from destination_versions where destination_id = ? and version = ?",
       ).get(episode.destination_id, episode.destination_version);
       if (!revision) return { ok: false, error: "destination_not_found" } as const;
       const destination = JSON.parse(revision.doc) as Destination;
-      if (!destination.landmarks.some((landmark) => landmark.id === patch.landmark)) {
-        return { ok: false, error: "landmark_reference" } as const;
+      const found = destination.landmarks.find((landmark) => landmark.id === landmarkId);
+      if (!found) return { ok: false, error: "landmark_reference" } as const;
+      if (typeof patch.landmark_ref === "number" && patch.landmark_ref >= found.refs.length) {
+        return { ok: false, error: "landmark_ref_invalid" } as const;
       }
     }
     if (episode.cut_policy === "fixed_1s" && patch.trim_start_s !== undefined && patch.trim_start_s !== null) {
@@ -80,7 +90,11 @@ export function submitReviewShotPatch(input: {
       return {ok:true,row_version:row.row_version+1} as const;
     }
     const shots = [...episode.shots];
-    shots[index] = { ...shot, ...patch };
+    const { landmark_ref, ...rest } = patch;
+    // Stored only when non-default (absent = refs[0]), like person_visible.
+    const { landmark_ref: kept, ...base } = shot;
+    const next = landmark_ref === undefined ? kept : landmark_ref === 0 ? undefined : landmark_ref;
+    shots[index] = { ...base, ...rest, ...(next !== undefined ? { landmark_ref: next } : {}) };
     getDb().query(`update episodes set doc = ?, row_version = row_version + 1,
       updated_at = datetime('now') where episode_id = ?`)
       .run(JSON.stringify({ ...episode, shots }), input.episode_id);

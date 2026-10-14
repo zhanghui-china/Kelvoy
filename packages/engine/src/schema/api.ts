@@ -62,6 +62,7 @@ export type ShotPatch = Partial<
     | "size"
     | "camera"
     | "landmark"
+    | "landmark_ref"
     | "kf_prompt"
     | "motion_prompt"
   >

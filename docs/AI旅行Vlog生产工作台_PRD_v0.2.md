@@ -298,6 +298,8 @@ flowchart LR
 
 `shots[].person_visible` 为可选布尔值，表示该镜画面里是否有人物（含手、背影）。缺失等同 `true`，旧期行为完全不变；只存显式 `false`。脚本阶段由 LLM 为纯空镜、景物与环境镜头输出 `false`，拿不准或字段缺失、类型不对一律按 `true` 处理。`false` 的镜头在直出（`references`）路径里仍按两张参考图（人物图、地标图）送入视频模型，但 H3 提示词校验不再强制提示词引用人物图，场景图仍必须引用，人物主体仍须在主体定义中出现；改写指令同时要求不在画面中描述人物。分镜编辑界面提供「画面中有人物」复选框：取消勾选即写入 `false`，重新勾选则删除该字段（保持只存显式 `false`）。该字段属于画面类字段，修改后该镜已生成的关键帧与视频失效、状态回到 `draft`；手工改写 `kf_prompt` 仍不会自动更新它。
 
+`shots[].landmark_ref` 为可选值（非负整数或 `"none"`），是关键帧阶段对「本镜送入哪张地标参考图」的覆盖：整数 = 该地标 `refs` 的第 N 张（越界回退到第 1 张），`"none"` = 本镜不送地标图、只送角色图；缺失 = 第 1 张（旧期行为不变），0 不落盘。它是视觉输入选择而非脚本字段：只在 `kf_review` 由审片台写入，写入后紧接着只重生成该镜关键帧，不回到脚本审核、不影响其他镜；空镜（`person_visible=false`）不允许 `"none"`（否则无任何参考图）；改 `landmark` 或把镜头改为空镜时该字段被清除。`shots[].model.image.landmark_ref_key` 记录实际送入的地标图（`ref_hashes` 只存内容哈希）。直出（`references`）期的视频阶段始终用地标第 1 张，因此该覆盖不对直出期开放。
+
 `shot.model.*.provider` ∈ `local` / `kling` / `jimeng` / …；`attempts` 含本地重试与溢出总次数；复现键 = (episode_id, shot_no, stage, provider, model, version, seed, prompt 哈希, ref_hashes)。
 
 ## 7. 模型与工具适配层
@@ -356,7 +358,7 @@ flowchart LR
 
 - 期 JSON 存本地 SQLite（`episodes.doc`），是唯一真源；产物文件（关键帧、片段、成片）落本地磁盘 `projects/<episode_id>/kf/07_a.png` 这种路径，角色与目的地的参考图各在自己的目录。
 - 队列任务只带 `{episode_id, stage, shot_no?, attempt}`（§6），存在 SQLite 的 `tasks` 表里。worker 出队后直接调 `packages/store` 的 `getEpisode`/`replaceEpisode`（带乐观锁 `row_version`）读写期数据，不经过 HTTP。
-- 审片台只改期 JSON 里这几处：审核决策与产物指针 `kf_selected / trim_start_s / status / regen_stage / bad_shot_reported`，审核 1/2 人工可改的脚本字段 `beat / size / camera / landmark / kf_prompt / motion_prompt / person_visible`，`long_3_6` 下另可改单镜建议时长 `duration_s`（3–6 秒；仅作合成建议，H3 素材仍按 4 秒及以内→4 秒、超过 4 秒→5 秒生成，因此越过 4 秒才使该镜视频失效，否则保留产物，仅提示重新合成），以及审核 1 的整体镜序重排（重排后 `no` 连续重编号，删镜走 `removed_shots`）。改完写一条任务进队列；进度靠浏览器 2–5 秒轮询 `apps/web`，`apps/web` 读同一个 SQLite。
+- 审片台只改期 JSON 里这几处：审核决策与产物指针 `kf_selected / trim_start_s / status / regen_stage / bad_shot_reported`，审核 1/2 人工可改的脚本字段 `beat / size / camera / landmark / kf_prompt / motion_prompt / person_visible`，关键帧审核阶段另可改 `landmark_ref`（地标参考图选择，见 §6），`long_3_6` 下另可改单镜建议时长 `duration_s`（3–6 秒；仅作合成建议，H3 素材仍按 4 秒及以内→4 秒、超过 4 秒→5 秒生成，因此越过 4 秒才使该镜视频失效，否则保留产物，仅提示重新合成），以及审核 1 的整体镜序重排（重排后 `no` 连续重编号，删镜走 `removed_shots`）。改完写一条任务进队列；进度靠浏览器 2–5 秒轮询 `apps/web`，`apps/web` 读同一个 SQLite。
 - 单机部署意味着当前没有"一台机器宕机不停服"这种冗余——MVP 阶段接受，上线前重新评估；队列超阈值自动溢出到国内 API；ffmpeg 合成也在 worker 上跑。
 
 **目录结构**（已落地，见仓库根目录、`docs/decisions/0002`、`docs/decisions/0004`）

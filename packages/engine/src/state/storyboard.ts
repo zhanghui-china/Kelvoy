@@ -65,6 +65,8 @@ export function editStoryboard(episode: Episode, edit: StoryboardEdit): Episode 
       const updated: Shot = { ...shot, ...rest };
       if (person_visible === false) updated.person_visible = false;
       else if (person_visible === true) delete updated.person_visible;
+      // The keyframe-stage picture choice belongs to one landmark, and "none" on an empty shot would leave no reference.
+      if (updated.landmark !== shot.landmark || (updated.person_visible === false && updated.landmark_ref === "none")) delete updated.landmark_ref;
       if (VISUAL.some(key => updated[key] !== shot[key])) Object.assign(updated, {
         candidates: [], kf_selected: null, clip: null, trim_start_s: null, model: {}, status: "draft", regen_stage: null });
       // A suggested-duration change only matters to generation when it moves the H3 clip length (4 s vs 5 s).

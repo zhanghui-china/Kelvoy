@@ -20,7 +20,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
   if (!shot || shot.status !== "generating_kf") throw new Error(`第 ${shotNo} 镜未处于关键帧生成中`);
   const used = keyframeReferences(context.persona, context.destination, shot, episode.brief.outfit_id);
   if (!used.persona && !used.person_omitted) throw new Error("角色参考图缺失");
-  if (used.landmark_id && !used.landmark) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
+  if (used.landmark_id && !used.landmark && !used.landmark_skipped) throw new Error(`第 ${shotNo} 镜地标参考图缺失`);
   const refs = [...(used.persona ? [used.persona.key] : []), ...(used.landmark ? [used.landmark.key] : [])];
   // What the model is told, not just the script's kf_prompt: image roles are named (ADR-0016).
   const prompt = buildKeyframePrompt({ kf_prompt: shot.kf_prompt, landmarkName: used.landmark?.name ?? null,
@@ -54,6 +54,7 @@ export async function runKeyframe(episode: Episode, shotNo?: number, context?: S
     model: { ...shot.model, image: {
       provider: "local" as const, model: first.model, version: first.version,
       seed: first.seed, prompt, ref_hashes: first.ref_hashes,
+      ...(used.landmark ? { landmark_ref_key: used.landmark.key } : {}),
       attempts: context.attempt ?? 1, cost_usd: 0,
     } },
   };

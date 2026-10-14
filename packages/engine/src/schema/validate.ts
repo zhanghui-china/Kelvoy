@@ -26,6 +26,10 @@ import type {
  */
 export type ValidationResult<T> = { valid: true; value: T } | { valid: false; errors: string[] };
 
+function isLandmarkRef(v: unknown): boolean {
+  return v === "none" || (typeof v === "number" && Number.isInteger(v) && v >= 0);
+}
+
 const SHOT_SIZES: ShotSize[] = ["wide", "medium", "close", "detail", "pov"];
 const SHOT_CAMERAS: ShotCamera[] = ["static", "pan", "push", "follow"];
 const SCENE_TIMES: SceneTime[] = ["morning", "noon", "afternoon", "evening", "night"];
@@ -81,6 +85,9 @@ function validateShotModelRecord(input: unknown, path: string, errors: string[])
   if (!isFiniteNumber(input.seed)) errors.push(`${path}.seed: 必须是数字`);
   if (typeof input.prompt !== "string") errors.push(`${path}.prompt: 必须是字符串`);
   if (!isStringArray(input.ref_hashes)) errors.push(`${path}.ref_hashes: 必须是字符串数组`);
+  if (input.landmark_ref_key !== undefined && !isNonEmptyString(input.landmark_ref_key)) {
+    errors.push(`${path}.landmark_ref_key: 必须是非空字符串`);
+  }
   if (!isFiniteNumber(input.attempts) || input.attempts < 0) {
     errors.push(`${path}.attempts: 必须是 ≥0 的数字`);
   }
@@ -137,6 +144,9 @@ export function validateShot(input: unknown): ValidationResult<Shot> {
   if (typeof s.kf_prompt !== "string") errors.push("kf_prompt: 必须是字符串");
   if (typeof s.motion_prompt !== "string") errors.push("motion_prompt: 必须是字符串");
   if (s.person_visible !== undefined && !isBoolean(s.person_visible)) errors.push("person_visible: 必须是布尔值");
+  if (s.landmark_ref !== undefined && !isLandmarkRef(s.landmark_ref)) {
+    errors.push('landmark_ref: 必须是非负整数或 "none"');
+  }
   if (!isFiniteNumber(s.duration_s) || s.duration_s <= 0) {
     errors.push("duration_s: 必须是正数");
   }
@@ -442,6 +452,9 @@ export function validatePatchShotRequest(input: unknown): ValidationResult<Patch
   }
   if ("landmark" in patch && patch.landmark !== null && !isNonEmptyString(patch.landmark)) {
     errors.push("patch.landmark: 必须是字符串或 null");
+  }
+  if ("landmark_ref" in patch && !isLandmarkRef(patch.landmark_ref)) {
+    errors.push('patch.landmark_ref: 必须是非负整数或 "none"');
   }
   // prompt 允许清空（还没生成过的镜本来就是空字符串），所以不是 isNonEmptyString。
   if ("kf_prompt" in patch && typeof patch.kf_prompt !== "string") {

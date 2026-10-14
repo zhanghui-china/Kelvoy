@@ -62,6 +62,8 @@ export interface ShotModelRecord {
   seed: number;
   prompt: string;
   ref_hashes: string[];
+  /** Image only: the landmark picture actually sent (ref_hashes are content hashes, not keys). */
+  landmark_ref_key?: string;
   attempts: number;
   cost_usd: number;
 }
@@ -89,6 +91,13 @@ export interface Shot {
    * supplied to the video model, which requires two references).
    */
   person_visible?: boolean;
+  /**
+   * Keyframe-stage override of which landmark reference picture is sent: an index into the landmark's
+   * `refs`, or "none" for no landmark picture at all (person reference only). Absent = `refs[0]`, so
+   * existing episodes behave exactly as before. A visual *input* choice, not a script field: editing it
+   * at kf_review does not send the episode back to script_review; the shot is regenerated instead.
+   */
+  landmark_ref?: number | "none";
   duration_s: number; // target; actual cut length is beat-aligned within 0.8–2.0 s (FR-07)
   candidates: string[];
   kf_selected: string | null;

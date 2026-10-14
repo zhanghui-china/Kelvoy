@@ -8,6 +8,7 @@ import { GuideTip } from "../GuideTip";
 import { describeWriteError } from "./errors";
 import ReviewQueue from "./ReviewQueue";
 import { ImageLightbox, type LightboxItem, ZoomImage } from "./ImageLightbox";
+import { LandmarkRefPicker } from "./LandmarkRefPicker";
 import { ShotFocusNav } from "./ShotFocusNav";
 import { AssetImage, MutationError, ShotHeader } from "./ShotHeader";
 import { focusedShot } from "./shot-focus";
@@ -185,12 +186,19 @@ function KeyframeShot({
               <ZoomImage src={assetUrl(usedRefs.landmark.key)} alt={`${usedRefs.landmark.name} 地标参考图`}
                 title={`${usedRefs.landmark.name} 地标参考`} />
             </div>
+          ) : usedRefs.landmark_skipped ? (
+            <p className="k-card-meta">本镜已选择不使用地标图，只用了角色参考图。</p>
           ) : usedRefs.landmark_id ? (
             <p className="k-card-meta">
               地标「{landmark?.name ?? usedRefs.landmark_id}」暂无参考图，无法显示。
             </p>
           ) : (
             <p className="k-card-meta">本镜没有指定地标，只用了角色参考图。</p>
+          )}
+          {landmark && landmark.refs.length > 0 && (
+            <LandmarkRefPicker key={`${shot.shot_id}:${shot.landmark_ref ?? 0}`} episode={episode} shot={shot}
+              landmark={landmark} current={shot.landmark_ref === "none" ? "none" : usedRefs.landmark?.index ?? 0}
+              personOmitted={usedRefs.person_omitted} locked={editLockReason} mutation={mutation} onError={setError} />
           )}
         </div>
       </div>

@@ -27,6 +27,8 @@ export interface KeyframeReferences {
   landmark: (KeyframeReference & { id: string; name: string }) | null;
   /** The landmark the shot asks for; non-null with `landmark` null means it is missing or has no image. */
   landmark_id: string | null;
+  /** The reviewer chose "no landmark picture" (`landmark_ref: "none"`); distinguishes it from a missing image. */
+  landmark_skipped: boolean;
   /**
    * An empty shot (`person_visible === false`) with a usable landmark image: the person reference is
    * deliberately not sent, so "no person" is not contradicted by a face in the references.
@@ -67,21 +69,23 @@ export function personaReference(
 /**
  * The reference images keyframe generation feeds the model, in provider order
  * (persona first, then landmark). This is the single source for both runKeyframe
- * and the review UI so what is shown is what was used: today always the first
- * image of each; `index` is kept so a per-shot choice can slot in later without
- * changing the shape.
+ * and the review UI so what is shown is what was used: the first persona image and, for the
+ * landmark, `refs[0]` unless the shot overrides it with `landmark_ref` (an index, clamped to a valid
+ * one so hand-edited data cannot fail the shot; or "none" to send no landmark picture).
  */
 export function keyframeReferences(
   persona: Persona | null | undefined,
   destination: Destination | null | undefined,
-  shot: Pick<Shot, "landmark" | "person_visible">,
+  shot: Pick<Shot, "landmark" | "person_visible" | "landmark_ref">,
   outfitId?: string | null,
 ): KeyframeReferences {
   const person = personaReference(persona, outfitId);
   const landmark = shot.landmark ? destination?.landmarks.find((item) => item.id === shot.landmark) : undefined;
-  const landmarkKey = landmark?.refs[0];
+  const skipped = shot.landmark_ref === "none" && landmark !== undefined;
+  const index = typeof shot.landmark_ref === "number" && shot.landmark_ref < (landmark?.refs.length ?? 0) ? shot.landmark_ref : 0;
+  const landmarkKey = skipped ? undefined : landmark?.refs[index];
   const landmarkRef = landmark && landmarkKey
-    ? { id: landmark.id, name: landmark.name, key: landmarkKey, index: 0, total: landmark.refs.length }
+    ? { id: landmark.id, name: landmark.name, key: landmarkKey, index, total: landmark.refs.length }
     : null;
   // Only drop the person when there is a landmark image left to send: the image workflow needs at
   // least one reference, so an empty shot without a landmark keeps today's behaviour (known limitation).
@@ -91,6 +95,7 @@ export function keyframeReferences(
     outfit: personOmitted ? null : person.outfit,
     landmark: landmarkRef,
     landmark_id: shot.landmark ?? null,
+    landmark_skipped: skipped,
     person_omitted: personOmitted,
   };
 }

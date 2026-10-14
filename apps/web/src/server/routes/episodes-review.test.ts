@@ -575,3 +575,31 @@ test("upgrade-long-cuts validates duration, isolates owners and moves a legacy f
   expect(ok.status).toBe(200);
   expect((await post({ row_version: 1, duration_s: 8 })).status).toBe(409);
 });
+
+test("the store review command lets kf_review choose a landmark picture without leaving the stage", async () => {
+  await upsertDestination(destinationFixture("d_landmark_ref"));
+  const make = async (id: string, status: Episode["status"], shot: Parameters<typeof shotFixture>[1]) => {
+    const episode = fixture(id, "u_owner");
+    episode.status = status;
+    episode.destination_id = "d_landmark_ref";
+    episode.shots = [shotFixture(1, { landmark: "l1", status: "kf_ready", candidates: ["kf/01_a.png"], ...shot })];
+    await insertEpisode(episode);
+    return { episode_id: id, owner_id: "u_owner", row_version: 1, shot_no: 1 };
+  };
+  const ok = await make("e_lref_ok", "kf_review", {});
+  expect(submitReviewShotPatch({ ...ok, patch: { landmark_ref: 2 } })).toMatchObject({ ok: true, row_version: 2 });
+  expect(submitReviewShotPatch({ ...ok, row_version: 2, patch: { landmark_ref: 0 } })).toMatchObject({ ok: true, row_version: 3 });
+  expect(submitReviewShotPatch({ ...ok, row_version: 3, patch: { landmark_ref: 3 } }))
+    .toMatchObject({ ok: false, error: "landmark_ref_invalid" });
+  const none = await make("e_lref_none", "kf_review", {});
+  expect(submitReviewShotPatch({ ...none, patch: { landmark_ref: "none" } })).toMatchObject({ ok: true });
+  const empty = await make("e_lref_empty", "kf_review", { person_visible: false });
+  expect(submitReviewShotPatch({ ...empty, patch: { landmark_ref: "none" } }))
+    .toMatchObject({ ok: false, error: "landmark_ref_invalid" });
+  const noLandmark = await make("e_lref_nolm", "kf_review", { landmark: null });
+  expect(submitReviewShotPatch({ ...noLandmark, patch: { landmark_ref: 1 } }))
+    .toMatchObject({ ok: false, error: "landmark_ref_invalid" });
+  const wrongStage = await make("e_lref_clip", "clip_review", {});
+  expect(submitReviewShotPatch({ ...wrongStage, patch: { landmark_ref: 1 } }))
+    .toMatchObject({ ok: false, error: "invalid_public_patch" });
+});

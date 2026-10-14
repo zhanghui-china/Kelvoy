@@ -22,7 +22,18 @@ test("uses the first persona image and the first image of the shot's landmark", 
     person_omitted: false,
     landmark: { id: "l1", name: "灵山大佛", key: "dest/a.jpg", index: 0, total: 4 },
     landmark_id: "l1",
+    landmark_skipped: false,
   });
+});
+
+test("landmark_ref picks another picture, clamps out-of-range, and \"none\" sends no landmark picture", () => {
+  expect(keyframeReferences(persona, destination, { landmark: "l1", landmark_ref: 2 }).landmark)
+    .toMatchObject({ key: "dest/c.jpg", index: 2, total: 4 });
+  expect(keyframeReferences(persona, destination, { landmark: "l1", landmark_ref: 9 }).landmark?.key).toBe("dest/a.jpg");
+  const none = keyframeReferences(persona, destination, { landmark: "l1", landmark_ref: "none" });
+  expect(none).toMatchObject({ landmark: null, landmark_id: "l1", landmark_skipped: true });
+  expect(none.persona?.key).toBe("persona/front.png");
+  expect(keyframeReferences(persona, destination, { landmark: null, landmark_ref: "none" }).landmark_skipped).toBe(false);
 });
 
 test("a shot without a landmark uses only the persona image", () => {
@@ -41,7 +52,7 @@ test("a named landmark that is unknown or has no image is distinguishable from n
 });
 
 test("missing persona or destination degrade to nulls instead of throwing", () => {
-  expect(keyframeReferences(null, null, { landmark: "l1" })).toEqual({ persona: null, outfit: null, landmark: null, landmark_id: "l1", person_omitted: false });
+  expect(keyframeReferences(null, null, { landmark: "l1" })).toEqual({ persona: null, outfit: null, landmark: null, landmark_id: "l1", person_omitted: false, landmark_skipped: false });
   expect(keyframeReferences({ ...persona, refs: [] }, destination, { landmark: null }).persona).toBeNull();
 });
 

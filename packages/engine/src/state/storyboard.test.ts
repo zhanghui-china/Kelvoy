@@ -67,3 +67,10 @@ test("insert honours duration_s and an explicit empty-shot flag", () => {
  const plain = editStoryboard(longPolicy(), { type: "insert", after_shot_id: null, shot_id: "sh_m", shot: { ...draft, person_visible: true } });
  expect(plain.shots[0].duration_s).toBe(4); expect("person_visible" in plain.shots[0]).toBe(false);
 });
+test("landmark_ref belongs to one landmark and never survives a switch to an empty shot with none", () => {
+ const ep = fixture(); ep.shots[0].landmark = "l1"; ep.shots[0].landmark_ref = 2;
+ expect(editStoryboard(ep, { type: "patch", shot_id: "sh_a", patch: { landmark: "l2" } }).shots[0].landmark_ref).toBeUndefined();
+ expect(editStoryboard(ep, { type: "patch", shot_id: "sh_a", patch: { beat: "other" } }).shots[0].landmark_ref).toBe(2);
+ ep.shots[0].landmark_ref = "none";
+ expect(editStoryboard(ep, { type: "patch", shot_id: "sh_a", patch: { person_visible: false } }).shots[0].landmark_ref).toBeUndefined();
+});

@@ -78,10 +78,23 @@ test("shows only the first persona image and the shot landmark's first image, wi
   expect(html).toContain("本镜生成用到的参考图");
   expect(html).toContain("角色参考 · 小岛 · 第 1 张 / 共 3 张");
   expect(html).toContain("地标参考 · 地标 · 第 1 张 / 共 3 张");
-  const urls = [...html.matchAll(/src="([^"]*(?:persona|a\.jpg|b\.jpg|c\.jpg)[^"]*)"/g)].map((m) => m[1]);
-  expect(urls.filter((u) => u.includes("front.png"))).toHaveLength(1);
-  expect(urls.filter((u) => u.includes("a.jpg"))).toHaveLength(1);
-  expect(urls.some((u) => u.includes("b.jpg") || u.includes("c.jpg") || u.includes("side.png"))).toBe(false);
+  // The used-reference panel shows one landmark picture; the picker below it lists all of them as thumbnails.
+  expect(html.match(/alt="地标 地标参考图"/g)).toHaveLength(1);
+  expect(html).toMatch(/src="[^"]*a\.jpg[^"]*"[^>]*alt="地标 地标参考图"|alt="地标 地标参考图"[^>]*src="[^"]*a\.jpg/);
+  expect(html.match(/front\.png/g)).toHaveLength(1);
+  expect(html).not.toContain("side.png");
+});
+
+test("kf_review offers every landmark picture plus a no-landmark choice for regeneration", () => {
+  const html = render("kf_ready", { withRefs: true, landmark: "l1" });
+  expect(html).toContain("换地标参考图");
+  for (const n of [1, 2, 3]) expect(html).toContain(`alt="地标 第 ${n} 张"`);
+  expect(html).toContain("不使用地标图");
+  expect(html).toContain("用所选参考图重生成");
+});
+
+test("a shot without a landmark has no picture picker", () => {
+  expect(render("kf_ready", { withRefs: true, landmark: null })).not.toContain("换地标参考图");
 });
 
 test("a chosen outfit is named and its image is the one shown instead of the base image", () => {
