@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { originalAudioEnabled, subtitlesEnabled, type Episode } from "@kelvoy/engine";
 import { continueEpisode, patchEpisode, retryFailedTask } from "../api/client";
 import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
@@ -7,7 +7,9 @@ import { MutationError } from "./ShotHeader";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
 /** Settings gate between approving every clip and submitting the compose job. */
-export default function ComposeSetup({ episode, mutation, retryFailed = false }: { episode: Episode; mutation: EpisodeMutation; retryFailed?: boolean }) {
+export default function ComposeSetup({ episode, mutation, retryFailed = false, storyboard }: {
+  episode: Episode; mutation: EpisodeMutation; retryFailed?: boolean; storyboard?: ReactNode;
+}) {
   const [title, setTitle] = useState(episode.render.title);
   const [subtitles, setSubtitles] = useState(subtitlesEnabled(episode.render));
   const [transitions, setTransitions] = useState(episode.render.transitions_enabled === true);
@@ -98,6 +100,7 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false }:
           {mutation.pending ? "提交中…" : retryFailed ? "重新执行失败任务" : "开始合成"}
         </button>
       </div>
+      {storyboard}
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import type { Episode } from "@kelvoy/engine";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { retryFailedTask } from "../api/client";
 import type { FailedTaskSummary, ShotFailureSummary } from "../api/client";
 import ComposeSetup from "./ComposeSetup";
@@ -16,11 +16,13 @@ export default function ProgressView({
   failedTask,
   failedTasks,
   shotFailures,
+  storyboard,
 }: {
   episode: Episode;
   mutation: EpisodeMutation;
   failedTask?: FailedTaskSummary | null;
   failedTasks?: FailedTaskSummary[];
+  storyboard?: ReactNode;
   shotFailures?: ShotFailureSummary[];
 }) {
   const submitting = useRef(false);
@@ -122,6 +124,7 @@ export default function ProgressView({
           )}
         </div>
       )}
+      {storyboard}
     </section>
   );
 }

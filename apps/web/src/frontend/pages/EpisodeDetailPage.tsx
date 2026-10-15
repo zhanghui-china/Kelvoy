@@ -1,7 +1,7 @@
 import type { ShotFailureSummary } from "../api/client";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Destination, Episode, Persona } from "@kelvoy/engine";
+import { storyboardEditable, type Destination, type Episode, type Persona } from "@kelvoy/engine";
 import { getEpisode } from "../api/client";
 import type { StoryboardPrices, FailedTaskSummary } from "../api/client";
 import { usePolledApiResource } from "../hooks/useApiResource";
@@ -71,6 +71,11 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
     episode.shots.filter(shot => shot.status === "failed").length);
   const stages = episodeStages(episode, failedTask);
   const currentStage = currentEpisodeStage(episode, failedTask);
+  // 分镜编辑随当前阶段卡片出现（或回看时出现在阶段下方）；后端只在 storyboardEditable 的状态下接受编辑。
+  const storyboard = episode.mode === "per_shot" && storyboardEditable(episode)
+    ? <StoryboardEditor episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy}
+      warnings={storyboardWarnings} prices={storyboardPrices} />
+    : null;
   const selectedStage = viewing?.episodeId === episode.episode_id &&
     stages.some(stage => stage.id === viewing.stage && stage.available) ? viewing.stage : null;
   const replaying = selectedStage !== null && selectedStage !== currentStage;
@@ -114,9 +119,9 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
       {episode.video_source === "references" && <p className="k-card-meta">
         本期为直出模式，无关键帧审核；如需选图，请新建时选择关键帧方式。
       </p>}
-      {replaying && <section className="k-playback" aria-label="只读阶段回看">
+      {replaying && <section className="k-playback" aria-label="阶段回看">
         <div className="k-desk-toolbar k-playback-banner">
-          <p role="status">正在回看：{stages.find(stage => stage.id === selectedStage)?.label.slice(2)} · 只读</p>
+          <p role="status">正在回看：{stages.find(stage => stage.id === selectedStage)?.label.slice(2)}{storyboard ? " · 分镜修改会让整期回到分镜审核" : " · 只读"}</p>
           <button type="button" className="k-btn k-btn-secondary" onClick={() => setViewing(null)}>返回当前进度</button>
         </div>
         {(episode.status === "failed" || episode.shots.some(shot => shot.status === "failed")) && <p className="k-error" role="alert">
@@ -124,6 +129,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
           {episode.failure_reason ? `：${episode.failure_reason}` : ""}。返回当前进度后可查看重试操作。
         </p>}
         <StagePlayback key={`${episode.episode_id}:${selectedStage}`} stage={selectedStage} episode={episode} destination={destination} persona={persona} />
+        {selectedStage !== "project" && storyboard}
       </section>}
       {/* Keep local edits mounted while replaying, but remove all operation entries from view. */}
       <div ref={operationRef} hidden={replaying} data-episode-operations
@@ -139,7 +145,7 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
         {episode.status !== "done" && episode.final && <PriorFinal episode={episode} />}
 
         {episode.status === "script_review" && (
-          <ScriptReview episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy} warnings={storyboardWarnings} prices={storyboardPrices} showEditor={false} />
+          <ScriptReview episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy} prices={storyboardPrices} storyboard={storyboard} />
         )}
         {(episode.status === "kf_review" || episode.status === "keyframing") && (
           <KeyframeReview shotFailures={shotFailures}
@@ -148,29 +154,25 @@ export function EpisodeDetailContent({ episode, destination, persona, destinatio
             persona={persona}
             mutation={mutation}
             busy={storyboardBusy}
+            storyboard={storyboard}
           />
         )}
         {(episode.status === "clip_review" || episode.status === "clipping") && (
-          <ClipReview shotFailures={shotFailures} episode={episode} mutation={mutation} />
+          <ClipReview shotFailures={shotFailures} episode={episode} mutation={mutation} storyboard={storyboard} />
         )}
-        {episode.status === "compose_ready" && <ComposeSetup episode={episode} mutation={mutation} />}
+        {episode.status === "compose_ready" && <ComposeSetup episode={episode} mutation={mutation} storyboard={storyboard} />}
         {(episode.status === "done" || episode.status === "composing") && (
-          <DoneView episode={episode} mutation={mutation} />
+          <DoneView episode={episode} mutation={mutation} storyboard={storyboard} />
         )}
         {(episode.status === "draft" ||
           episode.status === "scripting" ||
           episode.status === "assets" ||
-          episode.status === "failed") && <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} failedTasks={failedTasks} />}
+          episode.status === "failed") && <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} failedTasks={failedTasks} storyboard={storyboard} />}
         {(episode.status === "keyframing" || episode.status === "kf_review" ||
           episode.status === "clipping" || episode.status === "clip_review") &&
           episode.shots.some((shot) => shot.status === "failed") &&
           <ProgressView shotFailures={shotFailures} episode={episode} mutation={mutation} failedTask={failedTask} failedTasks={failedTasks} />}
 
-        {episode.mode === "per_shot" && <details className="k-desk-main" open={episode.status === "script_review" ? true : undefined}>
-          <summary>编辑分镜 · {episode.shots.length} 镜</summary>
-          <StoryboardEditor episode={episode} destination={destination} mutation={mutation} busy={storyboardBusy}
-            warnings={storyboardWarnings} prices={storyboardPrices} />
-        </details>}
         <SaveAsTemplateForm episodeId={episode.episode_id} />
       </div>
     </div>

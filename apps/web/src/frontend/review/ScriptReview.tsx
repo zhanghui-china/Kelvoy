@@ -1,16 +1,15 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Destination, Episode } from "@kelvoy/engine";
 import { continueEpisode, optimizeScript, regenerateScript, type StoryboardPrices } from "../api/client";
 import { SHOT_CAMERA_LABELS, SHOT_SIZE_LABELS } from "../labels";
 import { GuideTip } from "../GuideTip";
 import PromptTrace from "./PromptTrace";
-import StoryboardEditor from "./StoryboardEditor";
 import { downloadScriptCsv } from "./scriptExport";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 
-export default function ScriptReview({ episode, destination, mutation, busy = false, warnings, prices, showEditor = true }: {
+export default function ScriptReview({ episode, destination, mutation, busy = false, prices, storyboard }: {
   episode: Episode; destination: Destination | null; mutation: EpisodeMutation;
-  busy?: boolean; warnings?: string[]; prices?: StoryboardPrices; showEditor?: boolean;
+  busy?: boolean; prices?: StoryboardPrices; storyboard?: ReactNode;
 }) {
   const [view, setView] = useState<"script" | "storyboard">("script");
   const [instruction, setInstruction] = useState("");
@@ -38,7 +37,7 @@ export default function ScriptReview({ episode, destination, mutation, busy = fa
             </tr>)}</tbody>
           </table></div>
         </>}
-        {showEditor && <StoryboardEditor episode={episode} destination={destination} mutation={mutation} busy={busy} warnings={warnings} prices={prices} />}
+        {storyboard}
       </div>
       <div className="k-card k-desk-script-assistant">
         <div className="k-card-title">脚本助手</div>

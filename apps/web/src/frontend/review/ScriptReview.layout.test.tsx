@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Episode } from "@kelvoy/engine";
 import ScriptReview from "./ScriptReview";
+import StoryboardEditor from "./StoryboardEditor";
 import { StaticRouter } from "react-router-dom/server";
 import type { EpisodeMutation } from "./useEpisodeMutation";
 const reviewCss = readFileSync(new URL("./review.css", import.meta.url), "utf8");
@@ -10,7 +11,8 @@ const reviewCss = readFileSync(new URL("./review.css", import.meta.url), "utf8")
 test("script review exposes two columns, CSV export, and existing review actions", () => {
   const episode = { episode_id: "e1", name: "测试", shots: [{ no: 1, scene: "s", size: "wide", camera: "static", landmark: null, beat: "动作", kf_prompt: "" }], scenes: [], video_source: "references" } as unknown as Episode;
   const mutation = { pending: false, error: null, run: async () => null } as unknown as EpisodeMutation;
-  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e1"><ScriptReview episode={episode} destination={null} mutation={mutation} /></StaticRouter>);
+  const storyboard = <StoryboardEditor episode={episode} destination={null} mutation={mutation} />;
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e1"><ScriptReview episode={episode} destination={null} mutation={mutation} storyboard={storyboard} /></StaticRouter>);
   expect(html).toContain('class="k-desk-script-layout"');
   expect(html).toContain("导出脚本 CSV");
   expect(html).toMatch(/aria-pressed="true"[^>]*>脚本视图<\/button>/);

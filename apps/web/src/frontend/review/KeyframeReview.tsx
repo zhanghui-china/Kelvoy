@@ -1,6 +1,6 @@
 import { ShotFailureNotice, useShotRetry } from "./ShotFailure";
 import type { ShotFailureSummary } from "../api/client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { keyframeReferences, type Destination, type Episode, type Persona, type Shot } from "@kelvoy/engine";
 import { personaReferenceLabel } from "./persona-reference-label";
 import { assetUrl, continueEpisode, episodeFileUrl, patchShot, regenShot } from "../api/client";
@@ -271,6 +271,7 @@ export default function KeyframeReview({
   persona,
   mutation,
   busy = false,
+  storyboard,
 }: {
   episode: Episode;
   shotFailures?: ShotFailureSummary[];
@@ -278,6 +279,7 @@ export default function KeyframeReview({
   persona: Persona | null;
   mutation: EpisodeMutation;
   busy?: boolean;
+  storyboard?: ReactNode;
 }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -317,6 +319,8 @@ export default function KeyframeReview({
         </div>
 
         <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；任务空闲时可保存画面描述。内容未变时留在当前审核；修改后返回脚本审核，再明确选择生成。</GuideTip>
+
+        {storyboard}
 
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />

@@ -1,6 +1,6 @@
 import { ShotFailureNotice, useShotRetry } from "./ShotFailure";
 import type { ShotFailureSummary } from "../api/client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Episode, Shot } from "@kelvoy/engine";
 import type { WriteResult } from "../api/client";
 import {
@@ -255,10 +255,12 @@ export default function ClipReview({
   episode,
   shotFailures,
   mutation,
+  storyboard,
 }: {
   episode: Episode;
   shotFailures?: ShotFailureSummary[];
   mutation: EpisodeMutation;
+  storyboard?: ReactNode;
 }) {
   const [showAll, setShowAll] = useState(false);
   const mainRef = useRef<HTMLElement | null>(null);
@@ -287,6 +289,7 @@ export default function ClipReview({
           : episode.cut_policy === "long_3_6"
             ? "每镜成片 3–6 秒，最终时长由素材与目标预算分配；起点后至少保留 3 秒素材。逐镜检查动作与五项质量红线，通过后进入合成设置。"
           : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 3–6 秒长镜头时，请用下方「旧版剪辑」卡片升级并重新确认。"}</GuideTip>
+        {storyboard}
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />
         <MutationError error={mutation.error} />

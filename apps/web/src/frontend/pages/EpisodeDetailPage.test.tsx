@@ -96,3 +96,29 @@ test("healthy episode shows no failure summary or per-shot retry", () => {
   expect(html).not.toContain("生成失败，可在");
   expect(html).not.toContain("重试这一镜");
 });
+
+test.each([
+  ["script_review", "script"],
+  ["kf_review", "keyframes"],
+  ["clip_review", "clips"],
+  ["compose_ready", "compose"],
+  ["done", "compose"],
+] as const)("%s shows the storyboard editor inside the stage card, not at the page bottom", (status) => {
+  const episode = { ...fixture("e_editor", "u_1"), status, mode: "per_shot" as const,
+    shots: [shotFixture(1, { status: "approved", candidates: ["kf/1.png"], kf_selected: "kf/1.png", clip: "clip/1.mp4" })] };
+  const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_editor">
+    <EpisodeDetailContent episode={episode} destination={null} persona={null} mutation={mutation} />
+  </StaticRouter>);
+  expect(html.match(/aria-label="自由分镜编辑"/g)).toHaveLength(1);
+  expect(html).not.toContain("编辑分镜 ·");
+});
+
+test("storyboard editor is absent for grid mode and for statuses before the storyboard exists", () => {
+  for (const [status, mode] of [["script_review", "grid"], ["scripting", "per_shot"]] as const) {
+    const episode = { ...fixture("e_no_editor", "u_1"), status, mode, shots: [] };
+    const html = renderToStaticMarkup(<StaticRouter location="/episodes/e_no_editor">
+      <EpisodeDetailContent episode={episode} destination={null} persona={null} mutation={mutation} />
+    </StaticRouter>);
+    expect(html).not.toContain("自由分镜编辑");
+  }
+});

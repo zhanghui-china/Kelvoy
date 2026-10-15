@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { originalAudioEnabled, subtitlesEnabled, type Episode } from "@kelvoy/engine";
 import { episodeFileUrl, patchEpisode, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
 import { GuideTip } from "../GuideTip";
@@ -18,9 +18,11 @@ function finalKey(episode: Episode): string {
 export default function DoneView({
   episode,
   mutation,
+  storyboard,
 }: {
   episode: Episode;
   mutation: EpisodeMutation;
+  storyboard?: ReactNode;
 }) {
   const submitting = useRef(false);
   const [queuedEpisode, setQueuedEpisode] = useState<Episode | null>(null);
@@ -88,6 +90,7 @@ export default function DoneView({
       <p className="k-card-meta">{episode.cut_policy === "long_3_6" ? `每镜 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入` : episode.cut_policy === "fixed_1s" ? "每镜 1 秒" : "沿用旧项目的节拍切点"}</p>
       {canUpgradeToLongCuts(episode) && <UpgradeLongCutsCard episode={episode} mutation={mutation}
         title="升级为 3–6 秒长镜头" hint="保留片段，逐镜重新确认起点。升级后旧成片暂停交付，完成新版合成后可恢复分享。" />}
+      {storyboard}
 
       <div className="k-card k-share-card">
         <div className="k-card-title">分享</div>
