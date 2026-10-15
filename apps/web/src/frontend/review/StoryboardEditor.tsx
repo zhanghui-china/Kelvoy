@@ -75,9 +75,9 @@ export default function StoryboardEditor({ episode, destination, mutation, busy 
             onDrop={(event) => { event.preventDefault(); if (draggedId) void reorder(draggedId, id); setDraggedId(null); }}>
             <div className="k-card-title">第 {shot.no} 镜 · {SHOT_SIZE_LABELS[shot.size]}</div>
             <div className="k-card-meta">{episode.scenes.find((scene) => scene.id === shot.scene)?.name ?? shot.scene} · 拖动卡片调整顺序，或使用上移 / 下移</div>
-            <p>{shot.beat || "尚未填写画面动作"}</p>
+            <p>{shot.beat || "尚未填写动作 beat"}</p>
             <p className="k-card-meta">字幕：{shot.caption || "无"}{shot.person_visible === false ? " · 空镜（无人物）" : ""}</p>
-            <details><summary>画面描述</summary><p>{shot.kf_prompt || "尚未填写关键帧描述"}</p><p>{shot.motion_prompt || "尚未填写运动描述"}</p></details>
+            <details><summary>关键帧与运动描述</summary><p>{shot.kf_prompt || "尚未填写关键帧描述"}</p><p>{shot.motion_prompt || "尚未填写运动描述"}</p></details>
             <div className="k-desk-actions">
               <button type="button" className="k-btn k-btn-secondary k-btn-tiny" aria-label={`第 ${shot.no} 镜上移`} disabled={disabled || index === 0} onClick={() => move(id, -1)}>上移</button>
               <button type="button" className="k-btn k-btn-secondary k-btn-tiny" aria-label={`第 ${shot.no} 镜下移`} disabled={disabled || index === ids.length - 1} onClick={() => move(id, 1)}>下移</button>

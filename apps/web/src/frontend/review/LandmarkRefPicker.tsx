@@ -57,7 +57,7 @@ export function LandmarkRefPicker({ episode, shot, landmark, current, personOmit
           不使用地标图
         </button>
       </div>
-      {choice === "none" && <p className="k-card-meta">不带地标图时，画面描述里的地标场景可能画得不准，可先修改画面描述。</p>}
+      {choice === "none" && <p className="k-card-meta">不带地标图时，关键帧描述里的地标场景可能画得不准，可先修改关键帧描述。</p>}
       {personOmitted && <p className="k-card-meta">本镜是空镜，地标图是唯一的参考图。</p>}
       <button type="button" className="k-btn k-btn-secondary k-btn-tiny" disabled={disabled} onClick={apply}>
         用所选参考图重生成

@@ -50,9 +50,9 @@ function KeyframeShot({
   const [saving, setSaving] = useState(false);
   const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const savingRef = useRef(false);
-  const editLockReason = episode.status !== "kf_review" ? "当前不在关键帧审核，暂时不能修改画面描述。"
+  const editLockReason = episode.status !== "kf_review" ? "当前不在关键帧审核，暂时不能修改关键帧描述。"
     : episode.script_pending_task_id ? "脚本任务正在处理，请等待完成。"
-    : busy ? "生成任务正在处理中，完成后可修改画面描述。"
+    : busy ? "生成任务正在处理中，完成后可修改关键帧描述。"
     : mutation.pending || saving ? "操作正在提交，请稍候。" : null;
 
   async function savePrompt() {
@@ -218,7 +218,7 @@ function KeyframeShot({
             setPromptOpen(!promptOpen);
           }}
         >
-          {promptOpen ? "收起画面描述" : "修改画面描述"}
+          {promptOpen ? "收起关键帧描述" : "修改关键帧描述"}
         </button>
         <button
           type="button"
@@ -234,7 +234,7 @@ function KeyframeShot({
       {notice && <p className="k-card-meta" role="status">{notice}</p>}
       <div className="k-desk-editor" hidden={!promptOpen}>
         <label className="k-field">
-          画面描述
+          关键帧描述
           <textarea value={prompt} disabled={editLockReason !== null} onChange={(e) => setPrompt(e.target.value)} />
         </label>
         <div className="k-desk-actions">
@@ -244,7 +244,7 @@ function KeyframeShot({
             disabled={editLockReason !== null}
             onClick={savePrompt}
           >
-            {saving ? "保存中…" : "保存画面描述"}
+            {saving ? "保存中…" : "保存关键帧描述"}
           </button>
         </div>
         <p className="k-card-meta">内容未变时留在当前审核；修改后返回脚本审核，仅此镜素材需重新生成，其他镜头与旧成片保留。保存不会自动生成。</p>
@@ -318,7 +318,7 @@ export default function KeyframeReview({
           )}
         </div>
 
-        <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；任务空闲时可保存画面描述。内容未变时留在当前审核；修改后返回脚本审核，再明确选择生成。</GuideTip>
+        <GuideTip section="keyframes">对照角色和地标参考图，已就绪的镜头可以先选；任务空闲时可保存关键帧描述。内容未变时留在当前审核；修改后返回脚本审核，再明确选择生成。</GuideTip>
 
         {storyboard}
 

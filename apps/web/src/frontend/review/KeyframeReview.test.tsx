@@ -28,7 +28,7 @@ function render(status: "failed" | "kf_selected" | "kf_ready" | "approved", opti
 
 test.each(["failed", "kf_selected", "kf_ready", "approved"] as const)("%s allows saving the current description independent of regeneration", (status) => {
   const html = render(status);
-  const save = html.match(/<button[^>]*>保存画面描述<\/button>/)?.[0];
+  const save = html.match(/<button[^>]*>保存关键帧描述<\/button>/)?.[0];
   expect(save).toBeDefined();
   expect(save).not.toContain("disabled");
   expect(html).toContain("内容未变时留在当前审核");
@@ -42,7 +42,7 @@ test.each([
   [{ pending: true }, "操作正在提交"],
 ] as const)("edit and save share the lock: %s", (options, reason) => {
   const html = render("kf_ready", options);
-  for (const label of ["修改画面描述", "保存画面描述"]) {
+  for (const label of ["修改关键帧描述", "保存关键帧描述"]) {
     expect(html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0]).toContain('disabled=""');
   }
   expect(html).toContain(reason);

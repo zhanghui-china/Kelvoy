@@ -30,10 +30,10 @@ test("caption and visual editing remain separate and duration is not editable", 
   const visual = renderToStaticMarkup(<StoryboardShotForm {...common} />);
   const caption = renderToStaticMarkup(<StoryboardShotForm {...common} captionOnly />);
   const insert = renderToStaticMarkup(<StoryboardShotForm {...common} afterId={null} price={7} />);
-  expect(visual).toContain("画面动作（beat）");
+  expect(visual).toContain("动作 beat");
   expect(visual).not.toContain("成片字幕");
   expect(caption).toContain("成片字幕");
-  expect(caption).not.toContain("画面动作（beat）");
+  expect(caption).not.toContain("动作 beat");
   expect(insert).toContain("默认场景（保存时创建）");
   expect(insert).toContain("消耗 7 积分");
   expect(insert).toContain("确认插入");

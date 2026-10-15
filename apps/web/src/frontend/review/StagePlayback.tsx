@@ -68,7 +68,7 @@ export default function StagePlayback({ stage, episode, destination, persona }: 
   if (stage === "script") return <section className="k-desk-main">
     <div className="k-desk-toolbar"><h2>已保存的分镜脚本</h2><button type="button" className="k-btn k-btn-secondary" onClick={() => downloadScriptCsv(episode, destination)}>导出脚本 CSV</button></div>
     {!episode.shots.length ? <p className="k-empty">暂无已保存的脚本</p> : <div className="k-desk-tablewrap"><table className="k-desk-table">
-      <thead><tr>{["镜号", "场景", "景别", "动作 beat", "字幕", "机位", "画面描述", "运动描述"].map(label => <th key={label}>{label}</th>)}</tr></thead>
+      <thead><tr>{["镜号", "场景", "景别", "动作 beat", "字幕", "机位", "关键帧描述", "运动描述"].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{episode.shots.map(s => <tr key={s.shot_id ?? s.no}><td>{s.no}</td><td>{episode.scenes.find(scene => scene.id === s.scene)?.name ?? s.scene}</td><td>{SHOT_SIZE_LABELS[s.size]}</td><td>{s.beat}</td><td>{s.caption || "—"}</td><td>{SHOT_CAMERA_LABELS[s.camera]}</td><td>{s.kf_prompt || "—"}</td><td>{s.motion_prompt || "—"}</td></tr>)}</tbody>
     </table></div>}
     {episode.shots.length > 0 && <PromptTrace episodeId={episode.episode_id} kind="script"

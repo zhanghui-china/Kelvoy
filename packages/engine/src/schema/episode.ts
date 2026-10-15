@@ -78,11 +78,14 @@ export interface Shot {
   no: number;
   scene: string; // Scene.id
   size: ShotSize;
+  /** 动作 beat：本镜唯一动作的短语。作为镜头标题展示，并作为 H3 编写器的输入；不直送视频模型。 */
   beat: string;
   caption?: string;
   camera: ShotCamera;
   landmark: string | null; // Landmark.id
+  /** 关键帧描述：静态画面（光线、机位、动作，不含外貌）。驱动关键帧生图，也是 H3 编写器的输入；不直送视频模型。 */
   kf_prompt: string;
+  /** 运动描述：视频阶段的运动提示，一句、只描述一个动作。仅作为 H3 编写器的输入；不直送视频模型。 */
   motion_prompt: string;
   /**
    * Whether a person is in frame. Only an explicit `false` is stored; absent means visible, so existing

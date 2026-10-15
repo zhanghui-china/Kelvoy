@@ -105,11 +105,11 @@ export default function ShotEditor({
         <input value={caption} maxLength={120} onChange={(e) => setCaption(e.target.value)} />
       </label>
       <label className="k-field">
-        关键帧 prompt
+        关键帧描述
         <textarea value={kfPrompt} onChange={(e) => setKfPrompt(e.target.value)} />
       </label>
       <label className="k-field">
-        运动 prompt
+        运动描述
         <textarea value={motionPrompt} onChange={(e) => setMotionPrompt(e.target.value)} />
       </label>
       <MutationError error={error} />

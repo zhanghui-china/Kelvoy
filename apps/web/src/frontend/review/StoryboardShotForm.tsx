@@ -96,7 +96,7 @@ export default function StoryboardShotForm({ episode, destination, initial, muta
             <option value="">无</option>{destination?.landmarks.map((landmark) => <option key={landmark.id} value={landmark.id}>{landmark.name}</option>)}
           </select></label>
         </div>
-        <label className="k-field">画面动作（beat）<textarea required maxLength={2000} value={draft.beat} onChange={(e) => update("beat", e.target.value)} /></label>
+        <label className="k-field">动作 beat<textarea required maxLength={2000} value={draft.beat} onChange={(e) => update("beat", e.target.value)} /></label>
         <label className="k-field">关键帧描述<textarea required maxLength={2000} value={draft.kf_prompt} onChange={(e) => update("kf_prompt", e.target.value)} /></label>
         <label className="k-field">运动描述<textarea required maxLength={2000} value={draft.motion_prompt} onChange={(e) => update("motion_prompt", e.target.value)} /></label>
         <StoryboardShotExtras draft={draft} longCut={episode.cut_policy === "long_3_6"} onChange={update} />

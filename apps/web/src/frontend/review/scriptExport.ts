@@ -10,7 +10,7 @@ function csvCell(value: string | number): string {
 
 export function buildScriptCsv(episode: Episode, destination: Destination | null): string {
   const rows: (string | number)[][] = [
-    ["镜号", "场景", "时段", "景别", "动作 beat", "字幕", "机位", "地标", "关键帧 prompt", "运动 prompt", "目标时长（秒）"],
+    ["镜号", "场景", "时段", "景别", "动作 beat", "字幕", "机位", "地标", "关键帧描述", "运动描述", "目标时长（秒）"],
     ...episode.shots.map((shot) => {
       const scene = episode.scenes.find((item) => item.id === shot.scene);
       const landmark = destination?.landmarks.find((item) => item.id === shot.landmark);
