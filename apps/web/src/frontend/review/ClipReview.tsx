@@ -221,6 +221,18 @@ function ClipShot({
         >
           通过这一镜
         </button>
+        {episode.video_source !== "references" && (
+          <button
+            type="button"
+            className="k-btn k-btn-secondary k-btn-tiny"
+            disabled={mutation.pending || !canRegen(shot)}
+            onClick={() =>
+              runWrite((rowVersion) => regenShot(episode.episode_id, shot.no, rowVersion, "keyframe"))
+            }
+          >
+            重做关键帧
+          </button>
+        )}
         <button
           type="button"
           className="k-btn k-btn-secondary k-btn-tiny"
@@ -229,7 +241,7 @@ function ClipShot({
             runWrite((rowVersion) => regenShot(episode.episode_id, shot.no, rowVersion, "video"))
           }
         >
-          标记重生成
+          重做视频
         </button>
         <button
           type="button"
@@ -289,6 +301,7 @@ export default function ClipReview({
           : episode.cut_policy === "long_3_6"
             ? "每镜成片 3–6 秒，最终时长由素材与目标预算分配；起点后至少保留 3 秒素材。逐镜检查动作与五项质量红线，通过后进入合成设置。"
           : "旧版剪辑沿用原有选段长度；逐镜检查动作与五项质量红线。想改用每镜 3–6 秒长镜头时，请用下方「旧版剪辑」卡片升级并重新确认。"}</GuideTip>
+        {storyboard && <p className="k-card-meta">改分镜后会回到分镜审核，需再点继续；已通过的镜头不会重跑。</p>}
         {storyboard}
         <ShotFocusNav shotNos={shotNos} currentNo={activeNo} showAll={showAll}
           onPick={focusShot} onToggle={() => setShowAll(!showAll)} />

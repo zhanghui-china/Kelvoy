@@ -1,8 +1,7 @@
-import { useRef, useState, type ReactNode } from "react";
-import { originalAudioEnabled, subtitlesEnabled, type Episode } from "@kelvoy/engine";
-import { episodeFileUrl, patchEpisode, recompose, regenShot, setEpisodeShare, shareUrl } from "../api/client";
+import { useRef, type ReactNode } from "react";
+import type { Episode } from "@kelvoy/engine";
+import { episodeFileUrl, reopenStage, setEpisodeShare, shareUrl } from "../api/client";
 import { GuideTip } from "../GuideTip";
-import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
 import ShareActions from "./ShareActions";
 import UpgradeLongCutsCard, { canUpgradeToLongCuts } from "./UpgradeLongCutsCard";
 import { MutationError } from "./ShotHeader";
@@ -25,32 +24,11 @@ export default function DoneView({
   storyboard?: ReactNode;
 }) {
   const submitting = useRef(false);
-  const [queuedEpisode, setQueuedEpisode] = useState<Episode | null>(null);
-  const composeQueued = queuedEpisode === episode;
-  const [subtitles, setSubtitles] = useState(subtitlesEnabled(episode.render));
-  const [musicEnabled, setMusicEnabled] = useState(episode.music.enabled !== false);
-  const [musicFile, setMusicFile] = useState(episode.music.file);
-  const [originalAudio, setOriginalAudio] = useState(originalAudioEnabled(episode.render));
-  const musicChanged = musicEnabled !== (episode.music.enabled !== false) || musicFile !== episode.music.file;
-  const settingsChanged = subtitles !== subtitlesEnabled(episode.render) || musicChanged ||
-    originalAudio !== originalAudioEnabled(episode.render);
-  async function save() {
-    if (submitting.current || mutation.pending || !settingsChanged || composeQueued) return;
+  async function reopen(stage: "compose" | "clips") {
+    if (submitting.current || mutation.pending) return;
     submitting.current = true;
     try {
-      await mutation.run(rowVersion => patchEpisode(episode.episode_id, rowVersion,
-        { render: { ...episode.render, subtitles_enabled: subtitles, original_audio_enabled: originalAudio },
-          ...(musicChanged ? { music: musicSettingsPatch(episode.music, musicEnabled, musicFile) } : {}) }));
-    } finally {
-      submitting.current = false;
-    }
-  }
-  async function submitCompose() {
-    if (submitting.current || mutation.pending || settingsChanged || composeQueued) return;
-    submitting.current = true;
-    try {
-      const result = await mutation.run(rowVersion => recompose(episode.episode_id, rowVersion));
-      if (result?.ok) setQueuedEpisode(episode);
+      await mutation.run(rowVersion => reopenStage(episode.episode_id, rowVersion, stage));
     } finally {
       submitting.current = false;
     }
@@ -164,46 +142,17 @@ export default function DoneView({
 
       <MutationError error={mutation.error} />
       <div className="k-card">
-        <div className="k-card-title">重做镜头</div>
-        <p className="k-card-meta">选一镜重生成；审核新结果后再合成。其他已通过的镜头继续保留。</p>
-        {episode.shots.map((shot) => (
-          <div className="k-desk-actions" key={shot.no}>
-            <span className="k-card-meta">第 {shot.no} 镜 · {shot.beat}</span>
-            {episode.video_source !== "references" && <button type="button" className="k-btn k-btn-secondary k-btn-tiny"
-              disabled={mutation.pending}
-              onClick={() => mutation.run((rowVersion) =>
-                regenShot(episode.episode_id, shot.no, rowVersion, "keyframe"))}>
-              重生成关键帧
-            </button>}
-            <button type="button" className="k-btn k-btn-secondary k-btn-tiny"
-              disabled={mutation.pending || (episode.video_source !== "references" && !shot.kf_selected)}
-              onClick={() => mutation.run((rowVersion) =>
-                regenShot(episode.episode_id, shot.no, rowVersion, "video"))}>
-              重生成视频
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="k-card">
-        <div className="k-card-title">字幕、配乐与重新合成</div>
-        <label><input type="checkbox" checked={subtitles} disabled={mutation.pending || composeQueued}
-          onChange={(event) => setSubtitles(event.target.checked)} /> 烧录每镜字幕</label>
-        <p className="k-card-meta">已填写字幕 {episode.shots.filter(shot => shot.caption?.trim()).length} / {episode.shots.length} 镜 · 空字幕不显示。{!subtitles && "本次成片不显示每镜字幕。"}</p>
-        <MusicSettings enabled={musicEnabled} file={musicFile} originalAudio={originalAudio} disabled={mutation.pending || composeQueued}
-          onEnabledChange={setMusicEnabled} onFileChange={setMusicFile} onOriginalAudioChange={setOriginalAudio} />
-        <p className="k-card-meta">保存后需合成／重新合成才会更新成片。</p>
-        {composeQueued && <p role="status">合成任务已提交，等待后台处理。</p>}
-        {settingsChanged && <p role="status">合成设置尚未保存，请先保存设置，再重新合成。</p>}
+        <div className="k-card-title">还想调整？</div>
+        <p className="k-card-meta">字幕、配乐和重新合成在「配乐合成」；单镜重做在「视频片段」。回去不会重跑任何镜头，也不会丢掉当前成片。</p>
         <div className="k-desk-actions">
-          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || !settingsChanged || composeQueued}
-            onClick={() => void save()}>
-            保存设置
+          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending}
+            onClick={() => void reopen("compose")}>
+            调整字幕/配乐 → 回到配乐合成
           </button>
-          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || settingsChanged || composeQueued}
-            onClick={() => void submitCompose()}>
-            重新合成
+          <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending}
+            onClick={() => void reopen("clips")}>
+            某镜不满意 → 回到视频片段
           </button>
-          <span className="k-card-meta">重新合成只重跑合成，不动任何镜（FR-08）。</span>
         </div>
       </div>
     </section>

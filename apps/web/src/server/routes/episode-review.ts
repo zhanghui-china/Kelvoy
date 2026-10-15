@@ -10,6 +10,7 @@ import {
   submitReviewShotPatch,
   setShare,
   submitReviewAdvance,
+  reopenEpisodeStage,
   submitShotRegeneration,
   submitScriptAction,
   submitFailedTaskRetry,
@@ -237,6 +238,22 @@ review.post("/:id/shots/:no/remove", async (c) => {
   if (!result.ok) return c.json(result, result.error === "version_conflict" ? 409 : result.error === "not_found" ? 404 : 400);
   return c.json(result);
 
+});
+
+// 从成片/配乐合成回到对应阶段页面做修改。只改 status，不动镜头与成片。
+review.post("/:id/reopen", async (c) => {
+  const loaded = await loadOwnedEpisode(c.get("ownerId"), c.req.param("id"));
+  if (!loaded) return c.json({ ok: false, error: "not_found" }, 404);
+  const body = await c.req.json().catch(() => null);
+  const rowVersion = parseRowVersion(body);
+  if (rowVersion === null) return c.json({ ok: false, error: "invalid_row_version" }, 400);
+  const stage = (body as Record<string, unknown>).stage;
+  if (stage !== "compose" && stage !== "clips") return c.json({ ok: false, error: "invalid_stage" }, 400);
+  const result = reopenEpisodeStage({ episode_id: loaded.episode.episode_id, owner_id: c.get("ownerId"),
+    row_version: rowVersion, into: stage === "compose" ? "compose_ready" : "clip_review" });
+  if (!result.ok) return c.json(result, result.error === "version_conflict" ? 409 :
+    result.error === "not_found" ? 404 : 400);
+  return c.json({ ok: true, row_version: result.row_version });
 });
 
 review.post("/:id/recompose", async (c) => {

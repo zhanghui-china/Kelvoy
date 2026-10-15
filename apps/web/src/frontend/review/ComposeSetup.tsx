@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { originalAudioEnabled, subtitlesEnabled, type Episode } from "@kelvoy/engine";
-import { continueEpisode, patchEpisode, retryFailedTask } from "../api/client";
+import { continueEpisode, patchEpisode, reopenStage, retryFailedTask } from "../api/client";
 import MusicSettings, { musicSettingsPatch } from "./MusicSettings";
 import { GuideTip } from "../GuideTip";
 import { MutationError } from "./ShotHeader";
@@ -60,10 +60,22 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false, s
     }
   }
 
+  const hasFinal = !!episode.final;
+  const action = retryFailed ? "重试" : hasFinal ? "重新合成" : "开始合成";
+  async function backToClips() {
+    if (submitting.current || mutation.pending || retryQueued) return;
+    submitting.current = true;
+    try {
+      await mutation.run(rowVersion => reopenStage(episode.episode_id, rowVersion, "clips"));
+    } finally {
+      submitting.current = false;
+    }
+  }
+
   return (
     <section className="k-card k-compose-setup">
-      <div className="k-eyebrow">第 5 步 · 合成与预览</div>
-      <h2>合成设置</h2>
+      <div className="k-eyebrow">配乐与合成</div>
+      <h2>{episode.final ? "配乐与重新合成" : "合成设置"}</h2>
       <GuideTip section="compose">{fixed
         ? "调整标题、字幕、配乐与片头片尾后，先保存设置，再开始合成。下方时长按当前镜头数和首尾设置计算。"
         : long ? `每镜 3–6 秒，目标约 ${episode.brief.duration_s} 秒，片头片尾计入；实际分配由素材探测决定。调整后先保存设置，再开始合成。`
@@ -88,7 +100,7 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false, s
         <label><input type="checkbox" checked={outro !== null} onChange={(event) => setOutro(event.target.checked ? "outro/kelvoy_close.mp4" : null)} /> {outro && outro !== "outro/kelvoy_close.mp4" ? `原有片尾 · ${outro}` : "Kelvoy 片尾 · 1 秒"}</label>
       </div>
       <MutationError error={mutation.error} />
-      {settingsChanged && <p role="status">合成设置尚未保存，请先保存设置，再{retryFailed ? "重试" : "开始合成"}。</p>}
+      {settingsChanged && <p role="status">合成设置尚未保存，请先保存设置，再{action}。</p>}
       {retryQueued && <p role="status">合成任务已提交，等待后台处理。</p>}
       <div className="k-desk-actions">
         <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || retryQueued || !settingsChanged || !title.trim()}
@@ -97,9 +109,15 @@ export default function ComposeSetup({ episode, mutation, retryFailed = false, s
         </button>
         <button type="button" className="k-btn k-btn-primary" disabled={mutation.pending || settingsChanged || retryQueued}
           onClick={() => void submit()}>
-          {mutation.pending ? "提交中…" : retryFailed ? "重新执行失败任务" : "开始合成"}
+          {mutation.pending ? "提交中…" : retryFailed ? "重新执行失败任务" : action}
         </button>
+        {!retryFailed && <button type="button" className="k-btn k-btn-secondary" disabled={mutation.pending || retryQueued}
+          onClick={() => void backToClips()}>
+          某镜不满意 → 回到视频片段
+        </button>}
       </div>
+      {hasFinal && <p className="k-card-meta">重新合成只重跑合成，不动任何镜（FR-08）；下载与分享保留上一版，直到新版完成。</p>}
+      {storyboard && <p className="k-card-meta">改分镜后会回到分镜审核，需再点继续；已通过的镜头不会重跑。</p>}
       {storyboard}
     </section>
   );

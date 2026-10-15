@@ -106,6 +106,17 @@ describe("transitionEpisode: legal transitions", () => {
     expect(() => transitionEpisode("script_review", { type: "reopen_review", into: "clip_review" })).toThrow();
   });
 
+  test("reopen_stage steps back to compose settings or clip review without regenerating", () => {
+    expect(transitionEpisode("done", { type: "reopen_stage", into: "compose_ready" })).toBe("compose_ready");
+    expect(transitionEpisode("done", { type: "reopen_stage", into: "clip_review" })).toBe("clip_review");
+    expect(transitionEpisode("compose_ready", { type: "reopen_stage", into: "clip_review" })).toBe("clip_review");
+    expect(isLegalEpisodeStatusChange("done", "compose_ready")).toBe(true);
+    expect(isLegalEpisodeStatusChange("compose_ready", "clip_review")).toBe(true);
+    expect(() => transitionEpisode("compose_ready", { type: "reopen_stage", into: "compose_ready" })).toThrow();
+    expect(() => transitionEpisode("composing", { type: "reopen_stage", into: "clip_review" })).toThrow();
+    expect(() => transitionEpisode("clip_review", { type: "reopen_stage", into: "compose_ready" })).toThrow();
+  });
+
   const generatingStates: GeneratingEpisodeStatus[] = [
     "scripting",
     "assets",

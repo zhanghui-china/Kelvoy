@@ -216,6 +216,26 @@ test("POST /:id/recompose moves done -> composing and enqueues a compose task", 
   expect(task?.stage).toBe("compose");
 });
 
+test("POST /:id/reopen steps done back to compose or clips without touching shots or final", async () => {
+  const { cookie, ownerId } = await login("dannei");
+  const episode = fixture("e_1", ownerId);
+  episode.status = "done";
+  await insertEpisode(episode);
+  const app = buildApp();
+  const reopen = (rowVersion: number, stage: string) => app.request("/api/episodes/e_1/reopen", {
+    method: "POST", headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ row_version: rowVersion, stage }) });
+  expect((await reopen(1, "bogus")).status).toBe(400);
+  expect((await reopen(1, "compose")).status).toBe(200);
+  const got = await app.request("/api/episodes/e_1", { headers: { cookie } });
+  const after = ((await got.json()) as { episode: Episode }).episode;
+  expect(after.status).toBe("compose_ready");
+  expect(after.shots).toEqual(episode.shots);
+  expect((await reopen(1, "clips")).status).toBe(409); // stale row_version
+  expect((await reopen(2, "clips")).status).toBe(200);
+  expect((await reopen(3, "compose")).status).toBe(400); // clip_review cannot jump forward
+});
+
 test("POST /:id/recompose 400s from any status other than done", async () => {
   const { cookie, ownerId } = await login("dannei");
   const episode = fixture("e_1", ownerId);

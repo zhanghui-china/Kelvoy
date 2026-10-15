@@ -28,7 +28,7 @@ test.each([
   expect(html.match(/>重新执行失败任务<\/button>/g)).toHaveLength(1);
   expect(html).toContain("已通过 7 镜");
   expect(html).not.toContain("等 worker 自动重试");
-  expect(html).toContain(`disabled="">${stage === "keyframe" ? "直接重生成" : "标记重生成"}</button>`);
+  expect(html).toContain(`disabled="">${stage === "keyframe" ? "直接重生成" : "重做视频"}</button>`);
 });
 
 test.each(["kf_review", "clip_review"] as const)("%s keeps retry reachable without a task record", (status) => {

@@ -41,7 +41,8 @@ export type EpisodeEvent =
   | { type: "retry"; into: GeneratingEpisodeStatus }
   | { type: "recompose" }
   | { type: "prepare_compose" }
-  | { type: "reopen_review"; into: "kf_review" | "clip_review" };
+  | { type: "reopen_review"; into: "kf_review" | "clip_review" }
+  | { type: "reopen_stage"; into: "compose_ready" | "clip_review" };
 
 export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): EpisodeStatus {
   switch (event.type) {
@@ -76,6 +77,15 @@ export function transitionEpisode(current: EpisodeStatus, event: EpisodeEvent): 
       }
       throw illegalTransition(current, event.type);
     }
+    // Step back without regenerating anything: the stage's own page then hosts
+    // the edit/redo controls (settings at compose_ready, shot redo at clip_review).
+    case "reopen_stage": {
+      if ((current === "done" && event.into === "compose_ready") ||
+          ((current === "done" || current === "compose_ready") && event.into === "clip_review")) {
+        return event.into;
+      }
+      throw illegalTransition(current, event.type);
+    }
   }
 }
 
@@ -104,6 +114,8 @@ export function isLegalEpisodeStatusChange(from: EpisodeStatus, to: EpisodeStatu
     { type: "prepare_compose" },
     { type: "reopen_review", into: "kf_review" },
     { type: "reopen_review", into: "clip_review" },
+    { type: "reopen_stage", into: "compose_ready" },
+    { type: "reopen_stage", into: "clip_review" },
     ...RETRY_TARGETS.map((into): EpisodeEvent => ({ type: "retry", into })),
   ];
   return events.some((event) => {

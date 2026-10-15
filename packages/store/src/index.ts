@@ -18,6 +18,8 @@ export * from "./destination-drafts";
 
 export * from "./storyboard";
 
+export * from "./reopen-stage";
+
 export * from "./storyboard-suggestions";
 
 export * from "./system-config";

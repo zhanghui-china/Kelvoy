@@ -11,7 +11,7 @@ const mutation = { pending: false, error: null, clearError: () => {}, run: async
 test.each([
   ["brief", "创建项目", 1], ["script", "分镜脚本", 2],
   ["assets", "关键帧", 3], ["keyframe", "关键帧", 3],
-  ["video", "视频片段", 4], ["compose", "合成预览", 5],
+  ["video", "视频片段", 4], ["compose", "配乐合成", 5],
 ] as const)("failed %s task marks stage %s", (stage, label, ordinal) => {
   const html = renderToStaticMarkup(<StageSteps status="failed" failedTask={{ stage, shot_no: null }} />);
   expect(html).toContain(`aria-current="step">${["①", "②", "③", "④", "⑤"][ordinal - 1]} ${label}`);

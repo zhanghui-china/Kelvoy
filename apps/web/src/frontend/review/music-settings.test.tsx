@@ -13,9 +13,25 @@ const mutation: EpisodeMutation = { pending: false, error: null, clearError: () 
 const base = fixture("e_music", "u_music");
 const render = (component: React.ReactNode) => renderToStaticMarkup(<StaticRouter location="/episodes/e_music">{component}</StaticRouter>);
 
-test.each([undefined, true, false])("compose and delivery use the same music switch with enabled=%s", enabled => {
+test("delivery no longer hosts settings; it sends the user back to the owning stages", () => {
+  const html = render(<DoneView episode={{ ...base, status: "done" }} mutation={mutation} />);
+  expect(html).not.toContain("启用配乐");
+  expect(html).not.toContain("烧录每镜字幕");
+  expect(html).not.toContain("重生成关键帧");
+  expect(html).toContain("回到配乐合成");
+  expect(html).toContain("回到视频片段");
+});
+
+test("compose with a prior final offers re-compose and a way back to clips", () => {
+  const html = render(<ComposeSetup episode={{ ...base, final: { key: "final/a.mp4", duration_s: 30, width: 1080, height: 1920,
+    fps: 30, size_bytes: 1, completed_at: "2026-10-15T00:00:00Z" } as never }} mutation={mutation} />);
+  expect(html).toContain("重新合成");
+  expect(html).toContain("回到视频片段");
+});
+
+test.each([undefined, true, false])("compose uses the music switch with enabled=%s", enabled => {
   const episode = { ...base, music: { ...base.music, enabled, file: "music/old.mp3" } };
-  for (const component of [<ComposeSetup episode={episode} mutation={mutation} />, <DoneView episode={{ ...episode, status: "done" }} mutation={mutation} />]) {
+  for (const component of [<ComposeSetup episode={episode} mutation={mutation} />]) {
     const html = render(component);
     expect(html).toContain("启用配乐");
     expect(html).toContain('aria-label="启用配乐"');

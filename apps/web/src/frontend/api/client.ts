@@ -390,6 +390,11 @@ export function optimizeScript(episodeId: string, rowVersion: number, instructio
   return post(episodePath(episodeId, "/script/optimize"), { row_version: rowVersion, instruction });
 }
 
+/** 回到「配乐合成」或「视频片段」阶段修改；不动镜头与成片。 */
+export function reopenStage(episodeId: string, rowVersion: number, stage: "compose" | "clips") {
+  return post(episodePath(episodeId, "/reopen"), { row_version: rowVersion, stage });
+}
+
 export function recompose(episodeId: string, rowVersion: number) {
   return post(episodePath(episodeId, "/recompose"), { row_version: rowVersion });
 }

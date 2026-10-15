@@ -9,7 +9,7 @@ const STAGES: Omit<EpisodeStage, "available">[] = [
   { id: "script", states: ["scripting", "script_review"], label: "② 分镜脚本" },
   { id: "keyframes", states: ["assets", "keyframing", "kf_review"], label: "③ 关键帧" },
   { id: "clips", states: ["clipping", "clip_review"], label: "④ 视频片段" },
-  { id: "compose", states: ["compose_ready", "composing"], label: "⑤ 合成预览" },
+  { id: "compose", states: ["compose_ready", "composing"], label: "⑤ 配乐合成" },
   { id: "final", states: ["done"], label: "⑥ 成片分享" },
 ];
 
@@ -17,7 +17,7 @@ const DIRECT_STAGES: typeof STAGES = [
   { id: "project", states: ["draft"], label: "① 创建项目" },
   { id: "script", states: ["scripting", "script_review"], label: "② 分镜脚本" },
   { id: "clips", states: ["assets", "clipping", "clip_review"], label: "③ 视频片段" },
-  { id: "compose", states: ["compose_ready", "composing"], label: "④ 合成预览" },
+  { id: "compose", states: ["compose_ready", "composing"], label: "④ 配乐合成" },
   { id: "final", states: ["done"], label: "⑤ 成片分享" },
 ];
 
@@ -27,7 +27,7 @@ const FAILURE_STAGE_INDEX: Record<FailedTaskSummary["stage"], number> = {
 
 const FAILURE_STAGE_LABEL: Record<FailedTaskSummary["stage"], string> = {
   brief: "创建项目", script: "分镜脚本", assets: "准备素材",
-  keyframe: "关键帧", video: "视频片段", compose: "合成预览",
+  keyframe: "关键帧", video: "视频片段", compose: "配乐合成",
 };
 
 export function failedStageLabel(task: FailedTaskSummary): string {
